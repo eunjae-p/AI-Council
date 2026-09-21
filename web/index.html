@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Council V0.4</title>
+  <style>
+    :root { --bg:#0b1020; --panel:#121a2e; --line:#273454; --text:#eef3ff; --muted:#94a3c1; --blue:#6ea8fe; --violet:#a78bfa; --green:#5ee0a0; }
+    * { box-sizing:border-box } body { margin:0; background:radial-gradient(circle at 20% 0,#182545 0,var(--bg) 42%); color:var(--text); font:15px/1.65 system-ui,"Malgun Gothic",sans-serif; min-height:100vh }
+    .wrap { width:min(1180px,calc(100% - 32px)); margin:0 auto; padding:34px 0 60px }
+    header { display:flex; justify-content:space-between; gap:20px; align-items:center; margin-bottom:24px }
+    h1 { margin:0; font-size:28px; letter-spacing:-.03em } .subtitle,.meta { color:var(--muted) }
+    .meta { padding:9px 13px; border:1px solid var(--line); border-radius:999px; background:#0d1529 }
+    .panel { background:rgba(18,26,46,.94); border:1px solid var(--line); border-radius:18px; padding:20px; box-shadow:0 20px 50px #0004 }
+    textarea { width:100%; min-height:140px; resize:vertical; border:1px solid #344468; border-radius:13px; background:#0b1326; color:var(--text); padding:16px; font:16px/1.6 inherit; outline:none }
+    textarea:focus { border-color:var(--blue); box-shadow:0 0 0 3px #6ea8fe22 }
+    .actions { display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap }
+    button { border:0; border-radius:11px; padding:11px 16px; font-weight:700; cursor:pointer; color:#08101e; background:var(--green) }
+    button.secondary { color:var(--text); background:#202d49 } button:disabled { opacity:.45; cursor:not-allowed }
+    #status { margin-left:auto; color:var(--muted) }
+    .progress { height:7px; background:#202a43; border-radius:999px; overflow:hidden; margin-top:16px }
+    .bar { height:100%; width:0; background:linear-gradient(90deg,var(--blue),var(--violet)); transition:width .35s ease }
+    .final { margin-top:22px; border-color:#426d68; background:linear-gradient(145deg,#122337,#121a2e) }
+    .label { display:flex; align-items:center; gap:9px; font-size:13px; font-weight:800; color:var(--green); letter-spacing:.08em; text-transform:uppercase }
+    .dot { width:9px; height:9px; border-radius:50%; background:var(--green); box-shadow:0 0 16px var(--green) }
+    #finalText { margin-top:14px; white-space:pre-wrap; font-size:16px; min-height:90px }
+    details { margin-top:22px } summary { cursor:pointer; color:var(--muted); font-weight:700; padding:4px }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:14px }
+    .card { border:1px solid var(--line); border-radius:14px; padding:16px; background:#0d1528 }
+    .card h3 { margin:0 0 10px; font-size:14px; color:var(--blue) } .card pre { margin:0; white-space:pre-wrap; word-break:break-word; font:14px/1.6 inherit; color:#dce6fa }
+    .empty { color:var(--muted) } .error { color:#ff9eaa }
+    @media(max-width:760px){ header{align-items:flex-start;flex-direction:column}.grid{grid-template-columns:1fr}#status{width:100%;margin-left:0} }
+  </style>
+</head>
+<body>
+<main class="wrap">
+  <header><div><h1>AI Council</h1><div class="subtitle">GPT와 Claude가 검토하고 하나의 결론을 만듭니다.</div></div><div class="meta">GPT · gpt-5.6-sol &nbsp;|&nbsp; Claude · account default</div></header>
+  <section class="panel">
+    <textarea id="question" placeholder="논의할 질문을 입력하세요. 여러 줄 입력도 가능합니다."></textarea>
+    <div class="actions"><button id="start">자동 토론 시작</button><button class="secondary" id="clear">초기화</button><button class="secondary" id="shutdown">앱 종료</button><span id="status">준비됨</span></div>
+    <div class="progress"><div class="bar" id="bar"></div></div>
+  </section>
+  <section class="panel final">
+    <div class="label"><span class="dot"></span>AI Council 최종 결론</div>
+    <div id="finalText" class="empty">토론을 시작하면 최종 결론이 여기에 표시됩니다.</div>
+    <div class="actions"><button class="secondary" id="copy" disabled>최종 결론 복사</button></div>
+  </section>
+  <details><summary>토론 과정 보기</summary><div class="grid" id="rounds"></div></details>
+</main>
+<script>
+const $=s=>document.querySelector(s), q=$('#question'), start=$('#start'), status=$('#status'), bar=$('#bar'), finalText=$('#finalText'), rounds=$('#rounds'), copy=$('#copy');
+let finalValue='';
+function reset(){ rounds.innerHTML=''; finalValue=''; finalText.className='empty'; finalText.textContent='토론을 시작하면 최종 결론이 여기에 표시됩니다.'; status.textContent='준비됨'; bar.style.width='0'; copy.disabled=true; }
+function card(label,text){ const el=document.createElement('article'); el.className='card'; const h=document.createElement('h3'); h.textContent=label; const pre=document.createElement('pre'); pre.textContent=text; el.append(h,pre); rounds.append(el); }
+start.onclick=async()=>{ const question=q.value.trim(); if(!question){ q.focus(); return; } reset(); start.disabled=true; q.disabled=true; finalText.className='empty'; finalText.textContent='두 모델이 토론을 진행하고 있습니다…';
+ try { const res=await fetch('/api/debate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question})}); if(!res.ok) throw new Error((await res.json()).error||'요청 실패');
+  const reader=res.body.getReader(), decoder=new TextDecoder(); let buffer='';
+  while(true){ const {value,done}=await reader.read(); if(done) break; buffer+=decoder.decode(value,{stream:true}); const lines=buffer.split('\n'); buffer=lines.pop(); for(const line of lines){ if(!line)continue; const e=JSON.parse(line); if(e.type==='stage'){status.textContent=`${e.step}/4 · ${e.text}`;bar.style.width=`${(e.step-1)*25}%`;} if(e.type==='result')card(`${e.step}단계 · ${e.label}`,e.text); if(e.type==='final'){finalValue=e.text;finalText.className='';finalText.textContent=e.text;copy.disabled=false;} if(e.type==='done'){status.textContent='자동 토론 완료';bar.style.width='100%';} if(e.type==='error')throw new Error(e.text); } }
+ } catch(err){ finalText.className='error'; finalText.textContent='오류: '+err.message; status.textContent='오류로 중단됨'; } finally { start.disabled=false; q.disabled=false; } };
+$('#clear').onclick=()=>{q.value='';reset();q.focus();}; copy.onclick=async()=>{await navigator.clipboard.writeText(finalValue);status.textContent='최종 결론을 복사했습니다';};
+$('#shutdown').onclick=async()=>{try{await fetch('/api/shutdown',{method:'POST'});}finally{document.body.innerHTML='<main class="wrap"><section class="panel"><h1>AI Council을 종료했습니다.</h1><p class="subtitle">이 창을 닫아도 됩니다.</p></section></main>';}};
+q.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key==='Enter')start.click();});
+</script>
+</body>
+</html>

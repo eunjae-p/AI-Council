@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import queue
+import re
 import shutil
 import subprocess
 import threading
@@ -9,7 +10,7 @@ import tkinter as tk
 from tkinter import messagebox, scrolledtext, ttk
 
 
-APP_TITLE = "AI Council V0.2"
+APP_TITLE = "AI Council V0.3"
 GPT_MODEL = "gpt-5.6-sol"
 TIMEOUT_SECONDS = 180
 
@@ -42,6 +43,8 @@ class CouncilApp:
         self.current_process: subprocess.Popen[bytes] | None = None
         self.process_lock = threading.Lock()
         self.running = False
+        self.details_visible = False
+        self.final_text = ""
 
         root.title(APP_TITLE)
         root.geometry("1000x760")
@@ -84,6 +87,14 @@ class CouncilApp:
         ttk.Button(controls, text="결과 지우기", command=self.clear_output).pack(
             side=tk.LEFT, padx=(8, 0)
         )
+        self.copy_button = ttk.Button(
+            controls, text="최종 결론 복사", command=self.copy_final, state=tk.DISABLED
+        )
+        self.copy_button.pack(side=tk.LEFT, padx=(8, 0))
+        self.details_button = ttk.Button(
+            controls, text="토론 과정 보기", command=self.toggle_details
+        )
+        self.details_button.pack(side=tk.LEFT, padx=(8, 0))
 
         self.status_var = tk.StringVar(value="준비됨")
         ttk.Label(controls, textvariable=self.status_var).pack(side=tk.RIGHT)
@@ -91,33 +102,93 @@ class CouncilApp:
         self.progress = ttk.Progressbar(outer, mode="determinate", maximum=4, value=0)
         self.progress.pack(fill=tk.X, pady=(0, 10))
 
-        ttk.Label(outer, text="Council 결과", font=("Segoe UI", 10, "bold")).pack(
-            anchor=tk.W, pady=(0, 5)
-        )
-        self.output = scrolledtext.ScrolledText(
+        final_header = ttk.Frame(outer)
+        final_header.pack(fill=tk.X, pady=(0, 5))
+        ttk.Label(
+            final_header, text="AI Council 최종 결론", font=("Segoe UI", 13, "bold")
+        ).pack(side=tk.LEFT)
+        ttk.Label(
+            final_header, text="전체 토론을 반영한 마지막 답변", foreground="#666666"
+        ).pack(side=tk.RIGHT)
+
+        self.final_output = scrolledtext.ScrolledText(
             outer,
+            height=16,
+            wrap=tk.WORD,
+            font=("Malgun Gothic", 11),
+            state=tk.DISABLED,
+            background="#f6fbff",
+            borderwidth=1,
+            relief=tk.SOLID,
+        )
+        self.final_output.pack(fill=tk.BOTH, expand=True)
+        self.set_text(self.final_output, "토론이 완료되면 최종 결론이 여기에 표시됩니다.")
+
+        self.details_frame = ttk.Frame(outer)
+        ttk.Separator(self.details_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=(12, 10))
+        ttk.Label(
+            self.details_frame, text="토론 과정", font=("Segoe UI", 11, "bold")
+        ).pack(anchor=tk.W, pady=(0, 5))
+        self.details_output = scrolledtext.ScrolledText(
+            self.details_frame,
+            height=12,
             wrap=tk.WORD,
             font=("Malgun Gothic", 10),
             state=tk.DISABLED,
             background="#fbfbfb",
         )
-        self.output.pack(fill=tk.BOTH, expand=True)
+        self.details_output.pack(fill=tk.BOTH, expand=True)
 
         root.bind("<Control-Return>", lambda _event: self.start_council())
         root.after(100, self.process_events)
 
-    def append_output(self, text: str) -> None:
-        self.output.configure(state=tk.NORMAL)
-        self.output.insert(tk.END, text)
-        self.output.see(tk.END)
-        self.output.configure(state=tk.DISABLED)
+    @staticmethod
+    def clean_markdown(text: str) -> str:
+        lines = []
+        for line in text.splitlines():
+            if re.match(r"^\s*```", line):
+                continue
+            line = re.sub(r"^\s*#{1,6}\s+", "", line)
+            line = line.replace("**", "").replace("__", "").replace("`", "")
+            lines.append(line.rstrip())
+        return "\n".join(lines).strip()
+
+    @staticmethod
+    def set_text(widget: scrolledtext.ScrolledText, text: str) -> None:
+        widget.configure(state=tk.NORMAL)
+        widget.delete("1.0", tk.END)
+        widget.insert("1.0", text)
+        widget.configure(state=tk.DISABLED)
+
+    def append_detail(self, text: str) -> None:
+        self.details_output.configure(state=tk.NORMAL)
+        self.details_output.insert(tk.END, text)
+        self.details_output.see(tk.END)
+        self.details_output.configure(state=tk.DISABLED)
+
+    def copy_final(self) -> None:
+        if not self.final_text:
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(self.final_text)
+        self.status_var.set("최종 결론을 복사했습니다")
+
+    def toggle_details(self) -> None:
+        if self.details_visible:
+            self.details_frame.pack_forget()
+            self.details_button.configure(text="토론 과정 보기")
+        else:
+            self.details_frame.pack(fill=tk.BOTH, expand=True)
+            self.details_button.configure(text="토론 과정 숨기기")
+        self.details_visible = not self.details_visible
 
     def clear_output(self) -> None:
         if self.running:
             return
-        self.output.configure(state=tk.NORMAL)
-        self.output.delete("1.0", tk.END)
-        self.output.configure(state=tk.DISABLED)
+        self.final_text = ""
+        self.set_text(self.final_output, "토론이 완료되면 최종 결론이 여기에 표시됩니다.")
+        self.set_text(self.details_output, "")
+        self.copy_button.configure(state=tk.DISABLED)
         self.progress["value"] = 0
         self.status_var.set("준비됨")
 
@@ -136,7 +207,10 @@ class CouncilApp:
         self.run_button.configure(state=tk.DISABLED)
         self.cancel_button.configure(state=tk.NORMAL)
         self.progress["value"] = 0
-        self.append_output(f"\n{'=' * 72}\n질문\n{question}\n{'=' * 72}\n")
+        self.final_text = ""
+        self.set_text(self.final_output, "토론을 진행하고 있습니다...")
+        self.set_text(self.details_output, f"질문\n{question}\n\n")
+        self.copy_button.configure(state=tk.DISABLED)
 
         threading.Thread(target=self.run_council, args=(question,), daemon=True).start()
 
@@ -145,6 +219,9 @@ class CouncilApp:
 
     def emit_result(self, label: str, text: str) -> None:
         self.events.put(("result", (label, text)))
+
+    def emit_final(self, text: str) -> None:
+        self.events.put(("final", text))
 
     def run_cli(self, name: str, arguments: list[str], prompt: str) -> str:
         if self.cancel_event.is_set():
@@ -226,13 +303,13 @@ Original question:
                 ],
                 initial_prompt,
             )
-            self.emit_result("ROUND 1 · GPT", gpt_first)
+            self.emit_result("1단계 · GPT 초안", gpt_first)
 
             self.set_stage(2, "Claude가 첫 답변을 작성하는 중...")
             claude_first = self.run_cli(
                 "claude", ["-p", "--no-session-persistence"], initial_prompt
             )
-            self.emit_result("ROUND 1 · CLAUDE", claude_first)
+            self.emit_result("2단계 · Claude 초안", claude_first)
 
             gpt_review_prompt = f"""You are in an AI council debate.
 Review the other model's answer against the original question. Identify important strengths,
@@ -264,7 +341,7 @@ Other model's first answer:
                 ],
                 gpt_review_prompt,
             )
-            self.emit_result("ROUND 2 · GPT REVIEW + FINAL", gpt_final)
+            self.emit_result("3단계 · GPT 검토 및 개선안", gpt_final)
 
             claude_review_prompt = f"""You are in an AI council debate.
 Review both initial answers and the GPT review below. Point out remaining errors,
@@ -287,7 +364,8 @@ GPT review and revision:
             claude_final = self.run_cli(
                 "claude", ["-p", "--no-session-persistence"], claude_review_prompt
             )
-            self.emit_result("ROUND 2 · CLAUDE REVIEW + FINAL", claude_final)
+            self.emit_result("4단계 · Claude 최종 검토", claude_final)
+            self.emit_final(claude_final)
             self.events.put(("done", "자동 토론 완료"))
         except CliFailure as exc:
             details = str(exc)
@@ -309,13 +387,19 @@ GPT review and revision:
                     self.status_var.set(f"{number}/4 · {text}")
                 elif kind == "result":
                     label, text = payload
-                    self.append_output(f"\n[{label}]\n{text}\n")
+                    cleaned = self.clean_markdown(text)
+                    self.append_detail(f"[{label}]\n{cleaned}\n\n")
+                elif kind == "final":
+                    self.final_text = self.clean_markdown(str(payload))
+                    self.set_text(self.final_output, self.final_text)
+                    self.copy_button.configure(state=tk.NORMAL)
                 elif kind == "done":
                     self.progress["value"] = 4
                     self.status_var.set(str(payload))
                     self.finish_run()
                 elif kind == "error":
-                    self.append_output(f"\n[ERROR]\n{payload}\n")
+                    self.set_text(self.final_output, f"오류로 토론을 완료하지 못했습니다.\n\n{payload}")
+                    self.append_detail(f"[오류]\n{payload}\n")
                     self.status_var.set("오류로 중단됨")
                     self.finish_run()
         except queue.Empty:
