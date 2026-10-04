@@ -56,6 +56,25 @@ def installed_version(name: str) -> str:
         return ""
 
 
+LOGIN_ARGS = {"codex": ["login", "status"], "claude": ["auth", "status"]}
+LOGIN_COMMANDS = {"codex": "codex login", "claude": "claude auth login"}
+
+
+def logged_in(name: str) -> bool | None:
+    """로그인 여부. 확인할 수 없으면 None (구독 사용량을 쓰지 않는 상태 확인 명령)."""
+    try:
+        out = subprocess.run(
+            resolve_command(name) + LOGIN_ARGS[name], capture_output=True, timeout=20, stdin=subprocess.DEVNULL,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except (CliFailure, OSError, subprocess.TimeoutExpired):
+        return None
+    text = (out.stdout + out.stderr).decode("utf-8", "replace").lower()
+    if any(k in text for k in ("unknown", "unrecognized", "unexpected argument")):
+        return None  # 구버전 CLI 가 상태 확인 명령을 모름
+    return out.returncode == 0
+
+
 def latest_version(name: str) -> str:
     try:
         url = f"https://registry.npmjs.org/{PACKAGES[name]}/latest"
@@ -73,8 +92,11 @@ def check(force: bool = False) -> dict:
     for name in ("codex", "claude"):
         inst = _cached(f"inst:{name}", 600, lambda n=name: installed_version(n))
         late = _cached(f"late:{name}", 6 * 3600, lambda n=name: latest_version(n))
+        login = _cached(f"login:{name}", 600, lambda n=name: logged_in(n)) if inst else None
         result[name] = {
             "installed": inst,
+            "logged_in": login,
+            "login_command": LOGIN_COMMANDS[name],
             "latest": late,
             "outdated": bool(inst and late and newer(late, inst)),
             "update_command": UPDATE_COMMANDS[name],

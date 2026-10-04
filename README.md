@@ -6,22 +6,22 @@
 ## 처음 설치하기 (팀원용)
 
 각자 자기 PC에서, 자기 구독 계정으로 실행합니다. 대화 기록은 각자 PC의 `data/`에만 저장되고 공유되지 않습니다.
+필요한 것: ChatGPT 구독(GPT 사용) 그리고/또는 Claude Pro·Max 등 구독(Claude 사용), 인터넷 연결.
 
-1. **Python 3.10 이상** 설치 (설치할 때 "Add python.exe to PATH" 체크)
-2. **Node.js LTS** 설치 (Codex CLI 설치용)
-3. **Codex CLI** 설치와 로그인 (ChatGPT 구독 계정)
-   ```powershell
-   npm i -g @openai/codex@latest
-   codex login
-   ```
-4. **Claude Code** 설치와 로그인 (Claude 구독 계정). 설치 방법은 https://code.claude.com/docs 를 따르고, 설치 후 터미널에서 `claude`를 한 번 실행해 로그인합니다.
-5. 저장소 받기
+1. 저장소를 받습니다. (Git이 없으면 GitHub 페이지의 **Code → Download ZIP** 후 압축 해제)
    ```powershell
    git clone https://github.com/eunjae-p/AI-Council.git
    ```
-6. 받은 폴더의 `AI-Council_Web.cmd` 실행 → 왼쪽 아래에 Codex·Claude 버전이 표시되면 준비 완료
+2. 받은 폴더의 **`Setup.cmd`를 더블클릭**합니다. 자동으로:
+   - Python, Node.js가 없으면 winget으로 설치
+   - Codex CLI 설치·업데이트, Claude Code 설치 (공식 설치 프로그램, 이후 자동 업데이트)
+   - 로그인이 안 되어 있으면 로그인 창을 띄움 (브라우저에서 **자기 계정**으로 로그인)
+   - 바탕화면에 **AI Council** 바로가기 생성
+3. 바탕화면의 **AI Council**을 실행합니다. 왼쪽 아래에 Codex·Claude 버전이 보이고 빨간 "로그인 필요"가 없으면 준비 완료입니다.
 
-업데이트는 저장소 폴더에서 `git pull` 후 AI Council을 다시 실행하면 됩니다. 모델 목록에 있어도 계정·CLI 버전에 따라 지원되지 않을 수 있으니, 처음에는 **계정 기본값**으로 쓰는 것을 권장합니다.
+설치가 중간에 실패하면 마지막 표에 실패 항목과 해결 방법이 나옵니다. 새로 설치한 프로그램이 인식되지 않으면 창을 닫고 `Setup.cmd`를 한 번 더 실행하세요. 관리자 권한은 필요 없지만, 회사 PC에서 설치가 막혀 있으면 IT 담당자에게 문의하세요.
+
+업데이트는 저장소 폴더에서 `git pull` 후 AI Council을 다시 실행하면 됩니다. 처음에는 모델을 **계정 기본값**으로 쓰는 것을 권장합니다.
 
 ## 실행
 
@@ -78,6 +78,7 @@
 | `council_context.py` | 모델에 넘길 컨텍스트 구성과 장기 요약 |
 | `web/index.html` | 채팅 UI (HTML/CSS/JavaScript, 외부 라이브러리 없음) |
 | `AI-Council_Web.cmd` | 실행 파일 |
+| `Setup.cmd`, `setup.ps1` | 처음 설치 도우미 (Python·Node.js·Codex CLI·Claude Code 설치, 로그인 안내, 바로가기) |
 | `AI-Council_CLI.ps1` | CLI 연결 확인·디버깅용 PowerShell 스크립트 |
 
 ## CLI 연결 확인 (디버깅)

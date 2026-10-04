@@ -527,6 +527,12 @@ async function loadVersions(force) {
     line.append(el('span', '', (x.installed ? '● ' : '○ ') + names[k] + ' '), el('b', '', x.installed || '미설치'));
     line.title = `설치: ${x.installed || '-'} / 최신: ${x.latest || '확인 불가'}`;
     box.append(line);
+    if (x.installed && x.logged_in === false) {
+      const g = el('span', 'upd', `로그인 필요 · 명령 복사`); g.style.color = 'var(--danger)'; g.title = x.login_command;
+      g.onclick = async () => { try { await navigator.clipboard.writeText(x.login_command); toast(`복사됨: ${x.login_command}\n터미널에 붙여넣어 로그인한 뒤 '버전 다시 확인'을 누르세요.`); } catch { toast(x.login_command); } };
+      box.append(g); outdated.push(k + '-login');
+    }
+    if (!x.installed) { const m = el('span', 'upd', 'CLI 없음 · Setup.cmd 실행'); m.style.color = 'var(--danger)'; box.append(m); }
     if (x.outdated) {
       outdated.push(k);
       const u = el('span', 'upd', `${x.latest} 업데이트 있음 · 명령 복사`); u.title = x.update_command;
@@ -535,7 +541,7 @@ async function loadVersions(force) {
     }
   }
   const r = el('span', 'upd', '버전 다시 확인'); r.style.color = 'var(--dim)'; r.onclick = () => loadVersions(true); box.append(r);
-  if (outdated.length && !force) toast(`${outdated.map(k => names[k]).join(', ')} CLI 새 버전이 있습니다. 왼쪽 아래에서 업데이트 명령을 복사하세요.`, true);
+  if (outdated.length && !force) toast('CLI 업데이트 또는 로그인이 필요합니다. 왼쪽 아래 안내를 확인하세요.', true);
 }
 
 // ---------- 기타 ----------
