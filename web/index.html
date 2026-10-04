@@ -1,75 +1,573 @@
 <!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AI Council V0.4</title>
-  <style>
-    :root { --bg:#0b1020; --panel:#121a2e; --line:#273454; --text:#eef3ff; --muted:#94a3c1; --blue:#6ea8fe; --violet:#a78bfa; --green:#5ee0a0; }
-    * { box-sizing:border-box } body { margin:0; background:radial-gradient(circle at 20% 0,#182545 0,var(--bg) 42%); color:var(--text); font:15px/1.65 system-ui,"Malgun Gothic",sans-serif; min-height:100vh }
-    .wrap { width:min(1180px,calc(100% - 32px)); margin:0 auto; padding:34px 0 60px }
-    header { display:flex; justify-content:space-between; gap:20px; align-items:center; margin-bottom:24px }
-    h1 { margin:0; font-size:28px; letter-spacing:-.03em } .subtitle,.meta { color:var(--muted) }
-    .meta { padding:9px 13px; border:1px solid var(--line); border-radius:999px; background:#0d1529 }
-    .panel { background:rgba(18,26,46,.94); border:1px solid var(--line); border-radius:18px; padding:20px; box-shadow:0 20px 50px #0004 }
-    textarea { width:100%; min-height:140px; resize:vertical; border:1px solid #344468; border-radius:13px; background:#0b1326; color:var(--text); padding:16px; font:16px/1.6 inherit; outline:none }
-    .models { display:flex; gap:14px; margin-bottom:14px; flex-wrap:wrap } .models label { flex:1; min-width:220px; color:var(--muted); font-size:13px }
-    .models select,.models input { width:100%; margin-top:5px; border:1px solid #344468; border-radius:10px; background:#0b1326; color:var(--text); padding:10px 12px; font:14px inherit }
-    .custom-model { display:none }
-    textarea:focus { border-color:var(--blue); box-shadow:0 0 0 3px #6ea8fe22 }
-    .actions { display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap }
-    button { border:0; border-radius:11px; padding:11px 16px; font-weight:700; cursor:pointer; color:#08101e; background:var(--green) }
-    button.secondary { color:var(--text); background:#202d49 } button:disabled { opacity:.45; cursor:not-allowed }
-    #status { margin-left:auto; color:var(--muted) }
-    .progress { height:7px; background:#202a43; border-radius:999px; overflow:hidden; margin-top:16px }
-    .bar { height:100%; width:0; background:linear-gradient(90deg,var(--blue),var(--violet)); transition:width .35s ease }
-    .final { margin-top:22px; border-color:#426d68; background:linear-gradient(145deg,#122337,#121a2e) }
-    .label { display:flex; align-items:center; gap:9px; font-size:13px; font-weight:800; color:var(--green); letter-spacing:.08em; text-transform:uppercase }
-    .dot { width:9px; height:9px; border-radius:50%; background:var(--green); box-shadow:0 0 16px var(--green) }
-    #finalText { margin-top:14px; white-space:pre-wrap; font-size:16px; min-height:90px }
-    details { margin-top:22px } summary { cursor:pointer; color:var(--muted); font-weight:700; padding:4px }
-    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:14px }
-    .card { border:1px solid var(--line); border-radius:14px; padding:16px; background:#0d1528 }
-    .card h3 { margin:0 0 10px; font-size:14px; color:var(--blue) } .card pre { margin:0; white-space:pre-wrap; word-break:break-word; font:14px/1.6 inherit; color:#dce6fa }
-    .empty { color:var(--muted) } .error { color:#ff9eaa }
-    @media(max-width:760px){ header{align-items:flex-start;flex-direction:column}.grid{grid-template-columns:1fr}#status{width:100%;margin-left:0} }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Council</title>
+<style>
+:root{
+  --bg:#0a0e1a; --side:#0e1424; --panel:#121a2e; --panel2:#0d1528; --line:#223052; --line2:#2d3d63;
+  --text:#e9efff; --muted:#8e9bba; --dim:#64708f;
+  --user:#2a3b66; --gpt:#5ab0ff; --claude:#f2a65a; --council:#5ee0a0; --danger:#ff7d8c; --warn:#ffd166;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.65 system-ui,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;overflow:hidden}
+button{font:inherit;border:0;border-radius:9px;padding:8px 12px;cursor:pointer;color:var(--text);background:#1c2742}
+button:hover{background:#25335a} button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--council);color:#06131a;font-weight:700} button.primary:hover{filter:brightness(1.08)}
+button.danger{color:var(--danger)} button.ghost{background:transparent} button.ghost:hover{background:#1a2440}
+button.small{padding:4px 9px;font-size:12.5px;border-radius:7px}
+input,select,textarea{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line2);border-radius:9px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--gpt);box-shadow:0 0 0 3px #5ab0ff22}
+.app{display:grid;grid-template-columns:300px minmax(0,1fr);height:100vh}
+
+/* sidebar */
+.side{background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.brand{display:flex;align-items:center;justify-content:space-between;padding:16px 16px 10px}
+.brand h1{margin:0;font-size:18px;letter-spacing:-.02em} .brand span{color:var(--dim);font-size:12px}
+.side .top{padding:0 12px 10px;display:grid;gap:8px}
+.side .top input{padding:8px 11px;width:100%}
+.tabs{display:flex;gap:4px;padding:0 12px 8px} .tabs button{flex:1;font-size:13px;padding:6px 0;background:transparent;color:var(--muted)}
+.tabs button.on{background:#1c2742;color:var(--text)}
+.list{flex:1;overflow:auto;padding:0 8px 10px;min-height:0}
+.item{display:block;width:100%;text-align:left;padding:9px 10px;border-radius:9px;background:transparent;margin:1px 0}
+.item:hover{background:#151f38} .item.on{background:#1d2a4b;box-shadow:inset 3px 0 0 var(--council)}
+.item .t{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}
+.item .s{display:block;color:var(--dim);font-size:12px}
+.item mark{background:#5ab0ff33;color:var(--text);border-radius:3px;padding:0 1px}
+.item .row{display:flex;gap:6px;margin-top:6px}
+.group{color:var(--dim);font-size:11.5px;letter-spacing:.06em;padding:10px 10px 4px}
+.side .foot{padding:10px 12px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center;color:var(--dim);font-size:12px}
+.side .foot .cli{flex:1;line-height:1.5} .side .foot .cli b{font-weight:600;color:var(--muted)}
+.upd{display:block;margin-top:2px;color:var(--warn);cursor:pointer;text-decoration:underline dotted} .upd:hover{color:#ffe3a3}
+.empty-list{color:var(--dim);font-size:13px;padding:14px 10px}
+
+/* main */
+.main{display:flex;flex-direction:column;min-height:0;min-width:0}
+.bar{display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid var(--line);min-height:58px}
+.bar .menu{display:none}
+.title{flex:1;min-width:0;display:flex;align-items:center;gap:8px}
+.title h2{margin:0;font-size:16.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:text}
+.title input{flex:1;padding:6px 10px;font-size:15px}
+.chip{font-size:11.5px;color:var(--muted);border:1px solid var(--line2);border-radius:999px;padding:1px 8px;white-space:nowrap}
+.chip.arch{color:var(--warn);border-color:#6b5a2a}
+.acts{display:flex;gap:4px;flex-wrap:wrap}
+.notice{margin:10px 18px 0;padding:9px 12px;border-radius:10px;font-size:13.5px;border:1px solid var(--line2);background:#111a30}
+.notice summary{cursor:pointer;color:var(--muted)} .notice .body{white-space:pre-wrap;margin-top:8px;font-size:13.5px;color:#cfd8ee}
+.notice.err{border-color:#6b2c39;color:#ffc2ca}
+.thread{flex:1;overflow:auto;padding:18px 18px 28px;min-height:0;scroll-behavior:smooth}
+.inner{max-width:900px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.welcome{color:var(--muted);text-align:center;margin-top:12vh}
+.welcome h3{color:var(--text);font-size:20px;margin:0 0 6px}
+
+.msg{border-radius:14px;padding:12px 15px;border:1px solid var(--line);background:var(--panel)}
+.msg.user{align-self:flex-end;max-width:min(78%,720px);background:var(--user);border-color:#3a5089}
+.msg .head{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);margin-bottom:6px}
+.msg .who{font-weight:800;letter-spacing:.03em}
+.msg .head .sp{flex:1}
+.msg.gpt{border-left:3px solid var(--gpt)} .msg.gpt .who{color:var(--gpt)}
+.msg.claude{border-left:3px solid var(--claude)} .msg.claude .who{color:var(--claude)}
+.msg.council{border:1px solid #2f6b55;background:linear-gradient(160deg,#10261f,#121a2e 60%)} .msg.council .who{color:var(--council)}
+.msg.user .who{color:#b9c9f3}
+.msg.error{border-color:#6b2c39;background:#2a121a;color:#ffc2ca;font-size:13.5px} .msg.error .who{color:var(--danger)}
+.msg.flash{animation:flash 1.6s ease}
+@keyframes flash{0%,40%{box-shadow:0 0 0 3px var(--warn)}100%{box-shadow:none}}
+.content{white-space:pre-wrap;word-break:break-word}
+.content pre{white-space:pre;overflow:auto;background:#070b15;border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin:8px 0;font:13px/1.5 ui-monospace,Consolas,monospace}
+.content code{font:13px ui-monospace,Consolas,monospace;background:#070b15;border-radius:5px;padding:1px 5px}
+.content pre code{background:none;padding:0}
+.content .h{font-weight:800;display:block;margin-top:4px}
+details.indiv{border:1px dashed var(--line2);border-radius:12px;padding:6px 10px}
+details.indiv>summary{cursor:pointer;color:var(--muted);font-size:13px;padding:2px}
+details.indiv .msg{margin-top:10px}
+.pending{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:14px;padding:10px 14px;border:1px dashed var(--line2);border-radius:12px}
+.spin{width:14px;height:14px;border-radius:50%;border:2px solid #ffffff22;border-top-color:var(--council);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.inline-err{border:1px solid #6b2c39;background:#2a121a;color:#ffc2ca;border-radius:12px;padding:10px 14px;white-space:pre-wrap;font-size:13.5px}
+.inline-warn{border:1px solid #6b5a2a;background:#2a2412;color:#ffe3a3;border-radius:12px;padding:10px 14px;white-space:pre-wrap;font-size:13.5px}
+
+/* composer */
+.composer{border-top:1px solid var(--line);padding:12px 18px 14px;background:#0b111f}
+.composer .inner{gap:8px}
+.ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.seg{display:inline-flex;background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:3px}
+.seg button{background:transparent;padding:5px 12px;font-size:13.5px;color:var(--muted);border-radius:7px}
+.seg button.on[data-v=gpt]{background:#16304d;color:var(--gpt)}
+.seg button.on[data-v=claude]{background:#3a2a17;color:var(--claude)}
+.seg button.on[data-v=both]{background:#12352a;color:var(--council)}
+.seg button.on[data-m]{background:#1d2a4b;color:var(--text)}
+.workdir{display:none;flex:1;min-width:220px;padding:6px 10px;font-size:13.5px} .workdir.show{display:block}
+.badge{font-size:11px;border:1px solid #6b5a2a;color:var(--warn);border-radius:6px;padding:0 6px}
+.models{display:none;gap:8px;flex-wrap:wrap} .models.open{display:flex}
+.models label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:3px;min-width:200px;flex:1}
+.models select,.models input{padding:6px 9px;font-size:13.5px}
+.custom{display:none}
+.write{display:flex;gap:8px;align-items:flex-end}
+.write textarea{flex:1;resize:none;min-height:48px;max-height:40vh;padding:12px 14px;line-height:1.55}
+.status{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:8px;min-height:18px}
+.status .r{margin-left:auto;color:var(--dim)}
+.toast{position:fixed;right:18px;bottom:18px;display:grid;gap:8px;z-index:20}
+.toast div{background:#1c2742;border:1px solid var(--line2);padding:9px 13px;border-radius:10px;font-size:13.5px;max-width:420px;box-shadow:0 10px 30px #0006}
+.toast div.err{border-color:#6b2c39;color:#ffc2ca}
+.scrim{display:none}
+@media(max-width:860px){
+  .app{grid-template-columns:1fr}
+  .side{position:fixed;inset:0 auto 0 0;width:min(86vw,320px);z-index:10;transform:translateX(-105%);transition:transform .2s}
+  .app.nav .side{transform:none} .app.nav .scrim{display:block;position:fixed;inset:0;background:#0008;z-index:9}
+  .bar .menu{display:inline-block} .bar{padding:10px 12px} .thread{padding:14px 12px} .composer{padding:10px 12px}
+  .acts .lbl{display:none} .msg.user{max-width:92%}
+}
+</style>
 </head>
 <body>
-<main class="wrap">
-  <header><div><h1>AI Council</h1><div class="subtitle">GPT와 Claude가 검토하고 하나의 결론을 만듭니다.</div></div><div class="meta">기본값은 각 CLI 계정 설정</div></header>
-  <section class="panel">
-    <div class="models">
-      <label>GPT 모델<select id="gptModel"><option value="account default">Account default</option><option value="gpt-6.1-sol">GPT-6.1 Sol</option><option value="gpt-6-luna">GPT-6 Luna</option><option value="gpt-6-astra">GPT-6 Astra</option><option value="custom">직접 입력…</option></select><input class="custom-model" id="gptCustom" placeholder="예: gpt-6.1-sol"></label>
-      <label>Claude 모델<select id="claudeModel"><option value="account default">Account default</option><optgroup label="최신 버전 자동 추적"><option value="sonnet">Sonnet 최신 (현재 Sonnet 5)</option><option value="opus">Opus 최신 (현재 Opus 5)</option><option value="fable">Fable 최신 (현재 Fable 5)</option></optgroup><optgroup label="버전 고정"><option value="claude-sonnet-5">Claude Sonnet 5 고정</option><option value="claude-opus-5">Claude Opus 5 고정</option><option value="claude-fable-5">Claude Fable 5 고정</option><option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 고정</option></optgroup><option value="custom">직접 입력…</option></select><input class="custom-model" id="claudeCustom" placeholder="예: claude-sonnet-5"></label>
+<div class="app" id="app">
+  <aside class="side">
+    <div class="brand"><h1>AI Council</h1><span id="ver">V0.6</span></div>
+    <div class="top">
+      <button class="primary" id="newBtn">＋ 새 대화</button>
+      <input id="search" type="search" placeholder="모든 대화 검색…" autocomplete="off">
     </div>
-    <textarea id="question" placeholder="논의할 질문을 입력하세요. 여러 줄 입력도 가능합니다."></textarea>
-    <div class="actions"><button id="start">자동 토론 시작</button><button class="secondary" id="clear">초기화</button><button class="secondary" id="shutdown">앱 종료</button><span id="status">준비됨</span></div>
-    <div class="progress"><div class="bar" id="bar"></div></div>
-  </section>
-  <section class="panel final">
-    <div class="label"><span class="dot"></span>AI Council 최종 결론</div>
-    <div id="finalText" class="empty">토론을 시작하면 최종 결론이 여기에 표시됩니다.</div>
-    <div class="actions"><button class="secondary" id="copy" disabled>최종 결론 복사</button></div>
-  </section>
-  <details><summary>토론 과정 보기</summary><div class="grid" id="rounds"></div></details>
-</main>
+    <div class="tabs" id="tabs">
+      <button data-scope="all" class="on">대화</button>
+      <button data-scope="archived">보관함</button>
+      <button data-scope="trash">휴지통</button>
+    </div>
+    <div class="list" id="list"></div>
+    <div class="foot"><span class="cli" id="cli">CLI 확인 중…</span><button class="small" id="quit">앱 종료</button></div>
+  </aside>
+  <div class="scrim" id="scrim"></div>
+
+  <main class="main">
+    <div class="bar">
+      <button class="ghost menu" id="menu" aria-label="대화 목록">☰</button>
+      <div class="title" id="titleBox"><h2 id="title" title="클릭해서 제목 변경">새 대화</h2><span class="chip" id="count"></span><span class="chip arch" id="archChip" hidden>보관됨</span></div>
+      <div class="acts">
+        <button class="ghost small" id="renameBtn">✎ <span class="lbl">제목</span></button>
+        <button class="ghost small" id="archiveBtn">⇩ <span class="lbl">보관</span></button>
+        <button class="ghost small" id="exportBtn">⤓ <span class="lbl">Markdown</span></button>
+        <button class="ghost small danger" id="deleteBtn">🗑 <span class="lbl">삭제</span></button>
+      </div>
+    </div>
+    <div id="notices"></div>
+    <div class="thread" id="thread"><div class="inner" id="msgs"></div></div>
+
+    <div class="composer">
+      <div class="inner">
+        <div class="ctl">
+          <div class="seg" id="mode" title="대화: 도구·파일 접근 없이 빠르게 답변 / 작업: 지정한 폴더의 파일을 읽으며 답변">
+            <button data-m="chat" class="on">💬 대화</button><button data-m="work">🛠 작업</button>
+          </div>
+          <div class="seg" id="target">
+            <button data-v="gpt">GPT</button><button data-v="claude">Claude</button><button data-v="both" class="on">둘 다 + 최종 결론</button>
+          </div>
+          <button class="ghost small" id="modelToggle">모델 설정 ▾</button>
+          <span class="status" id="modelInfo"></span>
+          <input class="workdir" id="workdir" placeholder="작업 폴더 (예: D:\ComfyUI\user\default\workflows) — 읽기 전용">
+        </div>
+        <div class="models" id="models">
+          <label>GPT 모델 (Codex CLI)
+            <select id="gptModel">
+              <option value="account default">계정 기본값</option>
+              <optgroup label="계정에서 지원될 때만 동작">
+              <option value="gpt-6.1-sol">GPT-6.1 Sol</option>
+              <option value="gpt-6-sol">GPT-6 Sol</option>
+              <option value="gpt-6-luna">GPT-6 Luna</option>
+              <option value="gpt-6-astra">GPT-6 Astra</option>
+              </optgroup>
+              <option value="custom">직접 입력…</option>
+            </select>
+            <input class="custom" id="gptCustom" placeholder="예: gpt-6.1-sol">
+          </label>
+          <label>Claude 모델 (Claude Code CLI)
+            <select id="claudeModel">
+              <option value="account default">계정 기본값</option>
+              <optgroup label="최신 버전 자동 추적">
+                <option value="opus">Opus 최신</option><option value="sonnet">Sonnet 최신</option><option value="fable">Fable 최신</option>
+              </optgroup>
+              <optgroup label="버전 고정">
+                <option value="claude-opus-5-5">Claude Opus 5.5</option>
+                <option value="claude-sonnet-5-5">Claude Sonnet 5.5</option>
+                <option value="claude-fable-5-1">Claude Fable 5.1</option>
+                <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+              </optgroup>
+              <option value="custom">직접 입력…</option>
+            </select>
+            <input class="custom" id="claudeCustom" placeholder="예: claude-opus-5-5">
+          </label>
+        </div>
+        <div class="write">
+          <textarea id="q" rows="2" placeholder="질문을 입력하세요 (Enter 보내기 · Shift+Enter 줄바꿈)"></textarea>
+          <button class="primary" id="send">보내기</button>
+        </div>
+        <div class="status"><span id="spin" class="spin" hidden></span><span id="status">준비됨</span><span class="r" id="ctxInfo"></span></div>
+      </div>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
 <script>
-const $=s=>document.querySelector(s), q=$('#question'), gptModel=$('#gptModel'), gptCustom=$('#gptCustom'), claudeModel=$('#claudeModel'), claudeCustom=$('#claudeCustom'), start=$('#start'), status=$('#status'), bar=$('#bar'), finalText=$('#finalText'), rounds=$('#rounds'), copy=$('#copy');
-let finalValue='';
-function modelValue(select,custom){ return select.value==='custom' ? custom.value.trim() : select.value; }
-function toggleCustom(select,custom){ custom.style.display=select.value==='custom'?'block':'none'; if(select.value==='custom')custom.focus(); }
-gptModel.onchange=()=>toggleCustom(gptModel,gptCustom); claudeModel.onchange=()=>toggleCustom(claudeModel,claudeCustom);
-function reset(){ rounds.innerHTML=''; finalValue=''; finalText.className='empty'; finalText.textContent='토론을 시작하면 최종 결론이 여기에 표시됩니다.'; status.textContent='준비됨'; bar.style.width='0'; copy.disabled=true; }
-function card(label,text){ const el=document.createElement('article'); el.className='card'; const h=document.createElement('h3'); h.textContent=label; const pre=document.createElement('pre'); pre.textContent=text; el.append(h,pre); rounds.append(el); }
-start.onclick=async()=>{ const question=q.value.trim(), gpt=modelValue(gptModel,gptCustom), claude=modelValue(claudeModel,claudeCustom); if(!question){ q.focus(); return; } if(!gpt){gptCustom.focus();return;} if(!claude){claudeCustom.focus();return;} reset(); start.disabled=true; q.disabled=true; gptModel.disabled=true; gptCustom.disabled=true; claudeModel.disabled=true; claudeCustom.disabled=true; finalText.className='empty'; finalText.textContent='두 모델이 토론을 진행하고 있습니다…';
- try { const res=await fetch('/api/debate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,gpt_model:gpt,claude_model:claude})}); if(!res.ok) throw new Error((await res.json()).error||'요청 실패');
-  const reader=res.body.getReader(), decoder=new TextDecoder(); let buffer='';
-  while(true){ const {value,done}=await reader.read(); if(done) break; buffer+=decoder.decode(value,{stream:true}); const lines=buffer.split('\n'); buffer=lines.pop(); for(const line of lines){ if(!line)continue; const e=JSON.parse(line); if(e.type==='stage'){status.textContent=`${e.step}/4 · ${e.text}`;bar.style.width=`${(e.step-1)*25}%`;} if(e.type==='result')card(`${e.step}단계 · ${e.label}`,e.text); if(e.type==='final'){finalValue=e.text;finalText.className='';finalText.textContent=e.text;copy.disabled=false;} if(e.type==='done'){status.textContent='자동 토론 완료';bar.style.width='100%';} if(e.type==='error')throw new Error(e.text); } }
- } catch(err){ finalText.className='error'; finalText.textContent='오류: '+err.message; status.textContent='오류로 중단됨'; } finally { start.disabled=false; q.disabled=false; gptModel.disabled=false; gptCustom.disabled=false; claudeModel.disabled=false; claudeCustom.disabled=false; } };
-$('#clear').onclick=()=>{q.value='';reset();q.focus();}; copy.onclick=async()=>{await navigator.clipboard.writeText(finalValue);status.textContent='최종 결론을 복사했습니다';};
-$('#shutdown').onclick=async()=>{try{await fetch('/api/shutdown',{method:'POST'});}finally{document.body.innerHTML='<main class="wrap"><section class="panel"><h1>AI Council을 종료했습니다.</h1><p class="subtitle">이 창을 닫아도 됩니다.</p></section></main>';}};
-q.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key==='Enter')start.click();});
+const UI_VERSION = '0.6.3'; // ai_council_web.py 의 VERSION 과 같아야 함
+const $ = s => document.querySelector(s);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const store = { get(k){ try { return localStorage.getItem(k); } catch { return null; } }, set(k,v){ try { localStorage.setItem(k,v); } catch {} } };
+const S = { mode:'chat', scope:'all', list:[], current:null, meta:null, items:[], running:null, target:'both', searchTimer:null };
+
+// ---------- API ----------
+async function api(path, body) {
+  const opt = body === undefined ? {} : { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) };
+  const res = await fetch(path, opt);
+  let data = {};
+  try { data = await res.json(); } catch { throw new Error(`서버 응답을 읽을 수 없습니다 (${res.status})`); }
+  if (!res.ok) throw new Error(data.error || `요청 실패 (${res.status})`);
+  return data;
+}
+function toast(text, err) { const t = el('div', err ? 'err' : '', text); $('#toast').append(t); setTimeout(() => t.remove(), err ? 7000 : 3200); }
+function fmt(ts) { if (!ts) return ''; const d = new Date(ts * 1000), n = new Date();
+  const p = x => String(x).padStart(2,'0');
+  return (d.toDateString() === n.toDateString() ? '' : `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} `) + `${p(d.getHours())}:${p(d.getMinutes())}`; }
+
+// ---------- 간단한 Markdown 표시 (안전: textContent만 사용) ----------
+function renderText(container, text) {
+  const parts = String(text).split(/```/);
+  parts.forEach((part, i) => {
+    if (i % 2) { const pre = el('pre'); const code = el('code'); code.textContent = part.replace(/^[\w+-]*\n/, ''); pre.append(code); container.append(pre); return; }
+    part.split('\n').forEach((line, li, arr) => {
+      const m = line.match(/^\s{0,3}#{1,6}\s+(.*)$/);
+      if (m) { container.append(el('span', 'h', m[1])); return; }
+      line.split(/(`[^`\n]+`|\*\*[^*\n]+\*\*)/).forEach(tok => {
+        if (/^`[^`]+`$/.test(tok)) container.append(el('code', '', tok.slice(1, -1)));
+        else if (/^\*\*[^*]+\*\*$/.test(tok)) container.append(el('b', '', tok.slice(2, -2)));
+        else if (tok) container.append(document.createTextNode(tok));
+      });
+      if (li < arr.length - 1) container.append(document.createTextNode('\n'));
+    });
+  });
+}
+
+// ---------- 메시지 ----------
+const KIND = { user:'user', GPT:'gpt', Claude:'claude', Council:'council', '오류':'error' };
+const LABEL = { user:'나', GPT:'GPT', Claude:'Claude', Council:'Council 최종 결론', '오류':'오류 기록 · 모델에는 전달되지 않음' };
+function who(item) { return item.role === 'user' ? 'user' : (item.model || 'assistant'); }
+function msgEl(item, index) {
+  const w = who(item), box = el('article', 'msg ' + (KIND[w] || ''));
+  if (index != null) box.dataset.index = index;
+  const head = el('div', 'head');
+  head.append(el('span', 'who', LABEL[w] || w));
+  if (item.mode === 'work') head.append(el('span', 'badge', '작업' + (item.workdir ? ' · ' + item.workdir : '')));
+  if (item.cli_model) head.append(el('span', '', item.cli_model));
+  if (item.elapsed) head.append(el('span', '', `${item.elapsed}s`));
+  head.append(el('span', 'sp'), el('span', '', fmt(item.time)));
+  if (w !== 'user') { const c = el('button', 'ghost small', '복사'); c.onclick = () => copyText(item.content); head.append(c); }
+  const body = el('div', 'content'); renderText(body, item.content);
+  box.append(head, body);
+  return box;
+}
+async function copyText(t) { try { await navigator.clipboard.writeText(t); toast('복사했습니다'); } catch { toast('복사 실패: 브라우저 권한을 확인하세요', true); } }
+
+function renderThread() {
+  const box = $('#msgs'); box.innerHTML = '';
+  if (!S.items.length) {
+    const w = el('div', 'welcome'); w.append(el('h3', '', '무엇을 물어볼까요?'),
+      el('div', '', '질문마다 GPT, Claude, 또는 둘 다를 고를 수 있습니다. 모든 모델이 이 대화의 기록을 함께 읽습니다.'));
+    box.append(w); return;
+  }
+  // 사용자 질문 하나 + 뒤따르는 답변들을 한 묶음으로 표시
+  let i = 0;
+  while (i < S.items.length) {
+    const item = S.items[i];
+    if (item.role === 'user') { box.append(msgEl(item, i)); i++; }
+    const group = [];
+    while (i < S.items.length && S.items[i].role !== 'user') { group.push([S.items[i], i]); i++; }
+    const council = group.find(([x]) => x.model === 'Council');
+    if (council) {
+      box.append(msgEl(council[0], council[1]));
+      const rest = group.filter(g => g !== council);
+      if (rest.length) {
+        const d = el('details', 'indiv'); d.append(el('summary', '', `개별 답변 보기 (${rest.map(([x]) => x.model).join(' · ')})`));
+        rest.forEach(([x, idx]) => d.append(msgEl(x, idx))); box.append(d);
+      }
+    } else group.forEach(([x, idx]) => box.append(msgEl(x, idx)));
+  }
+}
+function scrollBottom() { const t = $('#thread'); t.scrollTop = t.scrollHeight; }
+
+function renderHeader() {
+  const m = S.meta;
+  $('#title').textContent = m ? m.title : '대화 없음';
+  $('#count').textContent = m ? `메시지 ${m.message_count}` : '';
+  $('#archChip').hidden = !(m && m.archived);
+  $('#archiveBtn').querySelector('.lbl').textContent = m && m.archived ? '보관 해제' : '보관';
+  const n = $('#notices'); n.innerHTML = '';
+  if (!m) return;
+  if (m.summary) {
+    const d = el('details', 'notice');
+    d.append(el('summary', '', `장기 요약 · 앞의 메시지 ${m.summarized_through}개 압축 · ${m.summary_model || '-'} · ${fmt(m.summary_updated_at)}`));
+    const b = el('div', 'body', m.summary); d.append(b); n.append(d);
+  }
+  if (m.summary_error) n.append(el('div', 'notice err', m.summary_error));
+}
+
+// ---------- 목록 ----------
+async function loadList() {
+  const scope = S.scope === 'trash' ? 'trash' : 'all';
+  const data = await api('/api/conversations?scope=' + scope);
+  S.list = data.items; renderList();
+}
+function renderList() {
+  if ($('#search').value.trim()) return; // 검색 결과 표시 중
+  const box = $('#list'); box.innerHTML = '';
+  let items = S.list;
+  if (S.scope === 'all') items = items.filter(x => !x.archived);
+  if (S.scope === 'archived') items = items.filter(x => x.archived);
+  if (!items.length) { box.append(el('div', 'empty-list', S.scope === 'trash' ? '휴지통이 비어 있습니다.' : S.scope === 'archived' ? '보관된 대화가 없습니다.' : '대화가 없습니다.')); return; }
+  items.forEach(x => {
+    const b = el('div', 'item' + (x.id === S.current && S.scope !== 'trash' ? ' on' : ''));
+    b.append(el('span', 't', x.title), el('span', 's', `${fmt(S.scope === 'trash' ? x.deleted_at : x.updated_at)} · 메시지 ${x.message_count}`));
+    if (S.scope === 'trash') {
+      const row = el('div', 'row'), r = el('button', 'small', '복구'), p = el('button', 'small danger', '영구 삭제');
+      r.onclick = async () => { try { await api('/api/conversation/restore', { id:x.id }); toast('복구했습니다'); await loadList(); } catch (e) { toast(e.message, true); } };
+      p.onclick = async () => { if (!confirm(`'${x.title}' 대화를 영구 삭제할까요?\n되돌릴 수 없습니다.`)) return;
+        try { await api('/api/conversation/purge', { id:x.id }); toast('영구 삭제했습니다'); await loadList(); } catch (e) { toast(e.message, true); } };
+      row.append(r, p); b.append(row);
+    } else { b.tabIndex = 0; b.onclick = () => openConversation(x.id); b.onkeydown = e => { if (e.key === 'Enter') openConversation(x.id); }; }
+    box.append(b);
+  });
+}
+function setScope(scope) {
+  S.scope = scope;
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.scope === scope));
+  $('#search').value = ''; loadList().catch(e => toast(e.message, true));
+}
+
+// ---------- 검색 ----------
+async function doSearch() {
+  const q = $('#search').value.trim();
+  if (!q) { renderList(); return; }
+  const data = await api('/api/search?q=' + encodeURIComponent(q));
+  if ($('#search').value.trim() !== q) return;
+  const box = $('#list'); box.innerHTML = '';
+  box.append(el('div', 'group', `검색 결과 ${data.items.length}건`));
+  if (!data.items.length) box.append(el('div', 'empty-list', '일치하는 내용이 없습니다.'));
+  data.items.forEach(r => {
+    const b = el('div', 'item'); b.tabIndex = 0;
+    b.append(el('span', 't', r.title + (r.archived ? ' (보관)' : '')));
+    const s = el('span', 's'); highlight(s, r.snippet, q); b.append(s);
+    b.append(el('span', 's', `${r.speaker ? (LABEL[r.speaker] || r.speaker) + ' · ' : ''}${fmt(r.time)}`));
+    b.onclick = () => openConversation(r.conversation_id, r.message_index);
+    box.append(b);
+  });
+}
+function highlight(node, text, q) {
+  const low = text.toLowerCase(), ql = q.toLowerCase(); let i = 0, k;
+  while ((k = low.indexOf(ql, i)) >= 0) { node.append(document.createTextNode(text.slice(i, k)), el('mark', '', text.slice(k, k + q.length))); i = k + q.length; }
+  node.append(document.createTextNode(text.slice(i)));
+}
+
+// ---------- 대화 열기/만들기 ----------
+async function openConversation(id, focusIndex) {
+  try {
+    const data = await api('/api/conversation?id=' + encodeURIComponent(id));
+    S.current = id; S.meta = data.meta; S.items = data.items;
+    store.set('councilConversation', id);
+    if (location.hash !== '#c=' + id) history.replaceState(null, '', '#c=' + id);
+    renderHeader(); renderThread(); renderList(); $('#app').classList.remove('nav');
+    $('#ctxInfo').textContent = '';
+    if (focusIndex != null) {
+      const t = document.querySelector(`[data-index="${focusIndex}"]`);
+      if (t) { const d = t.closest('details'); if (d) d.open = true; t.scrollIntoView({ block:'center' }); t.classList.add('flash'); }
+    } else scrollBottom();
+    if (S.running !== id) $('#q').focus();
+  } catch (e) { toast(e.message, true); throw e; }
+}
+async function newConversation() {
+  // 현재 대화가 비어 있으면 새로 만들지 않고 그대로 사용
+  if (S.current && S.items.length === 0 && S.meta && !S.meta.archived) { $('#q').focus(); return; }
+  const data = await api('/api/conversations', {});
+  if (S.scope !== 'all') setScope('all'); else await loadList();
+  await openConversation(data.id);
+}
+async function openFallback(excludeId) {
+  await loadList();
+  const next = S.list.find(x => !x.archived && x.id !== excludeId);
+  if (next) await openConversation(next.id); else { S.current = null; S.items = []; await newConversation(); }
+}
+
+// ---------- 제목/보관/삭제/내보내기 ----------
+function startRename() {
+  if (!S.meta) return;
+  const box = $('#titleBox'), h = $('#title'), inp = el('input'); inp.value = S.meta.title; inp.maxLength = 60;
+  h.hidden = true; box.prepend(inp); inp.focus(); inp.select();
+  let done = false;
+  const finish = async save => { if (done) return; done = true; const v = inp.value.trim(); inp.remove(); h.hidden = false;
+    if (save && v && v !== S.meta.title) { try { const d = await api('/api/conversation/rename', { id:S.current, title:v }); S.meta = { ...S.meta, ...d.meta }; renderHeader(); await loadList(); } catch (e) { toast(e.message, true); } } };
+  inp.onkeydown = e => { if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); };
+  inp.onblur = () => finish(true);
+}
+$('#title').onclick = startRename; $('#renameBtn').onclick = startRename;
+$('#archiveBtn').onclick = async () => {
+  if (!S.meta) return; const archive = !S.meta.archived;
+  try {
+    await api('/api/conversation/archive', { id:S.current, archived:archive });
+    toast(archive ? '보관함으로 옮겼습니다' : '보관을 해제했습니다');
+    if (archive && S.scope === 'all') await openFallback(S.current); else await openConversation(S.current);
+    await loadList();
+  } catch (e) { toast(e.message, true); }
+};
+$('#deleteBtn').onclick = async () => {
+  if (!S.meta) return;
+  if (S.running === S.current) { toast('답변 생성 중에는 삭제할 수 없습니다', true); return; }
+  if (!confirm(`'${S.meta.title}' 대화를 휴지통으로 옮길까요?\n휴지통에서 복구할 수 있습니다.`)) return;
+  try { const id = S.current; await api('/api/conversation/delete', { id }); toast('휴지통으로 옮겼습니다'); await openFallback(id); }
+  catch (e) { toast(e.message, true); }
+};
+$('#exportBtn').onclick = async () => {
+  if (!S.meta) return;
+  try {
+    const d = await api('/api/export', { id:S.current });
+    const a = el('a'); a.href = URL.createObjectURL(new Blob([d.markdown], { type:'text/markdown;charset=utf-8' })); a.download = d.filename; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast('저장됨: ' + d.path);
+  } catch (e) { toast(e.message, true); }
+};
+
+// ---------- 모델 선택 ----------
+function modelValue(sel, custom) { return sel.value === 'custom' ? custom.value.trim() : sel.value; }
+function bindModel(sel, custom, key) {
+  const saved = store.get(key);
+  if (saved) { if ([...sel.options].some(o => o.value === saved)) sel.value = saved; else { sel.value = 'custom'; custom.value = saved; } }
+  const sync = () => { custom.style.display = sel.value === 'custom' ? 'block' : 'none'; updateModelInfo(); };
+  sel.onchange = () => { sync(); if (sel.value === 'custom') custom.focus(); else store.set(key, sel.value); };
+  custom.oninput = () => { store.set(key, custom.value.trim()); updateModelInfo(); };
+  sync();
+}
+function updateModelInfo() {
+  const g = modelValue($('#gptModel'), $('#gptCustom')) || '?', c = modelValue($('#claudeModel'), $('#claudeCustom')) || '?';
+  const short = v => v === 'account default' ? '기본' : v;
+  $('#modelInfo').textContent = S.target === 'gpt' ? `GPT: ${short(g)}` : S.target === 'claude' ? `Claude: ${short(c)}` : `GPT: ${short(g)} · Claude: ${short(c)}`;
+}
+document.querySelectorAll('#target button').forEach(b => b.onclick = () => setTarget(b.dataset.v));
+function setTarget(v) { S.target = v; store.set('councilTarget', v); document.querySelectorAll('#target button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); updateModelInfo(); }
+document.querySelectorAll('#mode button').forEach(b => b.onclick = () => setMode(b.dataset.m));
+function setMode(m) { S.mode = m; store.set('councilMode', m); document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.m === m)); $('#workdir').classList.toggle('show', m === 'work'); $('#q').placeholder = m === 'work' ? '작업 폴더의 파일을 참고해 답할 질문 (Enter 보내기 · Shift+Enter 줄바꿈)' : '질문을 입력하세요 (Enter 보내기 · Shift+Enter 줄바꿈)'; }
+$('#workdir').addEventListener('input', () => store.set('councilWorkdir', $('#workdir').value.trim()));
+$('#modelToggle').onclick = () => { const m = $('#models'); m.classList.toggle('open'); $('#modelToggle').textContent = m.classList.contains('open') ? '모델 설정 ▴' : '모델 설정 ▾'; };
+
+// ---------- 보내기 ----------
+function setBusy(on, text) {
+  S.running = on ? S.current : null;
+  $('#send').disabled = on; $('#spin').hidden = !on; $('#status').textContent = text || (on ? '진행 중' : '준비됨');
+}
+function pendingEl(text) { const p = el('div', 'pending'); p.id = 'pending'; p.append(el('span', 'spin'), el('span', 'ptext', text)); return p; }
+
+async function send() {
+  const q = $('#q'), question = q.value.trim();
+  if (!question || S.running) return;
+  const gpt = modelValue($('#gptModel'), $('#gptCustom')), claude = modelValue($('#claudeModel'), $('#claudeCustom'));
+  if (S.target !== 'claude' && !gpt) { $('#models').classList.add('open'); $('#gptCustom').focus(); return; }
+  if (S.target !== 'gpt' && !claude) { $('#models').classList.add('open'); $('#claudeCustom').focus(); return; }
+  if (S.mode === 'work' && !$('#workdir').value.trim()) { $('#workdir').focus(); toast('작업 모드에서는 작업 폴더를 입력하세요', true); return; }
+  if (!S.current) await newConversation();
+  const convId = S.current, box = $('#msgs');
+  setBusy(true, '보내는 중');
+  if (!S.items.length) box.innerHTML = '';
+  const pend = pendingEl('대화 맥락을 준비하는 중'); box.append(pend); scrollBottom();
+  const draft = question; q.value = ''; autoGrow();
+  const here = () => S.current === convId;
+  let gotUser = false;
+  try {
+    const res = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, workdir:$('#workdir').value.trim() }) });
+    if (!res.ok) { let m = '요청 실패'; try { m = (await res.json()).error || m; } catch {} throw new Error(m); }
+    const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
+    for (;;) {
+      const { value, done } = await reader.read(); if (done) break;
+      buf += dec.decode(value, { stream:true }); const lines = buf.split('\n'); buf = lines.pop();
+      for (const line of lines) {
+        if (!line) continue; const e = JSON.parse(line);
+        if (e.type === 'stage') { $('#status').textContent = e.text; const t = pend.querySelector('.ptext'); if (t) t.textContent = e.text; }
+        else if (e.type === 'saved') { gotUser = true; if (here()) { pend.before(msgEl(e.item)); }
+          const c = e.context; $('#ctxInfo').textContent = c ? `모델에 전달: ${c.summarized_through ? `요약(1-${c.summarized_through}) + ` : ''}최근 ${c.total - c.recent_from}개 메시지` : ''; }
+        else if (e.type === 'answer') { if (here()) { pend.before(msgEl(e.item)); scrollBottom(); } }
+        else if (e.type === 'summary') { if (here()) pend.before(el('div', 'inline-warn', e.text)); }
+        else if (e.type === 'warning') { if (here()) pend.before(el('div', 'inline-warn', e.text)); }
+        else if (e.type === 'model_error') { if (here()) pend.before(el('div', 'inline-err', `${e.model} 오류\n${e.text}`)); }
+        else if (e.type === 'error') { throw new Error(e.text); }
+        else if (e.type === 'done') { if (e.errors && Object.keys(e.errors).length) toast('일부 모델 호출이 실패했습니다', true); }
+      }
+    }
+    pend.remove();
+    if (here()) await openConversation(convId);
+    $('#status').textContent = '답변 완료';
+  } catch (err) {
+    pend.remove();
+    if (!gotUser && !q.value) { q.value = draft; autoGrow(); } // 질문이 저장되지 않았으면 입력창에 되돌림
+    if (here()) { try { await openConversation(convId); } catch {} const last = S.items[S.items.length - 1];
+      if (!last || last.role !== 'error') { $('#msgs').append(el('div', 'inline-err', '오류: ' + err.message)); } scrollBottom(); }
+    else toast('오류: ' + err.message, true);
+    $('#status').textContent = '오류로 중단됨';
+  } finally {
+    setBusy(false, $('#status').textContent); $('#send').disabled = false;
+    loadList().catch(() => {});
+  }
+}
+$('#send').onclick = send;
+const autoGrow = () => { const q = $('#q'); q.style.height = 'auto'; q.style.height = Math.min(q.scrollHeight, innerHeight * .4) + 'px'; };
+$('#q').addEventListener('input', autoGrow);
+$('#q').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
+
+// ---------- CLI 버전 확인 (업데이트는 직접 실행) ----------
+async function loadVersions(force) {
+  let v; try { v = await api('/api/versions' + (force ? '?refresh=1' : '')); } catch { $('#cli').append(el('span', 'upd', '버전 확인 불가 · 서버 재시작 필요')); return; }
+  const box = $('#cli'); box.innerHTML = '';
+  const names = { codex:'Codex', claude:'Claude' }, outdated = [];
+  for (const k of ['codex', 'claude']) {
+    const x = v[k], line = el('div');
+    line.append(el('span', '', (x.installed ? '● ' : '○ ') + names[k] + ' '), el('b', '', x.installed || '미설치'));
+    line.title = `설치: ${x.installed || '-'} / 최신: ${x.latest || '확인 불가'}`;
+    box.append(line);
+    if (x.outdated) {
+      outdated.push(k);
+      const u = el('span', 'upd', `${x.latest} 업데이트 있음 · 명령 복사`); u.title = x.update_command;
+      u.onclick = async () => { try { await navigator.clipboard.writeText(x.update_command); toast(`복사됨: ${x.update_command}\n터미널에 붙여넣어 실행한 뒤 AI Council을 다시 시작하세요.`); } catch { toast(x.update_command); } };
+      box.append(u);
+    }
+  }
+  const r = el('span', 'upd', '버전 다시 확인'); r.style.color = 'var(--dim)'; r.onclick = () => loadVersions(true); box.append(r);
+  if (outdated.length && !force) toast(`${outdated.map(k => names[k]).join(', ')} CLI 새 버전이 있습니다. 왼쪽 아래에서 업데이트 명령을 복사하세요.`, true);
+}
+
+// ---------- 기타 ----------
+$('#newBtn').onclick = () => newConversation().catch(e => toast(e.message, true));
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => setScope(b.dataset.scope));
+$('#search').addEventListener('input', () => { clearTimeout(S.searchTimer); S.searchTimer = setTimeout(() => doSearch().catch(e => toast(e.message, true)), 250); });
+$('#menu').onclick = () => $('#app').classList.toggle('nav'); $('#scrim').onclick = () => $('#app').classList.remove('nav');
+$('#quit').onclick = async () => { if (S.running && !confirm('답변 생성 중입니다. 그래도 종료할까요?')) return;
+  try { await fetch('/api/shutdown', { method:'POST' }); } finally { document.body.innerHTML = '<div style="padding:40px;font:16px system-ui;color:#e9efff;background:#0a0e1a;height:100vh">AI Council을 종료했습니다. 이 창을 닫아도 됩니다.</div>'; } };
+window.addEventListener('beforeunload', e => { if (S.running) { e.preventDefault(); e.returnValue = ''; } });
+window.addEventListener('hashchange', () => { const id = (location.hash.match(/^#c=([\w-]+)/) || [])[1]; if (id && id !== S.current) openConversation(id).catch(() => {}); });
+
+(async function init() {
+  bindModel($('#gptModel'), $('#gptCustom'), 'councilGptModel');
+  bindModel($('#claudeModel'), $('#claudeCustom'), 'councilClaudeModel');
+  $('#workdir').value = store.get('councilWorkdir') || '';
+  setMode('chat'); // 기본값은 항상 대화 모드
+  setTarget(['gpt','claude','both'].includes(store.get('councilTarget')) ? store.get('councilTarget') : 'both');
+  api('/api/status').then(s => { $('#ver').textContent = 'V' + s.version;
+    if (s.version !== UI_VERSION) { const n = el('div', 'notice err', `서버(V${s.version})가 화면(V${UI_VERSION})보다 오래된 버전입니다. AI Council 콘솔 창을 닫고 AI-Council_Web.cmd 를 다시 실행하세요.`); $('#notices').before(n); }
+    const mark = ok => ok ? '●' : '○'; $('#cli').textContent = `${mark(s.cli.codex)} Codex  ${mark(s.cli.claude)} Claude`;
+    $('#cli').title = 'CLI 감지 여부 (PATH 기준)'; if (!s.cli.codex || !s.cli.claude) toast('일부 CLI를 찾지 못했습니다. PATH를 확인하세요.', true);
+    loadVersions(false);
+  }).catch(() => { $('#cli').textContent = '서버 연결 실패'; });
+  try {
+    await loadList();
+    const want = (location.hash.match(/^#c=([\w-]+)/) || [])[1] || store.get('councilConversation');
+    const found = S.list.find(x => x.id === want);
+    if (found) await openConversation(found.id);
+    else { const first = S.list.find(x => !x.archived); if (first) await openConversation(first.id); else await newConversation(); }
+  } catch (e) { toast('초기화 실패: ' + e.message, true); }
+})();
 </script>
 </body>
 </html>
