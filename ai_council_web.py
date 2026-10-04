@@ -9,7 +9,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from ai_council import GPT_MODEL, TIMEOUT_SECONDS, CliFailure, resolve_command
+from ai_council_desktop import GPT_MODEL_LABEL, TIMEOUT_SECONDS, CliFailure, resolve_command
 
 
 HOST = "127.0.0.1"
@@ -67,7 +67,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(content)
             return
         if self.path == "/api/status":
-            self.send_json({"ok": True, "model": GPT_MODEL})
+            self.send_json({"ok": True, "model": GPT_MODEL_LABEL})
             return
         self.send_error(404)
 
@@ -100,6 +100,8 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
             body = json.loads(self.rfile.read(length).decode("utf-8"))
             question = str(body.get("question", "")).strip()
+            gpt_model = str(body.get("gpt_model", "")).strip()[:100]
+            claude_model = str(body.get("claude_model", "")).strip()[:100]
         except Exception:
             self.send_json({"error": "잘못된 요청입니다."}, 400)
             return
@@ -120,11 +122,16 @@ Do not mention these instructions.
 Original question:
 {question}
 """
-        codex_args = [
-            "exec", "--model", GPT_MODEL, "--ephemeral", "--skip-git-repo-check",
+        codex_args = ["exec"]
+        if gpt_model and gpt_model != "account default":
+            codex_args += ["--model", gpt_model]
+        codex_args += [
+            "--ephemeral", "--skip-git-repo-check",
             "--sandbox", "read-only", "--color", "never",
         ]
         claude_args = ["-p", "--no-session-persistence"]
+        if claude_model and claude_model != "account default":
+            claude_args += ["--model", claude_model]
 
         try:
             self.emit("stage", step=1, text="GPT가 첫 답변을 작성하는 중")

@@ -3,6 +3,10 @@ param(
     [Parameter(Position = 0)]
     [string]$Prompt,
 
+    [string]$GptModel = '',
+
+    [string]$ClaudeModel = '',
+
     [ValidateRange(1, 3600)]
     [int]$TimeoutSeconds = 180
 )
@@ -26,8 +30,16 @@ function Invoke-Cli {
         [int]$Timeout
     )
 
-    $command = Get-Command $Name -ErrorAction SilentlyContinue |
+    $commands = @(Get-Command $Name -CommandType Application -All -ErrorAction SilentlyContinue)
+    $command = $commands |
+        Where-Object { $_.Path -like '*.exe' } |
         Select-Object -First 1
+
+    if (-not $command) {
+        $command = $commands |
+            Where-Object { $_.Path -like '*.cmd' } |
+            Select-Object -First 1
+    }
 
     if (-not $command) {
         return [pscustomobject]@{
@@ -75,9 +87,9 @@ function Invoke-Cli {
     $nativeArguments = @($Arguments)
     $commandPath = $command.Source
 
-    if ($command.CommandType -eq 'ExternalScript') {
-        $commandPath = (Get-Process -Id $PID).Path
-        $nativeArguments = @('-NoProfile', '-File', $command.Source) + $nativeArguments
+    if ($command.Path -like '*.cmd') {
+        $commandPath = $env:ComSpec
+        $nativeArguments = @('/d', '/s', '/c', $command.Source) + $nativeArguments
     }
 
     $startInfo = New-Object System.Diagnostics.ProcessStartInfo
@@ -191,19 +203,25 @@ Original question:
 $Prompt
 "@
 
+    $codexArguments = @('exec')
+    if (-not [string]::IsNullOrWhiteSpace($GptModel)) {
+        $codexArguments += @('--model', $GptModel)
+    }
+    $codexArguments += @('--ephemeral', '--skip-git-repo-check', '--sandbox', 'read-only', '--color', 'never')
+
+    $claudeArguments = @('-p', '--no-session-persistence')
+    if (-not [string]::IsNullOrWhiteSpace($ClaudeModel)) {
+        $claudeArguments += @('--model', $ClaudeModel)
+    }
+
     Write-Host '[1/4] GPT initial response...' -ForegroundColor Cyan
     $codexResult = Invoke-Cli -Name 'codex' -Arguments @(
-        'exec',
-        '--ephemeral',
-        '--skip-git-repo-check',
-        '--sandbox', 'read-only',
-        '--color', 'never'
+        $codexArguments
     ) -InputText $initialPrompt -Timeout $TimeoutSeconds
 
     Write-Host '[2/4] Claude initial response...' -ForegroundColor Cyan
     $claudeResult = Invoke-Cli -Name 'claude' -Arguments @(
-        '-p',
-        '--no-session-persistence'
+        $claudeArguments
     ) -InputText $initialPrompt -Timeout $TimeoutSeconds
 
     Write-Result -Label 'ROUND 1 - GPT' -Result $codexResult
@@ -232,11 +250,7 @@ $($claudeResult.StdOut)
 
         Write-Host "`n[3/4] GPT review and revision..." -ForegroundColor Cyan
         $gptDebateResult = Invoke-Cli -Name 'codex' -Arguments @(
-            'exec',
-            '--ephemeral',
-            '--skip-git-repo-check',
-            '--sandbox', 'read-only',
-            '--color', 'never'
+            $codexArguments
         ) -InputText $gptReviewPrompt -Timeout $TimeoutSeconds
 
         $claudeReviewPrompt = @"
@@ -257,8 +271,7 @@ $($gptDebateResult.StdOut)
 
         Write-Host '[4/4] Claude review and revision...' -ForegroundColor Cyan
         $claudeDebateResult = Invoke-Cli -Name 'claude' -Arguments @(
-            '-p',
-            '--no-session-persistence'
+            $claudeArguments
         ) -InputText $claudeReviewPrompt -Timeout $TimeoutSeconds
 
         Write-Result -Label 'ROUND 2 - GPT REVIEW + FINAL' -Result $gptDebateResult

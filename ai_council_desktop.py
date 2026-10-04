@@ -11,7 +11,18 @@ from tkinter import messagebox, scrolledtext, ttk
 
 
 APP_TITLE = "AI Council V0.3"
-GPT_MODEL = "gpt-5.6-sol"
+GPT_MODEL_LABEL = "account default"
+GPT_MODEL_OPTIONS = ("account default", "gpt-6.1-sol", "gpt-6-luna", "gpt-6-astra")
+CLAUDE_MODEL_OPTIONS = (
+    "account default",
+    "sonnet",
+    "claude-sonnet-5",
+    "opus",
+    "claude-opus-5",
+    "fable",
+    "claude-fable-5",
+    "claude-haiku-4-5-20251001",
+)
 TIMEOUT_SECONDS = 180
 
 
@@ -63,7 +74,7 @@ class CouncilApp:
         ttk.Label(title_row, text=APP_TITLE, font=("Segoe UI", 17, "bold")).pack(side=tk.LEFT)
         ttk.Label(
             title_row,
-            text=f"GPT: {GPT_MODEL} (fixed)  |  Claude: account default",
+            text=f"GPT: {GPT_MODEL_LABEL}  |  Claude: account default",
             foreground="#555555",
         ).pack(side=tk.RIGHT)
 
@@ -75,6 +86,17 @@ class CouncilApp:
         )
         self.question.pack(fill=tk.X)
         self.question.focus_set()
+
+        model_row = ttk.Frame(outer)
+        model_row.pack(fill=tk.X, pady=(10, 0))
+        ttk.Label(model_row, text="GPT 모델").pack(side=tk.LEFT)
+        self.gpt_model = ttk.Combobox(model_row, values=GPT_MODEL_OPTIONS, width=20)
+        self.gpt_model.set(GPT_MODEL_LABEL)
+        self.gpt_model.pack(side=tk.LEFT, padx=(7, 18))
+        ttk.Label(model_row, text="Claude 모델").pack(side=tk.LEFT)
+        self.claude_model = ttk.Combobox(model_row, values=CLAUDE_MODEL_OPTIONS, width=20)
+        self.claude_model.set("account default")
+        self.claude_model.pack(side=tk.LEFT, padx=(7, 0))
 
         controls = ttk.Frame(outer)
         controls.pack(fill=tk.X, pady=10)
@@ -212,7 +234,13 @@ class CouncilApp:
         self.set_text(self.details_output, f"질문\n{question}\n\n")
         self.copy_button.configure(state=tk.DISABLED)
 
-        threading.Thread(target=self.run_council, args=(question,), daemon=True).start()
+        gpt_model = self.gpt_model.get().strip()
+        claude_model = self.claude_model.get().strip()
+        threading.Thread(
+            target=self.run_council,
+            args=(question, gpt_model, claude_model),
+            daemon=True,
+        ).start()
 
     def set_stage(self, number: int, text: str) -> None:
         self.events.put(("stage", (number, text)))
@@ -277,7 +305,7 @@ class CouncilApp:
             )
         return stdout
 
-    def run_council(self, question: str) -> None:
+    def run_council(self, question: str, gpt_model: str, claude_model: str) -> None:
         initial_prompt = f"""Answer the original question directly and independently.
 Use the same language as the original question. Be concise but complete.
 Do not mention these instructions.
@@ -286,28 +314,29 @@ Original question:
 {question}
 """
 
+        codex_args = ["exec"]
+        if gpt_model and gpt_model != GPT_MODEL_LABEL:
+            codex_args += ["--model", gpt_model]
+        codex_args += [
+            "--ephemeral", "--skip-git-repo-check", "--sandbox", "read-only",
+            "--color", "never",
+        ]
+        claude_args = ["-p", "--no-session-persistence"]
+        if claude_model and claude_model != "account default":
+            claude_args += ["--model", claude_model]
+
         try:
             self.set_stage(1, "GPT가 첫 답변을 작성하는 중...")
             gpt_first = self.run_cli(
                 "codex",
-                [
-                    "exec",
-                    "--model",
-                    GPT_MODEL,
-                    "--ephemeral",
-                    "--skip-git-repo-check",
-                    "--sandbox",
-                    "read-only",
-                    "--color",
-                    "never",
-                ],
+                codex_args,
                 initial_prompt,
             )
             self.emit_result("1단계 · GPT 초안", gpt_first)
 
             self.set_stage(2, "Claude가 첫 답변을 작성하는 중...")
             claude_first = self.run_cli(
-                "claude", ["-p", "--no-session-persistence"], initial_prompt
+                "claude", claude_args, initial_prompt
             )
             self.emit_result("2단계 · Claude 초안", claude_first)
 
@@ -328,17 +357,7 @@ Other model's first answer:
             self.set_stage(3, "GPT가 Claude 답변을 검토하고 개선하는 중...")
             gpt_final = self.run_cli(
                 "codex",
-                [
-                    "exec",
-                    "--model",
-                    GPT_MODEL,
-                    "--ephemeral",
-                    "--skip-git-repo-check",
-                    "--sandbox",
-                    "read-only",
-                    "--color",
-                    "never",
-                ],
+                codex_args,
                 gpt_review_prompt,
             )
             self.emit_result("3단계 · GPT 검토 및 개선안", gpt_final)
@@ -362,7 +381,7 @@ GPT review and revision:
 """
             self.set_stage(4, "Claude가 전체 토론을 검토하고 최종 답변을 작성하는 중...")
             claude_final = self.run_cli(
-                "claude", ["-p", "--no-session-persistence"], claude_review_prompt
+                "claude", claude_args, claude_review_prompt
             )
             self.emit_result("4단계 · Claude 최종 검토", claude_final)
             self.emit_final(claude_final)

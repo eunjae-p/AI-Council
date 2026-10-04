@@ -13,6 +13,9 @@
     .meta { padding:9px 13px; border:1px solid var(--line); border-radius:999px; background:#0d1529 }
     .panel { background:rgba(18,26,46,.94); border:1px solid var(--line); border-radius:18px; padding:20px; box-shadow:0 20px 50px #0004 }
     textarea { width:100%; min-height:140px; resize:vertical; border:1px solid #344468; border-radius:13px; background:#0b1326; color:var(--text); padding:16px; font:16px/1.6 inherit; outline:none }
+    .models { display:flex; gap:14px; margin-bottom:14px; flex-wrap:wrap } .models label { flex:1; min-width:220px; color:var(--muted); font-size:13px }
+    .models select,.models input { width:100%; margin-top:5px; border:1px solid #344468; border-radius:10px; background:#0b1326; color:var(--text); padding:10px 12px; font:14px inherit }
+    .custom-model { display:none }
     textarea:focus { border-color:var(--blue); box-shadow:0 0 0 3px #6ea8fe22 }
     .actions { display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap }
     button { border:0; border-radius:11px; padding:11px 16px; font-weight:700; cursor:pointer; color:#08101e; background:var(--green) }
@@ -34,8 +37,12 @@
 </head>
 <body>
 <main class="wrap">
-  <header><div><h1>AI Council</h1><div class="subtitle">GPT와 Claude가 검토하고 하나의 결론을 만듭니다.</div></div><div class="meta">GPT · gpt-5.6-sol &nbsp;|&nbsp; Claude · account default</div></header>
+  <header><div><h1>AI Council</h1><div class="subtitle">GPT와 Claude가 검토하고 하나의 결론을 만듭니다.</div></div><div class="meta">기본값은 각 CLI 계정 설정</div></header>
   <section class="panel">
+    <div class="models">
+      <label>GPT 모델<select id="gptModel"><option value="account default">Account default</option><option value="gpt-6.1-sol">GPT-6.1 Sol</option><option value="gpt-6-luna">GPT-6 Luna</option><option value="gpt-6-astra">GPT-6 Astra</option><option value="custom">직접 입력…</option></select><input class="custom-model" id="gptCustom" placeholder="예: gpt-6.1-sol"></label>
+      <label>Claude 모델<select id="claudeModel"><option value="account default">Account default</option><optgroup label="최신 버전 자동 추적"><option value="sonnet">Sonnet 최신 (현재 Sonnet 5)</option><option value="opus">Opus 최신 (현재 Opus 5)</option><option value="fable">Fable 최신 (현재 Fable 5)</option></optgroup><optgroup label="버전 고정"><option value="claude-sonnet-5">Claude Sonnet 5 고정</option><option value="claude-opus-5">Claude Opus 5 고정</option><option value="claude-fable-5">Claude Fable 5 고정</option><option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 고정</option></optgroup><option value="custom">직접 입력…</option></select><input class="custom-model" id="claudeCustom" placeholder="예: claude-sonnet-5"></label>
+    </div>
     <textarea id="question" placeholder="논의할 질문을 입력하세요. 여러 줄 입력도 가능합니다."></textarea>
     <div class="actions"><button id="start">자동 토론 시작</button><button class="secondary" id="clear">초기화</button><button class="secondary" id="shutdown">앱 종료</button><span id="status">준비됨</span></div>
     <div class="progress"><div class="bar" id="bar"></div></div>
@@ -48,15 +55,18 @@
   <details><summary>토론 과정 보기</summary><div class="grid" id="rounds"></div></details>
 </main>
 <script>
-const $=s=>document.querySelector(s), q=$('#question'), start=$('#start'), status=$('#status'), bar=$('#bar'), finalText=$('#finalText'), rounds=$('#rounds'), copy=$('#copy');
+const $=s=>document.querySelector(s), q=$('#question'), gptModel=$('#gptModel'), gptCustom=$('#gptCustom'), claudeModel=$('#claudeModel'), claudeCustom=$('#claudeCustom'), start=$('#start'), status=$('#status'), bar=$('#bar'), finalText=$('#finalText'), rounds=$('#rounds'), copy=$('#copy');
 let finalValue='';
+function modelValue(select,custom){ return select.value==='custom' ? custom.value.trim() : select.value; }
+function toggleCustom(select,custom){ custom.style.display=select.value==='custom'?'block':'none'; if(select.value==='custom')custom.focus(); }
+gptModel.onchange=()=>toggleCustom(gptModel,gptCustom); claudeModel.onchange=()=>toggleCustom(claudeModel,claudeCustom);
 function reset(){ rounds.innerHTML=''; finalValue=''; finalText.className='empty'; finalText.textContent='토론을 시작하면 최종 결론이 여기에 표시됩니다.'; status.textContent='준비됨'; bar.style.width='0'; copy.disabled=true; }
 function card(label,text){ const el=document.createElement('article'); el.className='card'; const h=document.createElement('h3'); h.textContent=label; const pre=document.createElement('pre'); pre.textContent=text; el.append(h,pre); rounds.append(el); }
-start.onclick=async()=>{ const question=q.value.trim(); if(!question){ q.focus(); return; } reset(); start.disabled=true; q.disabled=true; finalText.className='empty'; finalText.textContent='두 모델이 토론을 진행하고 있습니다…';
- try { const res=await fetch('/api/debate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question})}); if(!res.ok) throw new Error((await res.json()).error||'요청 실패');
+start.onclick=async()=>{ const question=q.value.trim(), gpt=modelValue(gptModel,gptCustom), claude=modelValue(claudeModel,claudeCustom); if(!question){ q.focus(); return; } if(!gpt){gptCustom.focus();return;} if(!claude){claudeCustom.focus();return;} reset(); start.disabled=true; q.disabled=true; gptModel.disabled=true; gptCustom.disabled=true; claudeModel.disabled=true; claudeCustom.disabled=true; finalText.className='empty'; finalText.textContent='두 모델이 토론을 진행하고 있습니다…';
+ try { const res=await fetch('/api/debate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,gpt_model:gpt,claude_model:claude})}); if(!res.ok) throw new Error((await res.json()).error||'요청 실패');
   const reader=res.body.getReader(), decoder=new TextDecoder(); let buffer='';
   while(true){ const {value,done}=await reader.read(); if(done) break; buffer+=decoder.decode(value,{stream:true}); const lines=buffer.split('\n'); buffer=lines.pop(); for(const line of lines){ if(!line)continue; const e=JSON.parse(line); if(e.type==='stage'){status.textContent=`${e.step}/4 · ${e.text}`;bar.style.width=`${(e.step-1)*25}%`;} if(e.type==='result')card(`${e.step}단계 · ${e.label}`,e.text); if(e.type==='final'){finalValue=e.text;finalText.className='';finalText.textContent=e.text;copy.disabled=false;} if(e.type==='done'){status.textContent='자동 토론 완료';bar.style.width='100%';} if(e.type==='error')throw new Error(e.text); } }
- } catch(err){ finalText.className='error'; finalText.textContent='오류: '+err.message; status.textContent='오류로 중단됨'; } finally { start.disabled=false; q.disabled=false; } };
+ } catch(err){ finalText.className='error'; finalText.textContent='오류: '+err.message; status.textContent='오류로 중단됨'; } finally { start.disabled=false; q.disabled=false; gptModel.disabled=false; gptCustom.disabled=false; claudeModel.disabled=false; claudeCustom.disabled=false; } };
 $('#clear').onclick=()=>{q.value='';reset();q.focus();}; copy.onclick=async()=>{await navigator.clipboard.writeText(finalValue);status.textContent='최종 결론을 복사했습니다';};
 $('#shutdown').onclick=async()=>{try{await fetch('/api/shutdown',{method:'POST'});}finally{document.body.innerHTML='<main class="wrap"><section class="panel"><h1>AI Council을 종료했습니다.</h1><p class="subtitle">이 창을 닫아도 됩니다.</p></section></main>';}};
 q.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key==='Enter')start.click();});
