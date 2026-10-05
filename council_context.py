@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import time
 
-from council_core import SUMMARY_TIMEOUT_SECONDS, CliFailure, call_model
+from council_core import SUMMARY_TIMEOUT_SECONDS, Cancelled, CliFailure, call_model
 from council_store import ConversationStore, now, speaker
 
 RECENT_BUDGET_CHARS = 24000      # 프롬프트에 넣을 최근 원문 최대치
@@ -133,9 +133,10 @@ def maybe_summarize(
     claude_model: str = "",
     force: bool = False,
     runner=call_model,
+    cancel=None,
 ) -> dict:
     """필요하면 장기 요약을 갱신한다. 실패해도 예외를 던지지 않는다.
-    반환: {"status": "skipped"|"updated"|"failed", ...}"""
+    반환: {"status": "skipped"|"updated"|"failed"|"cancelled", ...}"""
     meta = store.get_meta(conversation_id)
     items = mark_skipped(store.load_messages(conversation_id))
     start = min(int(meta.get("summarized_through") or 0), len(items))
@@ -178,12 +179,14 @@ def maybe_summarize(
                 last=cursor,
                 messages="\n\n".join(chunk),
             )
-            summary = runner(which, model, prompt, "chat", None, SUMMARY_TIMEOUT_SECONDS).strip()
+            summary = runner(which, model, prompt, "chat", None, SUMMARY_TIMEOUT_SECONDS, cancel=cancel).strip()
             # 부분 성공도 저장해 진행분을 잃지 않는다
             store.update_meta(
                 conversation_id, summary=summary, summarized_through=cursor, summary_model=label,
                 summary_updated_at=now(), summary_error="",
             )
+    except Cancelled:
+        return {"status": "cancelled", "model": label}
     except (CliFailure, OSError) as exc:
         message = exc.details() if isinstance(exc, CliFailure) else str(exc)
         store.update_meta(conversation_id, summary_error=f"{time_label()} 요약 실패 ({label}): {message[:1500]}")

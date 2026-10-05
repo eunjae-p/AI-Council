@@ -16,6 +16,7 @@ body{margin:0;background:var(--bg);color:var(--text);font:15px/1.65 system-ui,"M
 button{font:inherit;border:0;border-radius:9px;padding:8px 12px;cursor:pointer;color:var(--text);background:#1c2742}
 button:hover{background:#25335a} button:disabled{opacity:.45;cursor:not-allowed}
 button.primary{background:var(--council);color:#06131a;font-weight:700} button.primary:hover{filter:brightness(1.08)}
+button.primary.stop{background:var(--danger);color:#1a0509}
 button.danger{color:var(--danger)} button.ghost{background:transparent} button.ghost:hover{background:#1a2440}
 button.small{padding:4px 9px;font-size:12.5px;border-radius:7px}
 input,select,textarea{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line2);border-radius:9px;outline:none}
@@ -113,7 +114,7 @@ details.indiv .msg{margin-top:10px}
 .write textarea{flex:1;resize:none;min-height:48px;max-height:40vh;padding:12px 14px;line-height:1.55}
 .status{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:8px;min-height:18px}
 .status .r{margin-left:auto;color:var(--dim)}
-.toast{position:fixed;right:18px;bottom:18px;display:grid;gap:8px;z-index:20}
+.toast{position:fixed;right:18px;top:68px;display:grid;gap:8px;z-index:20}
 .toast div{background:#1c2742;border:1px solid var(--line2);padding:9px 13px;border-radius:10px;font-size:13.5px;max-width:420px;box-shadow:0 10px 30px #0006}
 .toast div.err{border-color:#6b2c39;color:#ffc2ca}
 .scrim{display:none}
@@ -217,7 +218,7 @@ details.indiv .msg{margin-top:10px}
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.7.0'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.7.1'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const store = { get(k){ try { return localStorage.getItem(k); } catch { return null; } }, set(k,v){ try { localStorage.setItem(k,v); } catch {} } };
@@ -475,7 +476,9 @@ $('#modelToggle').onclick = () => { const m = $('#models'); m.classList.toggle('
 // ---------- 보내기 ----------
 function setBusy(on, text) {
   S.running = on ? S.current : null;
-  $('#send').disabled = on; $('#spin').hidden = !on; $('#status').textContent = text || (on ? '진행 중' : '준비됨');
+  const b = $('#send'); b.disabled = false; b.classList.toggle('stop', on);
+  b.textContent = on ? '■ 중지' : '보내기'; b.title = on ? '답변 생성 중지 (Esc)' : '';
+  $('#spin').hidden = !on; $('#status').textContent = text || (on ? '진행 중' : '준비됨');
 }
 function pendingEl(text) { const p = el('div', 'pending'); p.id = 'pending'; p.append(el('span', 'spin'), el('span', 'ptext', text)); return p; }
 
@@ -495,7 +498,7 @@ async function send() {
   const sentFiles = S.files.slice(); S.files = []; renderChips();
   if (sentFiles.length) { const t = pend.querySelector('.ptext'); if (t) t.textContent = '첨부 파일을 보내는 중'; }
   const here = () => S.current === convId;
-  let gotUser = false;
+  let gotUser = false, wasStopped = false;
   try {
     const res = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => ({ name:f.name, content:f.content })) }) });
@@ -512,6 +515,7 @@ async function send() {
         else if (e.type === 'answer') { if (here()) { pend.before(msgEl(e.item)); scrollBottom(); } }
         else if (e.type === 'summary') { if (here()) pend.before(el('div', 'inline-warn', e.text)); }
         else if (e.type === 'warning') { if (here()) pend.before(el('div', 'inline-warn', e.text)); }
+        else if (e.type === 'stopped') { wasStopped = true; if (here()) pend.before(el('div', 'inline-warn', e.text)); }
         else if (e.type === 'model_error') { if (here()) pend.before(el('div', 'inline-err', `${e.model} 오류\n${e.text}`)); }
         else if (e.type === 'error') { throw new Error(e.text); }
         else if (e.type === 'done') { if (e.errors && Object.keys(e.errors).length) toast('일부 모델 호출이 실패했습니다', true); }
@@ -519,7 +523,7 @@ async function send() {
     }
     pend.remove();
     if (here()) await openConversation(convId);
-    $('#status').textContent = '답변 완료';
+    $('#status').textContent = wasStopped ? '중지됨' : '답변 완료';
   } catch (err) {
     pend.remove();
     if (!gotUser && !q.value) { q.value = draft; autoGrow(); }
@@ -533,7 +537,14 @@ async function send() {
     loadList().catch(() => {});
   }
 }
-$('#send').onclick = send;
+$('#send').onclick = () => S.running ? stopRun() : send();
+async function stopRun() {
+  if (!S.running) return;
+  const b = $('#send'); b.disabled = true; b.textContent = '중지하는 중…'; $('#status').textContent = '중지하는 중…';
+  try { const r = await api('/api/chat/stop', { conversation_id: S.running }); if (!r.ok) toast(r.message || '진행 중인 답변이 없습니다'); }
+  catch (e) { toast('중지 실패: ' + e.message, true); b.disabled = false; b.textContent = '■ 중지'; }
+}
+window.addEventListener('keydown', e => { if (e.key === 'Escape' && S.running && !e.isComposing) { e.preventDefault(); stopRun(); } });
 const autoGrow = () => { const q = $('#q'); q.style.height = 'auto'; q.style.height = Math.min(q.scrollHeight, innerHeight * .4) + 'px'; };
 $('#q').addEventListener('input', autoGrow);
 $('#q').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });

@@ -15,6 +15,8 @@ from urllib.parse import parse_qs, urlparse
 from council_context import build_context, maybe_summarize
 from council_core import (
     TIMEOUT_SECONDS,
+    Cancelled,
+    CancelToken,
     MODES,
     ACCOUNT_DEFAULT,
     actual_model,
@@ -32,7 +34,7 @@ from council_store import ConversationStore
 import council_versions
 import council_attach
 
-VERSION = "0.7.0"
+VERSION = "0.7.1"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -41,6 +43,7 @@ ATTACH_TIMEOUT = 300  # 첨부·작업 모드는 분석량이 많아 제한 시�
 
 store = ConversationStore()
 _busy: set[str] = set()
+_tokens: dict[str, CancelToken] = {}  # 대화 ID → 진행 중인 작업의 중지 토큰
 _busy_lock = threading.Lock()
 
 
@@ -204,6 +207,14 @@ class Handler(BaseHTTPRequestHandler):
             cid = lambda: store.check_id(str(body.get("id") or body.get("conversation_id") or ""))  # noqa: E731
             if path == "/api/conversations":
                 self.send_json({"id": (meta := store.create())["id"], "meta": store._public_meta(meta)})
+            elif path == "/api/chat/stop":
+                with _busy_lock:
+                    tok = _tokens.get(cid())
+                if tok is None:
+                    self.send_json({"ok": False, "message": "진행 중인 답변이 없습니다."})
+                else:
+                    tok.cancel()
+                    self.send_json({"ok": True})
             elif path == "/api/conversation/rename":
                 self.send_json({"meta": store.rename(cid(), str(body.get("title", "")))})
             elif path == "/api/conversation/archive":
@@ -281,6 +292,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({"error": "이 대화는 이미 답변을 생성하는 중입니다."}, 409)
                 return
             _busy.add(conversation_id)
+            self.cancel = _tokens[conversation_id] = CancelToken()
         try:
             self.start_stream()
             try:
@@ -290,13 +302,15 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             with _busy_lock:
                 _busy.discard(conversation_id)
+                _tokens.pop(conversation_id, None)
 
     def run_chat(self, conversation_id: str, question: str, target: str, gpt_model: str, claude_model: str,
                  mode: str = "chat", workdir=None, files: list | None = None) -> None:
         # 1) 필요할 때만 장기 요약 갱신 (실패해도 채팅은 계속)
         self.emit("stage", step=0, text="대화 맥락을 준비하는 중")
         prefer = "gpt" if target == "gpt" else "claude"
-        result = maybe_summarize(store, conversation_id, prefer, gpt_model, claude_model)
+        token = getattr(self, "cancel", None) or CancelToken()
+        result = maybe_summarize(store, conversation_id, prefer, gpt_model, claude_model, cancel=token)
         if result["status"] == "updated":
             self.emit("summary", text=f"오래된 대화를 장기 요약으로 정리했습니다 ({result['model']}).")
         elif result["status"] == "failed":
@@ -318,7 +332,11 @@ class Handler(BaseHTTPRequestHandler):
         answers: dict[str, str] = {}
         errors: dict[str, str] = {}
         plan = [m for m in ("gpt", "claude") if target in (m, "both")]
+        stopped = token.cancelled
         for index, which in enumerate(plan, start=1):
+            if token.cancelled:
+                stopped = True
+                break
             label, model = ("GPT", gpt_model) if which == "gpt" else ("Claude", claude_model)
             name = "codex" if which == "gpt" else "claude"
             prompt = CHAT_PROMPT.format(me=label, context=context, question=question, attachments=attach_block)
@@ -333,7 +351,10 @@ class Handler(BaseHTTPRequestHandler):
             started = time.time()
             try:
                 run_info: dict = {}
-                answer = call_model(which, model, prompt, mode, workdir, timeout=timeout, info=run_info)
+                answer = call_model(which, model, prompt, mode, workdir, timeout=timeout, info=run_info, cancel=token)
+            except Cancelled:
+                stopped = True
+                break
             except CliFailure as exc:
                 errors[label] = exc.details()
                 self.emit("model_error", model=label, text=errors[label])
@@ -346,24 +367,34 @@ class Handler(BaseHTTPRequestHandler):
             )
             self.emit("answer", item=item)
 
-        if target == "both" and len(answers) == 2:
+        if target == "both" and len(answers) == 2 and not token.cancelled:
             self.emit("stage", step=3, text="두 답변을 최종 결론으로 정리하는 중")
             try:
                 final = call_model("claude", claude_model, SYNTH_PROMPT.format(
                     context=context, question=question, gpt=answers["GPT"], claude=answers["Claude"],
                     attachments="\n\n".join(f"### {a['name']}\n{a['summary']}" for a in attached if a["summary"])
                     or ("Attached: " + ", ".join(a["name"] for a in attached) if attached else "(none)"),
-                ), "chat", timeout=timeout)
+                ), "chat", timeout=timeout, cancel=token)
                 item = store.append_message(
                     conversation_id, "assistant", final, "Council",
                     cli_model="Claude" + (f" · {claude_model}" if model_label("claude", claude_model) else ""),
                 )
                 self.emit("answer", item=item)
+            except Cancelled:
+                stopped = True
             except CliFailure as exc:
                 errors["Council"] = exc.details()
                 self.emit("model_error", model="Council", text=errors["Council"])
 
-        if not answers:
+        if stopped or token.cancelled:
+            done_part = f" 완료된 답변: {', '.join(answers)}." if answers else ""
+            text = "사용자가 답변 생성을 중지했습니다." + done_part
+            if answers:
+                store.append_message(conversation_id, "error", text, "오류")
+            else:  # 답이 하나도 없으면 질문을 다음 맥락에서 제외
+                store.append_message(conversation_id, "error", text, "오류", failed_message_id=user_item["id"])
+            self.emit("stopped", text=text)
+        elif not answers:
             text = "모든 모델 호출이 실패했습니다.\n\n" + "\n\n".join(errors.values())
             # 질문은 원문에 남기되, 실패 기록을 붙여 다음 질문의 모델 컨텍스트에서는 제외한다.
             store.append_message(conversation_id, "error", text, "오류", failed_message_id=user_item["id"])

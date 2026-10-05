@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -117,9 +118,48 @@ def _kill_tree(process: subprocess.Popen[bytes]) -> None:
         process.kill()
 
 
+class Cancelled(CliFailure):
+    """사용자가 중지 버튼을 눌러 CLI 호출이 취소됨."""
+
+    def __init__(self, name: str):
+        super().__init__(name, "사용자가 답변 생성을 중지했습니다.")
+
+
+class CancelToken:
+    """진행 중인 CLI 프로세스를 중지하기 위한 토큰 (대화 하나당 하나)."""
+
+    def __init__(self) -> None:
+        self._event = threading.Event()
+        self._lock = threading.Lock()
+        self._process: subprocess.Popen | None = None
+
+    @property
+    def cancelled(self) -> bool:
+        return self._event.is_set()
+
+    def cancel(self) -> None:
+        self._event.set()
+        with self._lock:
+            process = self._process
+        if process is not None:
+            _kill_tree(process)
+
+    def attach(self, process: subprocess.Popen) -> None:
+        with self._lock:
+            self._process = process
+        if self._event.is_set():  # 시작 직전에 중지된 경우
+            _kill_tree(process)
+
+    def detach(self) -> None:
+        with self._lock:
+            self._process = None
+
+
 def run_cli(name: str, arguments: list[str], prompt: str, timeout: int = TIMEOUT_SECONDS, cwd: Path | str | None = None,
-            info: dict | None = None) -> str:
+            info: dict | None = None, cancel: CancelToken | None = None) -> str:
     """CLI에 prompt를 stdin으로 전달하고 stdout을 돌려준다. 실패하면 CliFailure."""
+    if cancel is not None and cancel.cancelled:
+        raise Cancelled(name)
     command = resolve_command(name) + arguments
     creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     try:
@@ -134,6 +174,8 @@ def run_cli(name: str, arguments: list[str], prompt: str, timeout: int = TIMEOUT
     except OSError as exc:
         raise CliFailure(name, f"{name} 실행 실패: {exc}") from exc
 
+    if cancel is not None:
+        cancel.attach(process)
     try:
         stdout_bytes, stderr_bytes = process.communicate(input=prompt.encode("utf-8"), timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -148,6 +190,16 @@ def run_cli(name: str, arguments: list[str], prompt: str, timeout: int = TIMEOUT
             stdout_bytes.decode("utf-8", errors="replace").strip(),
             stderr_bytes.decode("utf-8", errors="replace").strip(),
         )
+    except (BrokenPipeError, OSError):
+        # 중지로 프로세스가 먼저 종료되면 stdin 쓰기가 실패할 수 있음
+        if cancel is not None and cancel.cancelled:
+            raise Cancelled(name)
+        raise
+    finally:
+        if cancel is not None:
+            cancel.detach()
+    if cancel is not None and cancel.cancelled:
+        raise Cancelled(name)
 
     stdout = stdout_bytes.decode("utf-8", errors="replace").strip()
     stderr = stderr_bytes.decode("utf-8", errors="replace").strip()
@@ -186,7 +238,7 @@ def check_workdir(workdir: str) -> Path:
 
 
 def call_model(which: str, model: str, prompt: str, mode: str = "chat", workdir: Path | None = None,
-               timeout: int = TIMEOUT_SECONDS, info: dict | None = None) -> str:
+               timeout: int = TIMEOUT_SECONDS, info: dict | None = None, cancel: CancelToken | None = None) -> str:
     """which: gpt | claude.  mode: chat(도구 없음, 빈 폴더) | work(작업 폴더 읽기 전용)."""
     if which == "gpt":
         name, base = "codex", codex_args(model)
@@ -199,11 +251,13 @@ def call_model(which: str, model: str, prompt: str, mode: str = "chat", workdir:
             extra = ["--disallowedTools", "*", "--system-prompt", CHAT_SYSTEM_PROMPT]
     cwd = workdir if mode == "work" and workdir else chat_dir()
     try:
-        return run_cli(name, base + extra, prompt, timeout, cwd, info)
+        return run_cli(name, base + extra, prompt, timeout, cwd, info, cancel)
+    except Cancelled:
+        raise
     except CliFailure as exc:
         # 설치된 CLI 버전이 옵션을 모르면 기본 인수로 한 번만 다시 시도
         if extra and any(k in f"{exc.stderr}\n{exc.stdout}".lower() for k in _UNKNOWN_FLAG):
-            return run_cli(name, base, prompt, timeout, cwd, info)
+            return run_cli(name, base, prompt, timeout, cwd, info, cancel)
         raise
 
 
