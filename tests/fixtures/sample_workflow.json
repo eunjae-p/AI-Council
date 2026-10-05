@@ -1,0 +1,14 @@
+{"last_node_id":20,"last_link_id":10,
+ "nodes":[
+  {"id":1,"type":"VHS_LoadVideoPath","pos":[10,10],"mode":0,"title":"Source Video","color":"#322","bgcolor":"#533","properties":{"cnr_id":"comfyui-videohelpersuite","Node name for S&R":"VHS_LoadVideoPath"},"widgets_values":{"video":"Z:\\proj\\a.mov","force_rate":0,"videopreview":{"hidden":false}}},
+  {"id":2,"type":"UNETLoader","pos":[400,10],"mode":0,"properties":{"cnr_id":"comfy-core"},"widgets_values":["wan2.1_vace_14B_fp16.safetensors","default"]},
+  {"id":3,"type":"LoraLoaderModelOnly","pos":[400,200],"mode":4,"color":"#432","bgcolor":"#653","properties":{"cnr_id":"comfy-core"},"widgets_values":["detail.safetensors",0.8]},
+  {"id":4,"type":"SetNode","pos":[20,300],"mode":0,"color":"#322","bgcolor":"#533","properties":{"aux_id":"kijai/ComfyUI-KJNodes"},"widgets_values":["VAE"]},
+  {"id":5,"type":"MarkdownNote","pos":[900,10],"mode":0,"color":"#322","bgcolor":"#533","properties":{},"widgets_values":["설명"]},
+  {"id":6,"type":"KSampler","pos":[700,100],"mode":0,"bgcolor":"#a85a32","properties":{"cnr_id":"comfy-core"},"widgets_values":[123,"fixed",20,6,"euler","simple",1]},
+  {"id":7,"type":"abcd-sub","pos":[1200,100],"mode":2,"properties":{}}
+ ],
+ "links":[[1,1,0,6,0,"IMAGE"]],
+ "groups":[{"title":"Setting","bounding":[0,0,350,400]},{"title":"Generate","bounding":[380,0,600,400]}],
+ "definitions":{"subgraphs":[{"id":"abcd-sub","name":"Crop LR","nodes":[{"id":1,"type":"ImageCrop","pos":[0,0],"mode":0,"color":"#322","bgcolor":"#533","properties":{"cnr_id":"comfy-core"},"widgets_values":[2544,864,0,0]}]}]}
+}

@@ -1,4 +1,4 @@
-# AI Council V0.7.1
+# AI Council V0.8.0
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 둘 다 + 최종 결론**을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 백엔드는 각 PC에서 구독 계정으로 로그인한 **Codex CLI**와 **Claude Code CLI**이며, OpenAI·Anthropic API 키는 사용하지 않습니다. CLI 호출이 실패해도 다른 API로 우회하지 않습니다.
@@ -13,7 +13,7 @@
    git clone https://github.com/eunjae-p/AI-Council.git
    ```
 2. 받은 폴더의 **`Setup.cmd`를 더블클릭**합니다. 자동으로:
-   - Python, Node.js가 없으면 winget으로 설치
+   - Python, Node.js, Git이 없으면 winget으로 설치
    - Codex CLI 설치·업데이트, Claude Code 설치 (공식 설치 프로그램, 이후 자동 업데이트)
    - 로그인이 안 되어 있으면 로그인 창을 띄움 (브라우저에서 **자기 계정**으로 로그인)
    - 바탕화면에 **AI Council** 바로가기 생성
@@ -21,7 +21,7 @@
 
 설치가 중간에 실패하면 마지막 표에 실패 항목과 해결 방법이 나옵니다. 새로 설치한 프로그램이 인식되지 않으면 창을 닫고 `Setup.cmd`를 한 번 더 실행하세요. 관리자 권한은 필요 없지만, 회사 PC에서 설치가 막혀 있으면 IT 담당자에게 문의하세요.
 
-업데이트는 저장소 폴더에서 `git pull` 후 AI Council을 다시 실행하면 됩니다. 처음에는 모델을 **계정 기본값**으로 쓰는 것을 권장합니다.
+**업데이트**: Council 왼쪽 아래 **업데이트 확인 → 지금 업데이트**를 누르면 GitHub 최신 버전을 받아 자동으로 다시 시작합니다(대화 기록은 유지). Git으로 받은(`git clone`) 폴더에서만 동작하므로 ZIP 대신 `git clone`을 권장합니다. 처음에는 모델을 **계정 기본값**으로 쓰는 것을 권장합니다.
 
 ## 실행
 
@@ -83,11 +83,14 @@
 | `council_store.py` | 대화 저장, 검색, 휴지통, Markdown 내보내기 (나중에 SQLite FTS로 교체 가능하도록 분리) |
 | `council_workflow.py` | ComfyUI 워크플로우 JSON 요약 (노드·색상 등급·모델·노드 팩·서브그래프) |
 | `council_attach.py` | 첨부 파일 검사·보관·프롬프트 구성 |
+| `council_update.py` | Council 자체 업데이트 (GitHub → 이 PC, 안전 검사, 자동 재시작) |
 | `council_versions.py` | 설치된 CLI 버전과 npm 최신 버전 비교 (업데이트는 하지 않고 안내만) |
 | `council_context.py` | 모델에 넘길 컨텍스트 구성과 장기 요약 |
 | `web/index.html` | 채팅 UI (HTML/CSS/JavaScript, 외부 라이브러리 없음) |
 | `AI-Council_Web.cmd` | 실행 파일 |
-| `Setup.cmd`, `setup.ps1` | 처음 설치 도우미 (Python·Node.js·Codex CLI·Claude Code 설치, 로그인 안내, 바로가기) |
+| `CLAUDE.md`, `AGENTS.md` | 수정 작업 규칙 (Claude Code·Codex 공용) |
+| `tests/` | 가짜 CLI로 하는 테스트 (`python tests/test_api.py`, `python tests/test_update.py`) |
+| `Setup.cmd`, `setup.ps1` | 처음 설치 도우미 (Python·Node.js·Git·Codex CLI·Claude Code 설치, 로그인 안내, 바로가기) |
 | `AI-Council_CLI.ps1` | CLI 연결 확인·디버깅용 PowerShell 스크립트 |
 
 ## CLI 연결 확인 (디버깅)

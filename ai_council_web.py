@@ -6,6 +6,7 @@ Python 표준 라이브러리만 사용한다. API 키를 사용하지 않는다
 from __future__ import annotations
 
 import json
+import os
 import threading
 import time
 import webbrowser
@@ -33,8 +34,9 @@ from council_core import (
 from council_store import ConversationStore
 import council_versions
 import council_attach
+import council_update
 
-VERSION = "0.7.1"
+VERSION = "0.8.0"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -171,6 +173,8 @@ class Handler(BaseHTTPRequestHandler):
                     "ok": True, "version": VERSION, "model": ACCOUNT_DEFAULT,
                     "cli": {"codex": cli_available("codex"), "claude": cli_available("claude")},
                 })
+            elif parsed.path == "/api/update/check":
+                self.send_json(council_update.check(VERSION, force=arg("refresh") == "1"))
             elif parsed.path == "/api/versions":
                 self.send_json(council_versions.check(force=arg("refresh") == "1"))
             elif parsed.path == "/api/conversations":
@@ -207,6 +211,20 @@ class Handler(BaseHTTPRequestHandler):
             cid = lambda: store.check_id(str(body.get("id") or body.get("conversation_id") or ""))  # noqa: E731
             if path == "/api/conversations":
                 self.send_json({"id": (meta := store.create())["id"], "meta": store._public_meta(meta)})
+            elif path == "/api/update/apply":
+                with _busy_lock:
+                    if _busy:
+                        raise RuntimeError("답변을 생성하는 중에는 업데이트할 수 없습니다. 완료되거나 중지한 뒤 다시 시도하세요.")
+                try:
+                    result = council_update.apply(VERSION)
+                except council_update.UpdateError as exc:
+                    self.send_json({"error": str(exc)}, 409)
+                    return
+                restart = result["status"] == "updated" or result.get("version") != VERSION
+                result["restarting"] = restart
+                self.send_json(result)
+                if restart:  # 새 서버가 뜨면서 이 서버를 종료시키고 포트를 넘겨받는다
+                    threading.Timer(0.5, council_update.restart_detached).start()
             elif path == "/api/chat/stop":
                 with _busy_lock:
                     tok = _tokens.get(cid())
@@ -506,7 +524,8 @@ def main() -> None:
         raise SystemExit(f"Missing UI file: {INDEX}")
     server = bind_server()
     print(f"AI Council V{VERSION}: http://{HOST}:{PORT}  (종료: 화면의 '앱 종료' 또는 Ctrl+C)")
-    threading.Thread(target=open_browser, daemon=True).start()
+    if not os.environ.get("AI_COUNCIL_NO_BROWSER"):  # 업데이트 후 재시작 때는 브라우저를 새로 열지 않음
+        threading.Thread(target=open_browser, daemon=True).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
