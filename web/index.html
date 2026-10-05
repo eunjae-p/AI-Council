@@ -104,6 +104,12 @@ details.indiv .msg{margin-top:10px}
 .models select,.models input{padding:6px 9px;font-size:13.5px}
 .custom{display:none}
 .write{display:flex;gap:8px;align-items:flex-end}
+.composer.drag{outline:2px dashed var(--gpt);outline-offset:-6px;background:#0e1a30}
+.chips{display:flex;gap:6px;flex-wrap:wrap} .chips:empty{display:none}
+.chip2{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;background:#16223d;border:1px solid var(--line2);border-radius:8px;padding:3px 6px 3px 9px}
+.chip2 .x{background:none;padding:0 4px;color:var(--muted)} .chip2 .k{color:var(--council);font-size:11px}
+.atts{margin-top:8px;display:flex;flex-direction:column;gap:4px} .atts details{font-size:13px} .atts summary{cursor:pointer;color:#c7d3f5}
+.atts pre{white-space:pre-wrap;max-height:320px;overflow:auto;background:#0b1326;border:1px solid var(--line);border-radius:8px;padding:8px;font:12.5px/1.5 ui-monospace,Consolas,monospace;margin:6px 0 0}
 .write textarea{flex:1;resize:none;min-height:48px;max-height:40vh;padding:12px 14px;line-height:1.55}
 .status{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:8px;min-height:18px}
 .status .r{margin-left:auto;color:var(--dim)}
@@ -196,8 +202,11 @@ details.indiv .msg{margin-top:10px}
             <input class="custom" id="claudeCustom" placeholder="예: claude-opus-5-5">
           </label>
         </div>
+        <div class="chips" id="chips"></div>
         <div class="write">
-          <textarea id="q" rows="2" placeholder="질문을 입력하세요 (Enter 보내기 · Shift+Enter 줄바꿈)"></textarea>
+          <button class="ghost" id="attachBtn" title="파일 첨부 (워크플로우 JSON 등 · 끌어다 놓기 가능)">📎</button>
+          <input type="file" id="fileInput" multiple hidden accept=".json,.txt,.md,.py,.yaml,.yml,.csv,.tsv,.toml,.ini,.cfg,.log,.js,.ts,.html,.css,.xml,.ps1,.bat,.cmd,.sh">
+          <textarea id="q" rows="2" placeholder="질문을 입력하세요 · 📎 또는 끌어다 놓기로 JSON 첨부 (Enter 보내기 · Shift+Enter 줄바꿈)"></textarea>
           <button class="primary" id="send">보내기</button>
         </div>
         <div class="status"><span id="spin" class="spin" hidden></span><span id="status">준비됨</span><span class="r" id="ctxInfo"></span></div>
@@ -208,11 +217,11 @@ details.indiv .msg{margin-top:10px}
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.6.3'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.7.0'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const store = { get(k){ try { return localStorage.getItem(k); } catch { return null; } }, set(k,v){ try { localStorage.setItem(k,v); } catch {} } };
-const S = { mode:'chat', scope:'all', list:[], current:null, meta:null, items:[], running:null, target:'both', searchTimer:null };
+const S = { files:[], mode:'chat', scope:'all', list:[], current:null, meta:null, items:[], running:null, target:'both', searchTimer:null };
 
 // ---------- API ----------
 async function api(path, body) {
@@ -262,6 +271,15 @@ function msgEl(item, index) {
   if (w !== 'user') { const c = el('button', 'ghost small', '복사'); c.onclick = () => copyText(item.content); head.append(c); }
   const body = el('div', 'content'); renderText(body, item.content);
   box.append(head, body);
+  if (item.attachments && item.attachments.length) {
+    const a = el('div', 'atts');
+    item.attachments.forEach(att => {
+      const label = `📎 ${att.name} · ${(att.size || 0).toLocaleString()}자` + (att.kind === 'workflow' ? ' · 워크플로우 요약됨' : '');
+      if (att.summary) { const d = el('details'); d.append(el('summary', '', label), el('pre', '', att.summary)); a.append(d); }
+      else a.append(el('div', '', label));
+    });
+    box.append(a);
+  }
   return box;
 }
 async function copyText(t) { try { await navigator.clipboard.writeText(t); toast('복사했습니다'); } catch { toast('복사 실패: 브라우저 권한을 확인하세요', true); } }
@@ -450,7 +468,7 @@ function updateModelInfo() {
 document.querySelectorAll('#target button').forEach(b => b.onclick = () => setTarget(b.dataset.v));
 function setTarget(v) { S.target = v; store.set('councilTarget', v); document.querySelectorAll('#target button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); updateModelInfo(); }
 document.querySelectorAll('#mode button').forEach(b => b.onclick = () => setMode(b.dataset.m));
-function setMode(m) { S.mode = m; store.set('councilMode', m); document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.m === m)); $('#workdir').classList.toggle('show', m === 'work'); $('#q').placeholder = m === 'work' ? '작업 폴더의 파일을 참고해 답할 질문 (Enter 보내기 · Shift+Enter 줄바꿈)' : '질문을 입력하세요 (Enter 보내기 · Shift+Enter 줄바꿈)'; }
+function setMode(m) { S.mode = m; store.set('councilMode', m); document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.m === m)); $('#workdir').classList.toggle('show', m === 'work'); $('#q').placeholder = m === 'work' ? '작업 폴더의 파일을 참고해 답할 질문 (Enter 보내기 · Shift+Enter 줄바꿈)' : '질문을 입력하세요 · 📎 또는 끌어다 놓기로 JSON 첨부 (Enter 보내기 · Shift+Enter 줄바꿈)'; }
 $('#workdir').addEventListener('input', () => store.set('councilWorkdir', $('#workdir').value.trim()));
 $('#modelToggle').onclick = () => { const m = $('#models'); m.classList.toggle('open'); $('#modelToggle').textContent = m.classList.contains('open') ? '모델 설정 ▴' : '모델 설정 ▾'; };
 
@@ -463,7 +481,7 @@ function pendingEl(text) { const p = el('div', 'pending'); p.id = 'pending'; p.a
 
 async function send() {
   const q = $('#q'), question = q.value.trim();
-  if (!question || S.running) return;
+  if ((!question && !S.files.length) || S.running) return;
   const gpt = modelValue($('#gptModel'), $('#gptCustom')), claude = modelValue($('#claudeModel'), $('#claudeCustom'));
   if (S.target !== 'claude' && !gpt) { $('#models').classList.add('open'); $('#gptCustom').focus(); return; }
   if (S.target !== 'gpt' && !claude) { $('#models').classList.add('open'); $('#claudeCustom').focus(); return; }
@@ -474,11 +492,13 @@ async function send() {
   if (!S.items.length) box.innerHTML = '';
   const pend = pendingEl('대화 맥락을 준비하는 중'); box.append(pend); scrollBottom();
   const draft = question; q.value = ''; autoGrow();
+  const sentFiles = S.files.slice(); S.files = []; renderChips();
+  if (sentFiles.length) { const t = pend.querySelector('.ptext'); if (t) t.textContent = '첨부 파일을 보내는 중'; }
   const here = () => S.current === convId;
   let gotUser = false;
   try {
     const res = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, workdir:$('#workdir').value.trim() }) });
+      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => ({ name:f.name, content:f.content })) }) });
     if (!res.ok) { let m = '요청 실패'; try { m = (await res.json()).error || m; } catch {} throw new Error(m); }
     const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
     for (;;) {
@@ -502,7 +522,8 @@ async function send() {
     $('#status').textContent = '답변 완료';
   } catch (err) {
     pend.remove();
-    if (!gotUser && !q.value) { q.value = draft; autoGrow(); } // 질문이 저장되지 않았으면 입력창에 되돌림
+    if (!gotUser && !q.value) { q.value = draft; autoGrow(); }
+    if (!gotUser && !S.files.length) { S.files = sentFiles; renderChips(); } // 저장 전 실패면 첨부도 되돌림 // 질문이 저장되지 않았으면 입력창에 되돌림
     if (here()) { try { await openConversation(convId); } catch {} const last = S.items[S.items.length - 1];
       if (!last || last.role !== 'error') { $('#msgs').append(el('div', 'inline-err', '오류: ' + err.message)); } scrollBottom(); }
     else toast('오류: ' + err.message, true);
@@ -543,6 +564,41 @@ async function loadVersions(force) {
   const r = el('span', 'upd', '버전 다시 확인'); r.style.color = 'var(--dim)'; r.onclick = () => loadVersions(true); box.append(r);
   if (outdated.length && !force) toast('CLI 업데이트 또는 로그인이 필요합니다. 왼쪽 아래 안내를 확인하세요.', true);
 }
+
+// ---------- 첨부 ----------
+const MAX_FILES = 5, MAX_FILE_BYTES = 2 * 1024 * 1024;
+const OK_EXT = /\.(json|txt|md|py|ya?ml|csv|tsv|toml|ini|cfg|log|js|ts|html|css|xml|ps1|bat|cmd|sh)$/i;
+function renderChips() {
+  const box = $('#chips'); box.innerHTML = '';
+  S.files.forEach((f, i) => {
+    const c = el('span', 'chip2'); c.append(el('span', '', '📎 ' + f.name), el('span', 'k', `${Math.max(1, Math.round(f.size / 1024))}KB`));
+    const x = el('button', 'x', '×'); x.title = '첨부 취소'; x.onclick = () => { S.files.splice(i, 1); renderChips(); };
+    c.append(x); box.append(c);
+  });
+}
+async function addFiles(list) {
+  for (const file of [...list]) {
+    if (S.files.length >= MAX_FILES) { toast(`첨부는 ${MAX_FILES}개까지 가능합니다`, true); break; }
+    if (!OK_EXT.test(file.name)) { toast(`${file.name}: JSON·텍스트 파일만 첨부할 수 있습니다`, true); continue; }
+    if (file.size > MAX_FILE_BYTES) { toast(`${file.name}: 2MB 이하만 첨부할 수 있습니다`, true); continue; }
+    try { S.files.push({ name:file.name, size:file.size, content: await file.text() }); }
+    catch { toast(`${file.name}: 파일을 읽지 못했습니다`, true); }
+  }
+  renderChips(); $('#q').focus();
+}
+$('#attachBtn').onclick = () => $('#fileInput').click();
+$('#fileInput').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
+(() => {
+  const zone = document.querySelector('.composer'); let depth = 0;
+  const has = e => [...(e.dataTransfer && e.dataTransfer.types || [])].includes('Files');
+  zone.addEventListener('dragenter', e => { if (!has(e)) return; e.preventDefault(); depth++; zone.classList.add('drag'); });
+  zone.addEventListener('dragover', e => { if (has(e)) e.preventDefault(); });
+  zone.addEventListener('dragleave', () => { depth = Math.max(0, depth - 1); if (!depth) zone.classList.remove('drag'); });
+  zone.addEventListener('drop', e => { if (!has(e)) return; e.preventDefault(); depth = 0; zone.classList.remove('drag'); addFiles(e.dataTransfer.files); });
+  // 화면 다른 곳에 떨어뜨려도 브라우저가 파일을 열어버리지 않게
+  window.addEventListener('dragover', e => { if (has(e)) e.preventDefault(); });
+  window.addEventListener('drop', e => { if (has(e)) { e.preventDefault(); if (!zone.contains(e.target)) addFiles(e.dataTransfer.files); } });
+})();
 
 // ---------- 기타 ----------
 $('#newBtn').onclick = () => newConversation().catch(e => toast(e.message, true));

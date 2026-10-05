@@ -305,6 +305,9 @@ class ConversationStore:
             t_jsonl.unlink()
             if t_meta.exists():
                 t_meta.unlink()
+            attach_dir = self.data_dir / "attachments" / conversation_id
+            if attach_dir.is_dir():
+                shutil.rmtree(attach_dir, ignore_errors=True)
 
     def clear(self, conversation_id: str) -> str:
         """원문을 백업한 뒤 비운다. 백업 경로를 돌려준다."""
@@ -339,6 +342,9 @@ class ConversationStore:
                 if item.get("role") == "error":
                     continue
                 content = str(item.get("content", ""))
+                names = " ".join(f"📎{a.get('name')}" for a in item.get("attachments") or [])
+                if names:
+                    content = f"{content}\n{names}"
                 pos = content.casefold().find(needle)
                 if pos < 0:
                     continue
@@ -396,6 +402,10 @@ class ConversationStore:
             label = SPEAKER_LABELS.get(who, who)
             extra = f" · {item['cli_model']}" if item.get("cli_model") else ""
             lines += [f"### {label}{extra}", f"_{fmt_time(item.get('time'))}_", "", str(item.get("content", "")).rstrip(), ""]
+            for att in item.get("attachments") or []:
+                lines.append(f"> 📎 첨부: `{att.get('name')}` ({att.get('size', 0):,}자)")
+            if item.get("attachments"):
+                lines.append("")
         return "\n".join(lines).rstrip() + "\n"
 
     def export_markdown(self, conversation_id: str) -> tuple[Path, str]:

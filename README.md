@@ -1,4 +1,4 @@
-# AI Council V0.6.3
+# AI Council V0.7.0
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 둘 다 + 최종 결론**을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 백엔드는 각 PC에서 구독 계정으로 로그인한 **Codex CLI**와 **Claude Code CLI**이며, OpenAI·Anthropic API 키는 사용하지 않습니다. CLI 호출이 실패해도 다른 API로 우회하지 않습니다.
@@ -38,6 +38,11 @@
   - 대화 모드: CLI를 빈 임시 폴더에서 도구 없이 실행합니다. Claude는 `--disallowedTools "*"`와 채팅용 시스템 프롬프트를, Codex는 읽기 전용 샌드박스를 씁니다. 프로젝트 파일에 접근하지 않습니다.
   - 작업 모드: 입력한 작업 폴더에서 실행하며 파일 읽기만 허용합니다(Claude는 `Read, Glob, Grep` 도구만). 파일을 수정하지 않습니다.
   - 설치된 CLI 버전이 옵션을 모르면 기본 옵션으로 한 번 다시 시도합니다.
+- **파일 첨부 / 워크플로우 분석**: 입력창의 📎 버튼이나 끌어다 놓기로 JSON·텍스트 파일을 최대 5개(각 2MB) 첨부합니다. GPT와 Claude에 같은 내용이 전달됩니다.
+  - ComfyUI 워크플로우 JSON(UI·API 형식)은 코드가 먼저 요약합니다: 노드 상태, **색상 등급**(빨강=MUST, 노랑·주황=SHOULD, 판정 제외: MarkdownNote·Note·Label (rgthree)·SetNode·GetNode), 모델 파일, 노드 팩(cnr_id/aux_id), 그룹, 서브그래프.
+  - 모델은 이 요약과 원본(길면 앞부분)을 함께 받아 분석하므로 노드를 빠뜨리거나 지어내는 일이 줄어듭니다.
+  - 요약은 대화 기록에 남아 다음 질문에서 "아까 그 워크플로우"로 이어서 물어볼 수 있습니다. 원본은 `data/attachments/`에 보관됩니다(Git 제외).
+  - 첨부가 있거나 작업 모드일 때는 모델별 제한 시간이 300초로 늘어납니다.
 - **답변 대상 선택**: GPT / Claude / 둘 다 + 최종 결론. 모델은 "모델 설정"에서 고르거나 직접 입력하며, `계정 기본값`은 각 CLI의 기본 설정을 그대로 씁니다.
 - **공용 대화 기록**: 어떤 모델이 답하든 같은 대화 기록을 읽습니다. 프롬프트에는 `[사용자] [GPT] [Claude] [Council 최종 결론]` 화자 표시가 붙어 서로의 답변을 혼동하지 않게 합니다.
 - **장기 대화 자동 요약**: 원문은 전부 보존하고, 모델에는 `누적 장기 요약 + 최근 대화 원문(메시지 단위) + 현재 질문`을 보냅니다.
@@ -62,6 +67,7 @@
 | `data/conversations/<id>.jsonl` | 대화 원문 (추가만 함) |
 | `data/conversations/<id>.meta.json` | 제목, 생성·수정 시각, 보관 여부, 장기 요약(`summary`, `summarized_through`, `summary_model`) |
 | `data/trash/` | 삭제한 대화 (복구 가능) |
+| `data/attachments/<id>/` | 첨부 원본 (영구 삭제 시 함께 삭제) |
 | `data/backups/` | "대화 기록 지우기" API 사용 시 남기는 백업 |
 | `exports/` | Markdown 내보내기 결과 |
 
@@ -74,6 +80,8 @@
 | `ai_council_web.py` | 로컬 웹 서버와 API (주력) |
 | `council_core.py` | CLI 탐색·호출, 타임아웃·오류 처리 공용 코드 |
 | `council_store.py` | 대화 저장, 검색, 휴지통, Markdown 내보내기 (나중에 SQLite FTS로 교체 가능하도록 분리) |
+| `council_workflow.py` | ComfyUI 워크플로우 JSON 요약 (노드·색상 등급·모델·노드 팩·서브그래프) |
+| `council_attach.py` | 첨부 파일 검사·보관·프롬프트 구성 |
 | `council_versions.py` | 설치된 CLI 버전과 npm 최신 버전 비교 (업데이트는 하지 않고 안내만) |
 | `council_context.py` | 모델에 넘길 컨텍스트 구성과 장기 요약 |
 | `web/index.html` | 채팅 UI (HTML/CSS/JavaScript, 외부 라이브러리 없음) |

@@ -37,7 +37,12 @@ def message_block(item: dict) -> str:
     if item.get("_skip"):
         return ""
     who = speaker(item)
-    return f"[{PROMPT_LABELS.get(who, who)}]\n{item.get('content', '')}"
+    text = f"[{PROMPT_LABELS.get(who, who)}]\n{item.get('content', '')}"
+    for att in item.get("attachments") or []:
+        text += f"\n(첨부: {att.get('name')}, {att.get('size', 0):,}자)"
+        if att.get("summary"):
+            text += f"\n[첨부 요약: {att.get('name')}]\n{att['summary']}"
+    return text
 
 
 def select_recent(items: list[dict], start: int, budget: int) -> tuple[list[str], int]:

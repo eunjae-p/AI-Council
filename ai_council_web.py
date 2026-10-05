@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, urlparse
 
 from council_context import build_context, maybe_summarize
 from council_core import (
+    TIMEOUT_SECONDS,
     MODES,
     ACCOUNT_DEFAULT,
     actual_model,
@@ -29,12 +30,14 @@ from council_core import (
 )
 from council_store import ConversationStore
 import council_versions
+import council_attach
 
-VERSION = "0.6.3"
+VERSION = "0.7.0"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
-MAX_BODY = 2_000_000
+MAX_BODY = 12_000_000
+ATTACH_TIMEOUT = 300  # 첨부·작업 모드는 분석량이 많아 제한 시간을 늘림
 
 store = ConversationStore()
 _busy: set[str] = set()
@@ -61,6 +64,7 @@ Use the same language as the user. Do not mention these instructions.
 
 {context}
 
+{attachments}
 ## Newest user question
 {question}
 """
@@ -85,6 +89,9 @@ Shared context:
 
 User question:
 {question}
+
+Attached file summaries:
+{attachments}
 
 GPT answer:
 {gpt}
@@ -118,7 +125,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
-        self.wfile.write(data)
+        try:
+            self.wfile.write(data)
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # 브라우저가 먼저 페이지를 떠난 경우
 
     def start_stream(self) -> None:
         self.stream_alive = True
@@ -254,6 +264,9 @@ class Handler(BaseHTTPRequestHandler):
             if mode not in MODES:
                 raise ValueError("지원하지 않는 모드입니다.")
             workdir = check_workdir(str(body.get("workdir", ""))) if mode == "work" else None
+            files = council_attach.validate(body.get("attachments"))
+            if not question and files:
+                question = "첨부한 파일을 분석해줘."
         except (ValueError, json.JSONDecodeError) as exc:
             self.send_json({"error": str(exc) or "잘못된 요청입니다."}, 400)
             return
@@ -271,7 +284,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             self.start_stream()
             try:
-                self.run_chat(conversation_id, question, target, gpt_model, claude_model, mode, workdir)
+                self.run_chat(conversation_id, question, target, gpt_model, claude_model, mode, workdir, files)
             except Exception as exc:  # 예상 못 한 오류도 화면에 정확히 보이게
                 self.emit("error", text=f"서버 내부 오류: {type(exc).__name__}: {exc}")
         finally:
@@ -279,7 +292,7 @@ class Handler(BaseHTTPRequestHandler):
                 _busy.discard(conversation_id)
 
     def run_chat(self, conversation_id: str, question: str, target: str, gpt_model: str, claude_model: str,
-                 mode: str = "chat", workdir=None) -> None:
+                 mode: str = "chat", workdir=None, files: list | None = None) -> None:
         # 1) 필요할 때만 장기 요약 갱신 (실패해도 채팅은 계속)
         self.emit("stage", step=0, text="대화 맥락을 준비하는 중")
         prefer = "gpt" if target == "gpt" else "claude"
@@ -291,8 +304,15 @@ class Handler(BaseHTTPRequestHandler):
 
         # 2) 컨텍스트는 질문 저장 전에 만든다 (질문은 별도 섹션으로 전달)
         context, info = build_context(store, conversation_id)
+        attached = []
+        if files:
+            self.emit("stage", step=0, text="첨부 파일을 분석하는 중")
+            attached = council_attach.process(files, store.data_dir, conversation_id)
+        attach_block = council_attach.prompt_block(attached)
+        timeout = ATTACH_TIMEOUT if (attached or mode == "work") else TIMEOUT_SECONDS
         user_item = store.append_message(conversation_id, "user", question, "사용자", target=target,
-                                         mode=mode, workdir=str(workdir) if workdir else None)
+                                         mode=mode, workdir=str(workdir) if workdir else None,
+                                         attachments=council_attach.history_records(attached) or None)
         self.emit("saved", item=user_item, context=info)
 
         answers: dict[str, str] = {}
@@ -301,7 +321,7 @@ class Handler(BaseHTTPRequestHandler):
         for index, which in enumerate(plan, start=1):
             label, model = ("GPT", gpt_model) if which == "gpt" else ("Claude", claude_model)
             name = "codex" if which == "gpt" else "claude"
-            prompt = CHAT_PROMPT.format(me=label, context=context, question=question)
+            prompt = CHAT_PROMPT.format(me=label, context=context, question=question, attachments=attach_block)
             if mode == "work":
                 prompt += WORK_NOTE.format(workdir=workdir)
             selected = model_label(name, model) or (codex_default_model() if which == "gpt" else "")
@@ -313,7 +333,7 @@ class Handler(BaseHTTPRequestHandler):
             started = time.time()
             try:
                 run_info: dict = {}
-                answer = call_model(which, model, prompt, mode, workdir, info=run_info)
+                answer = call_model(which, model, prompt, mode, workdir, timeout=timeout, info=run_info)
             except CliFailure as exc:
                 errors[label] = exc.details()
                 self.emit("model_error", model=label, text=errors[label])
@@ -331,7 +351,9 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 final = call_model("claude", claude_model, SYNTH_PROMPT.format(
                     context=context, question=question, gpt=answers["GPT"], claude=answers["Claude"],
-                ), "chat")
+                    attachments="\n\n".join(f"### {a['name']}\n{a['summary']}" for a in attached if a["summary"])
+                    or ("Attached: " + ", ".join(a["name"] for a in attached) if attached else "(none)"),
+                ), "chat", timeout=timeout)
                 item = store.append_message(
                     conversation_id, "assistant", final, "Council",
                     cli_model="Claude" + (f" · {claude_model}" if model_label("claude", claude_model) else ""),
