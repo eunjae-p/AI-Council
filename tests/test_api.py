@@ -221,4 +221,18 @@ try: urllib.request.urlopen(B+f"/api/attachment?conversation_id={c10}&file="+url
 except urllib.error.HTTPError as e: ok(e.code==404, "path traversal blocked")
 r = upload(c10, media_dir/"shot.png", "evil.exe"); ok(isinstance(r, tuple) and r[0]==400, "reject non-media upload")
 r = post("/api/chat", {"question":"x","conversation_id":c10,"attachments":[{"name":"a","upload":"../x.png"}]}); ok(r[0]==400, "reject bad upload id")
+
+# ---- ffmpeg 없음 ----
+import council_media as _cm
+_orig = _cm.find_tool; _cm.find_tool = lambda n: ""
+ok(get("/api/status")["ffmpeg"] is False, "status reports missing ffmpeg")
+r = upload(c10, media_dir/"clip.mp4"); ok(isinstance(r, tuple) and r[0]==400 and "ffmpeg" in r[1]["error"], "video upload refused without ffmpeg")
+ok(upload(c10, media_dir/"shot.png").get("kind")=="image", "images still work without ffmpeg")
+open(os.environ["FAKE_LOG"],"w").close()
+ev = post("/api/chat", {"question":"영상 분석","conversation_id":c10,"target":"both","attachments":[{"name":"clip.mp4","upload":vid["id"]}]}, raw=True)
+types=[e["type"] for e in ev]; log=open(os.environ["FAKE_LOG"]).read()
+ok("error" in types and types.count("answer")==0 and log=="", f"no model call when frames fail {types}")
+its=get("/api/conversation?id="+c10)["items"]; ok(its[-1]["role"]=="error" and its[-1].get("failed_message_id")==its[-2]["id"], "failure recorded, question excluded")
+_cm.find_tool = _orig
+ok(get("/api/status")["ffmpeg"] is True, "status reports ffmpeg")
 srv.shutdown(); shutil.rmtree(tmp); print("ALL PASS; temp data removed")

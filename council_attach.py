@@ -41,6 +41,8 @@ def save_upload(data_dir: Path, conversation_id: str, name: str, stream, length:
     kind = media.kind_of(name)
     if not kind:
         raise ValueError(f"{name}: 이미지(png·jpg·webp·gif·bmp) 또는 영상(mp4·mov·mkv·avi·webm 등)만 올릴 수 있습니다.")
+    if kind == "video" and not media.ffmpeg_available():
+        raise ValueError(media.FFMPEG_MISSING)
     limit = media.MAX_IMAGE_BYTES if kind == "image" else media.MAX_VIDEO_BYTES
     if length <= 0:
         raise ValueError("빈 파일입니다.")

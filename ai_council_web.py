@@ -34,9 +34,10 @@ from council_core import (
 from council_store import ConversationStore
 import council_versions
 import council_attach
+import council_media
 import council_update
 
-VERSION = "0.9.0"
+VERSION = "0.9.1"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -172,6 +173,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({
                     "ok": True, "version": VERSION, "model": ACCOUNT_DEFAULT,
                     "cli": {"codex": cli_available("codex"), "claude": cli_available("claude")},
+                    "ffmpeg": council_media.ffmpeg_available(),
                 })
             elif parsed.path == "/api/attachment":
                 self.send_attachment(arg("conversation_id"), arg("file"))
@@ -402,9 +404,19 @@ class Handler(BaseHTTPRequestHandler):
                 images = council_attach.images_for(resent)
                 attach_block += council_attach.prompt_block(resent, resent=True)
         image_dir = council_attach.attach_dir(store.data_dir, conversation_id) if images else None
-        for it in attached:
-            if it.get("error"):
-                self.emit("warning", text=it["summary"])
+        failed_media = [it for it in attached if it.get("error")]
+        if failed_media:
+            # 영상을 못 읽었는데 모델을 부르면 사용량만 쓰고 "못 봤다"는 답만 온다 → 여기서 멈춘다
+            text = "영상 분석을 준비하지 못해 모델에 보내지 않았습니다.\n\n" + "\n".join(
+                f"- {it['name']}: {it['error']}" for it in failed_media)
+            user_item = store.append_message(conversation_id, "user", question, "사용자", target=target,
+                                             mode=mode, workdir=str(workdir) if workdir else None,
+                                             attachments=council_attach.history_records(attached) or None)
+            self.emit("saved", item=user_item, context=info)
+            store.append_message(conversation_id, "error", text, "오류", failed_message_id=user_item["id"])
+            self.emit("error", text=text)
+            self.emit("done", meta=store.detail(conversation_id)["meta"], errors={})
+            return
         timeout = ATTACH_TIMEOUT if (attached or images or mode == "work") else TIMEOUT_SECONDS
         user_item = store.append_message(conversation_id, "user", question, "사용자", target=target,
                                          mode=mode, workdir=str(workdir) if workdir else None,

@@ -230,7 +230,7 @@ details.indiv .msg{margin-top:10px}
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.9.0'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.9.1'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const store = { get(k){ try { return localStorage.getItem(k); } catch { return null; } }, set(k,v){ try { localStorage.setItem(k,v); } catch {} } };
@@ -598,6 +598,8 @@ async function loadVersions(force) {
       box.append(u);
     }
   }
+  if (S.ffmpeg === false) { const f = el('span', 'upd', 'ffmpeg 없음 · 영상 분석 불가'); f.style.color = 'var(--warn)'; f.title = 'Setup.cmd를 실행해 설치한 뒤 Council을 다시 시작하세요';
+    f.onclick = () => modal('ffmpeg 설치', 'Council 폴더의 Setup.cmd를 실행하면 ffmpeg가 설치됩니다.\n설치 후 Council을 다시 시작하세요.\n\n직접 설치: winget install Gyan.FFmpeg'); box.append(f); }
   const r = el('span', 'upd', '버전 다시 확인'); r.style.color = 'var(--dim)'; r.onclick = () => loadVersions(true); box.append(r);
   if (outdated.length && !force) toast('CLI 업데이트 또는 로그인이 필요합니다. 왼쪽 아래 안내를 확인하세요.', true);
 }
@@ -645,6 +647,7 @@ async function addFiles(list) {
     const name = file.name || `붙여넣은_이미지_${Date.now()}.png`;
     if (IMG_EXT.test(name) || VID_EXT.test(name) || (!file.name && /^image\//.test(file.type))) {
       const kind = VID_EXT.test(name) ? 'video' : 'image';
+      if (kind === 'video' && S.ffmpeg === false) { modal('영상을 분석할 수 없습니다', '이 PC에 ffmpeg가 없습니다.\n\nCouncil 폴더의 Setup.cmd를 실행해 ffmpeg를 설치한 뒤 Council을 다시 시작하세요.\n(이미지·텍스트 첨부는 지금도 가능합니다. 영상 대신 캡처 이미지를 붙여넣어도 됩니다.)'); continue; }
       if (file.size > (kind === 'image' ? MAX_IMAGE_BYTES : MAX_VIDEO_BYTES)) { toast(`${name}: ${kind === 'image' ? '이미지는 20MB' : '영상은 2GB'} 이하만 첨부할 수 있습니다`, true); continue; }
       if (!S.current) await newConversation();
       const f = { name, size:file.size, kind, conv:S.current, thumb: kind === 'image' ? URL.createObjectURL(file) : '' };
@@ -755,6 +758,7 @@ window.addEventListener('hashchange', () => { const id = (location.hash.match(/^
     if (s.version !== UI_VERSION) { const n = el('div', 'notice err', `서버(V${s.version})가 화면(V${UI_VERSION})보다 오래된 버전입니다. AI Council 콘솔 창을 닫고 AI-Council_Web.cmd 를 다시 실행하세요.`); $('#notices').before(n); }
     const mark = ok => ok ? '●' : '○'; $('#cli').textContent = `${mark(s.cli.codex)} Codex  ${mark(s.cli.claude)} Claude`;
     $('#cli').title = 'CLI 감지 여부 (PATH 기준)'; if (!s.cli.codex || !s.cli.claude) toast('일부 CLI를 찾지 못했습니다. PATH를 확인하세요.', true);
+    S.ffmpeg = s.ffmpeg;
     loadVersions(false);
     $('#appVer').textContent = 'Council V' + s.version;
     checkUpdate(false, true);

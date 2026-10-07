@@ -7,7 +7,9 @@ ffmpeg/ffprobe 가 없으면 영상 분석만 안내 오류를 낸다.
 """
 from __future__ import annotations
 
+import glob
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -35,8 +37,34 @@ def kind_of(name: str) -> str:
     return ""
 
 
+def find_tool(name: str) -> str:
+    """ffmpeg/ffprobe 위치. PATH 에 없으면 Windows 의 흔한 설치 위치도 찾는다.
+    (winget 으로 방금 설치하면 이미 실행 중인 Council 에는 새 PATH 가 반영되지 않기 때문)"""
+    found = shutil.which(name)
+    if found:
+        return found
+    if os.name != "nt":
+        return ""
+    exe = name + ".exe"
+    local = os.environ.get("LOCALAPPDATA", "")
+    candidates = [
+        os.path.join(local, "Microsoft", "WinGet", "Links", exe),
+        *glob.glob(os.path.join(local, "Microsoft", "WinGet", "Packages", "Gyan.FFmpeg*", "*", "bin", exe)),
+        *glob.glob(os.path.join(local, "Microsoft", "WinGet", "Packages", "*FFmpeg*", "*", "bin", exe)),
+        os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "ffmpeg", "bin", exe),
+        os.path.join(r"C:\ffmpeg", "bin", exe),
+        os.path.join(os.environ.get("ChocolateyInstall", r"C:\ProgramData\chocolatey"), "bin", exe),
+        os.path.join(os.path.expanduser("~"), "scoop", "shims", exe),
+    ]
+    return next((c for c in candidates if c and os.path.isfile(c)), "")
+
+
+FFMPEG_MISSING = ("이 PC에 ffmpeg가 없어 영상을 분석할 수 없습니다. Council 폴더의 Setup.cmd를 실행해 ffmpeg를 설치한 뒤 "
+                  "Council을 다시 시작하세요. (이미지·텍스트 첨부는 ffmpeg 없이도 됩니다)")
+
+
 def ffmpeg_available() -> bool:
-    return bool(shutil.which("ffmpeg") and shutil.which("ffprobe"))
+    return bool(find_tool("ffmpeg") and find_tool("ffprobe"))
 
 
 def _run(args: list[str], timeout: int = 120) -> subprocess.CompletedProcess:
@@ -44,9 +72,9 @@ def _run(args: list[str], timeout: int = 120) -> subprocess.CompletedProcess:
 
 
 def probe(path: Path) -> dict:
-    exe = shutil.which("ffprobe")
+    exe = find_tool("ffprobe")
     if not exe:
-        raise MediaError("영상 분석에는 ffmpeg가 필요합니다. Setup.cmd를 다시 실행해 설치하세요.")
+        raise MediaError(FFMPEG_MISSING)
     proc = _run([exe, "-v", "error", "-show_entries",
                  "format=duration,size:stream=codec_type,codec_name,width,height,r_frame_rate,pix_fmt",
                  "-of", "json", str(path)], timeout=60)
@@ -79,9 +107,9 @@ def _ts(sec: float) -> str:
 
 def extract_frames(path: Path, out_dir: Path, count: int = FRAME_COUNT) -> tuple[dict, list[dict]]:
     """영상 길이 전체에 고르게 프레임을 뽑는다. 반환: (메타, [{path, time}])"""
-    exe = shutil.which("ffmpeg")
+    exe = find_tool("ffmpeg")
     if not exe:
-        raise MediaError("영상 분석에는 ffmpeg가 필요합니다. Setup.cmd를 다시 실행해 설치하세요.")
+        raise MediaError(FFMPEG_MISSING)
     meta = probe(path)
     duration = meta["duration"]
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -117,7 +145,7 @@ def video_summary(name: str, meta: dict, frames: list[dict]) -> str:
 def image_summary(name: str, path: Path) -> str:
     size = path.stat().st_size if path.exists() else 0
     dims = ""
-    if shutil.which("ffprobe"):
+    if find_tool("ffprobe"):
         try:
             m = probe(path)
             if m.get("width"):
