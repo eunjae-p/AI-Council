@@ -2,6 +2,9 @@
 
 대화 기록(`data/`)과 내보내기 파일(`exports/`)은 개인 정보가 들어 있으므로 저장소에 올리지 않습니다.
 
+## 문서 (2026-10-07)
+- README에 GPT·Claude 로그인 방법(Setup.cmd / `codex login` / `claude auth login`)과 문제 해결 안내 추가
+
 ## V0.8.0 (2026-10-05)
 
 ### 새 기능
