@@ -1,4 +1,4 @@
-# AI Council V0.9.1
+# AI Council V0.9.2
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 둘 다 + 최종 결론**을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 백엔드는 각 PC에서 구독 계정으로 로그인한 **Codex CLI**와 **Claude Code CLI**이며, OpenAI·Anthropic API 키는 사용하지 않습니다. CLI 호출이 실패해도 다른 API로 우회하지 않습니다.
@@ -48,7 +48,13 @@ PowerShell 또는 명령 프롬프트에서 실행합니다.
 
 ## 업데이트
 
-Council 왼쪽 아래 **업데이트 확인 → 지금 업데이트**를 누르면 GitHub 최신 버전을 받아 자동으로 다시 시작합니다(대화 기록은 유지). Git으로 받은(`git clone`) 폴더에서만 동작하므로 ZIP 대신 `git clone`을 권장합니다. 처음에는 모델을 **계정 기본값**으로 쓰는 것을 권장합니다.
+GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록(`data/`)은 어느 방법이든 그대로 유지됩니다.
+
+1. **Council 화면에서**: 왼쪽 아래 **업데이트 확인 → 지금 업데이트**. 받은 뒤 Council이 새 창으로 자동 재시작됩니다. (앱을 켤 때 새 버전이 있으면 "새 버전 있음"이 표시됩니다.)
+2. **화면 없이**: 폴더의 **`Update.cmd`** 더블클릭. 변경 내역을 보여주고 `Y`를 누르면 업데이트합니다. Council이 켜져 있으면 새 버전으로 다시 시작할지 묻습니다.
+
+두 방법 모두 Git으로 받은(`git clone`) 폴더에서만 동작합니다. 이 PC에서 직접 고친 파일이 있으면 덮어쓰지 않고 멈춥니다. `Setup.cmd`는 프로그램(Python·CLI·ffmpeg 등) 설치용이며 Council 코드는 업데이트하지 않습니다.
+처음에는 모델을 **계정 기본값**으로 쓰는 것을 권장합니다.
 
 ## 실행
 
@@ -121,6 +127,7 @@ Council 왼쪽 아래 **업데이트 확인 → 지금 업데이트**를 누르�
 | `council_context.py` | 모델에 넘길 컨텍스트 구성과 장기 요약 |
 | `web/index.html` | 채팅 UI (HTML/CSS/JavaScript, 외부 라이브러리 없음) |
 | `AI-Council_Web.cmd` | 실행 파일 |
+| `Update.cmd` | 화면 없이 Council 업데이트 (GitHub → 이 PC) |
 | `CLAUDE.md`, `AGENTS.md` | 수정 작업 규칙 (Claude Code·Codex 공용) |
 | `tests/` | 가짜 CLI로 하는 테스트 (`python tests/test_api.py`, `python tests/test_update.py`) |
 | `Setup.cmd`, `setup.ps1` | 처음 설치 도우미 (Python·Node.js·Git·ffmpeg·Codex CLI·Claude Code 설치, 로그인 안내, 바로가기) |

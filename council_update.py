@@ -169,3 +169,98 @@ def restart_detached() -> None:
     else:
         subprocess.Popen([sys.executable, str(ROOT / "ai_council_web.py")], cwd=str(ROOT), env=env,
                          start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+# ---------- 화면 없이 업데이트 (Update.cmd) ----------
+STATUS_URL = "http://127.0.0.1:8765/api/status"
+
+
+def _running_server_version() -> str:
+    """실행 중인 Council 서버 버전. 꺼져 있으면 빈 문자열."""
+    import json
+    import urllib.request
+    try:
+        with urllib.request.urlopen(STATUS_URL, timeout=2) as res:
+            data = json.loads(res.read().decode("utf-8"))
+        return str(data.get("version", "")) if data.get("ok") else ""
+    except Exception:
+        return ""
+
+
+def _stop_server() -> None:
+    import urllib.request
+    try:
+        req = urllib.request.Request(STATUS_URL.replace("/api/status", "/api/shutdown"), data=b"{}",
+                                     headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=3).read()
+    except Exception:
+        pass
+    for _ in range(20):  # 포트가 비워질 때까지 잠깐 대기
+        if not _running_server_version():
+            return
+        time.sleep(0.5)
+
+
+def _ask(question: str, default: bool = True) -> bool:
+    try:
+        answer = input(f"{question} ({'Y/n' if default else 'y/N'}) ").strip().lower()
+    except EOFError:
+        return default
+    return default if not answer else answer in ("y", "yes", "예", "ㅛ")
+
+
+def cli() -> int:
+    print("=" * 44)
+    print("  AI Council 업데이트 (GitHub → 이 PC)")
+    print("=" * 44)
+    if not is_repo():
+        print("\n[!] Git으로 받은 폴더가 아니라 업데이트할 수 없습니다.")
+        print("    원하는 위치에서 git clone https://github.com/eunjae-p/AI-Council.git 으로 다시 받으세요.")
+        return 1
+    local = file_version((ROOT / "ai_council_web.py").read_text(encoding="utf-8"))
+    running = _running_server_version()
+    print(f"\n이 폴더의 버전: V{local}" + (f"  (실행 중인 Council: V{running})" if running else "  (Council 꺼짐)"))
+    print("GitHub 확인 중...")
+    info = check(local, force=True)
+    if info["status"] in ("error", "not_repo"):
+        print(f"\n[!] {info['message']}")
+        return 1
+    updated = False
+    if info["status"] == "available":
+        print(f"\n새 버전 V{info.get('remote') or '?'} 이 있습니다 (변경 {info['behind']}개).")
+        for c in info.get("commits") or []:
+            print(f"  • {c}")
+        print("\n대화 기록(data/)은 그대로 유지됩니다.")
+        if not _ask("지금 업데이트할까요?"):
+            print("업데이트를 취소했습니다.")
+            return 0
+        try:
+            result = apply(local)
+        except UpdateError as exc:
+            print(f"\n[!] 업데이트를 멈췄습니다:\n{exc}")
+            return 1
+        if result["status"] == "updated":
+            print(f"\n[완료] V{result['version']} 으로 업데이트했습니다 ({result['from']} → {result['to']}).")
+        else:
+            print(f"\n[완료] 파일은 이미 최신이라 Git 기록만 정리했습니다 (V{result['version']}).")
+        local = result["version"]
+        updated = True
+    else:
+        print(f"\n[완료] 이미 최신 버전입니다 (V{local}).")
+    if running and (updated or running != local):
+        print(f"\n실행 중인 Council은 아직 V{running} 입니다. 답변을 생성 중이었다면 중단됩니다.")
+        if _ask("Council을 새 버전으로 다시 시작할까요?"):
+            _stop_server()
+            restart_detached()
+            print("새 창에서 Council을 다시 시작했습니다. 브라우저를 새로고침하세요.")
+        else:
+            print("나중에 Council을 다시 시작하면 새 버전이 적용됩니다.")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")  # 한글 출력
+    except (AttributeError, ValueError):
+        pass
+    sys.exit(cli())

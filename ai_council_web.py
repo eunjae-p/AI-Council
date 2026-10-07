@@ -37,7 +37,7 @@ import council_attach
 import council_media
 import council_update
 
-VERSION = "0.9.1"
+VERSION = "0.9.2"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"

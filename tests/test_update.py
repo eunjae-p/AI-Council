@@ -44,6 +44,16 @@ try: u.apply("9.9.9"); ok(False, "should block ahead")
 except u.UpdateError as e: ok("커밋" in str(e), "local commit blocks")
 ok(u.is_newer("0.10.0","0.9.0") and not u.is_newer("0.8.0","0.9.0") and not u.is_newer("0.9.0","0.9.0"), "version compare")
 r = u.check("99.0.0", force=True); ok(r["status"] == "latest", "running newer than GitHub -> no downgrade offer")
+# Update.cmd 와 같은 방식(화면 없이)으로 업데이트
+sh("git", "reset", "-q", "--soft", "HEAD~1", cwd=pc)  # 위에서 만든 로컬 커밋 정리
+w = (dev/"ai_council_web.py").read_text(encoding="utf-8").replace('VERSION = "9.9.9"', 'VERSION = "9.9.10"')
+(dev/"ai_council_web.py").write_text(w, encoding="utf-8"); sh(*G, "commit", "-qam", "cli release", cwd=dev); sh("git", "push", "-q", "origin", "main", cwd=dev)
+env = dict(os.environ, PYTHONUTF8="1")
+out = subprocess.run([sys.executable, str(pc/"council_update.py")], cwd=pc, input="y\n", capture_output=True, text=True, env=env, timeout=120)
+ok(out.returncode == 0 and "새 버전 V9.9.10" in out.stdout and "[완료] V9.9.10" in out.stdout, "cli update: " + out.stdout.strip().splitlines()[-1])
+ok('VERSION = "9.9.10"' in (pc/"ai_council_web.py").read_text(encoding="utf-8"), "cli updated files")
+out = subprocess.run([sys.executable, str(pc/"council_update.py")], cwd=pc, input="", capture_output=True, text=True, env=env, timeout=120)
+ok("이미 최신 버전" in out.stdout, "cli says latest")
 # git 저장소가 아닌 폴더
 u.ROOT = T/"dev"/"web"; ok(u.check("1")["status"] == "not_repo", "zip install detected")
 shutil.rmtree(T); print("ALL PASS")

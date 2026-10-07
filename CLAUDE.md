@@ -12,7 +12,7 @@
 ## 버전 관리 = GitHub이 기준 (클라우드 개념)
 - 기준 저장소: `https://github.com/eunjae-p/AI-Council` 의 `main` 브랜치.
 - **모든 수정은 GitHub에 올려야 끝난 것**으로 봅니다. 각 PC(집, 회사, 팀원)는 GitHub에서 받아 갑니다.
-  - 받는 방법: Council 왼쪽 아래 **업데이트 확인 → 지금 업데이트** (또는 `git pull`).
+  - 받는 방법: Council 왼쪽 아래 **업데이트 확인 → 지금 업데이트**, 또는 폴더의 **`Update.cmd`** (또는 `git pull`).
 - 작업 시작 전: `git pull` 로 최신 상태에서 시작합니다.
 - 한 번에 **한 에이전트만** 파일을 수정합니다. 다른 에이전트는 검토만 합니다.
 
@@ -53,7 +53,7 @@
 | `council_media.py` | 이미지 정보, 영상 프레임 추출 (ffmpeg/ffprobe) |
 | `council_workflow.py` | ComfyUI 워크플로우 JSON 요약 (색상 등급 규칙 포함) |
 | `council_versions.py` | Codex/Claude CLI 버전·로그인 상태 |
-| `council_update.py` | Council 자체 업데이트 (GitHub → PC, 안전 검사, 재시작) |
+| `council_update.py` | Council 자체 업데이트 (GitHub → PC, 안전 검사, 재시작) · `Update.cmd` 가 화면 없이 실행 |
 | `Setup.cmd`, `setup.ps1` | 처음 설치 도우미 |
 | `tests/` | 가짜 CLI(`fake_bin`)를 쓰는 테스트 |
 
