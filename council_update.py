@@ -57,6 +57,13 @@ def file_version(text: str) -> str:
     return m.group(1) if m else ""
 
 
+def is_newer(a: str, b: str) -> bool:
+    """버전 a 가 b 보다 크면 True (예: 0.10.0 > 0.9.0)."""
+    def parts(v: str) -> tuple:
+        return tuple(int(x) for x in re.findall(r"\d+", v or "")[:4]) or (0,)
+    return bool(a) and parts(a) > parts(b)
+
+
 def fetch(force: bool = False) -> None:
     with _lock:
         if not force and _fetch_cache["ok"] and time.time() - float(_fetch_cache["time"]) < 600:
@@ -106,7 +113,8 @@ def check(running_version: str, force: bool = False) -> dict:
         return {"status": "error", "message": str(exc), "running": running_version}
     except subprocess.TimeoutExpired:
         return {"status": "error", "message": "GitHub 연결 시간이 초과되었습니다. 인터넷 연결을 확인하세요.", "running": running_version}
-    available = behind > 0 or (remote_version and remote_version != running_version)
+    # GitHub에 받을 커밋이 있거나, GitHub 버전 번호가 더 클 때만 업데이트 (실행 중인 쪽이 더 새로우면 아님)
+    available = behind > 0 or is_newer(remote_version, running_version)
     return {
         "status": "available" if available else "latest",
         "running": running_version, "remote": remote_version, "behind": behind, "ahead": ahead,

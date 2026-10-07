@@ -1,4 +1,4 @@
-# AI Council V0.8.0
+# AI Council V0.9.0
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 둘 다 + 최종 결론**을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 백엔드는 각 PC에서 구독 계정으로 로그인한 **Codex CLI**와 **Claude Code CLI**이며, OpenAI·Anthropic API 키는 사용하지 않습니다. CLI 호출이 실패해도 다른 API로 우회하지 않습니다.
@@ -13,7 +13,7 @@
    git clone https://github.com/eunjae-p/AI-Council.git
    ```
 2. 받은 폴더의 **`Setup.cmd`를 더블클릭**합니다. 자동으로:
-   - Python, Node.js, Git이 없으면 winget으로 설치
+   - Python, Node.js, Git, ffmpeg가 없으면 winget으로 설치
    - Codex CLI 설치·업데이트, Claude Code 설치 (공식 설치 프로그램, 이후 자동 업데이트)
    - 로그인이 안 되어 있으면 로그인 창을 띄움 (브라우저에서 **자기 계정**으로 로그인)
    - 바탕화면에 **AI Council** 바로가기 생성
@@ -70,6 +70,11 @@ Council 왼쪽 아래 **업데이트 확인 → 지금 업데이트**를 누르�
   - 모델은 이 요약과 원본(길면 앞부분)을 함께 받아 분석하므로 노드를 빠뜨리거나 지어내는 일이 줄어듭니다.
   - 요약은 대화 기록에 남아 다음 질문에서 "아까 그 워크플로우"로 이어서 물어볼 수 있습니다. 원본은 `data/attachments/`에 보관됩니다(Git 제외).
   - 첨부가 있거나 작업 모드일 때는 모델별 제한 시간이 300초로 늘어납니다.
+- **이미지·영상 첨부 분석**: 📎 버튼, 끌어다 놓기, **Ctrl+V 붙여넣기**(캡처 이미지·탐색기에서 복사한 파일)로 첨부합니다.
+  - 이미지(png·jpg·webp·gif·bmp, 최대 20MB): GPT는 Codex `--image`로, Claude는 첨부 폴더 안에서만 파일 읽기 도구로 직접 봅니다.
+  - 영상(mp4·mov·mkv·avi·webm 등, 최대 2GB): 모델이 영상을 직접 보지 못하므로 **ffmpeg로 길이 전체에서 12장의 프레임**을 뽑아 이미지로 전달하고, 길이·해상도·fps·코덱 정보를 함께 알려줍니다. **소리는 분석하지 않습니다.** ffmpeg가 필요합니다(`Setup.cmd`가 설치).
+  - 원본은 PC의 `data/attachments/`에 저장되고 화면에 썸네일·프레임이 표시됩니다. 다음 질문에 새 첨부가 없으면 최근 이미지·프레임을 다시 보여 주므로 "방금 영상 3번째 프레임은?"처럼 이어서 물을 수 있습니다.
+  - ⚠️ 첨부 내용은 질문과 함께 **OpenAI·Anthropic 서버로 전송**됩니다(CLI도 모델은 클라우드). 반출이 제한된 자료는 회사 규정을 확인하세요.
 - **답변 대상 선택**: GPT / Claude / 둘 다 + 최종 결론. 모델은 "모델 설정"에서 고르거나 직접 입력하며, `계정 기본값`은 각 CLI의 기본 설정을 그대로 씁니다.
 - **공용 대화 기록**: 어떤 모델이 답하든 같은 대화 기록을 읽습니다. 프롬프트에는 `[사용자] [GPT] [Claude] [Council 최종 결론]` 화자 표시가 붙어 서로의 답변을 혼동하지 않게 합니다.
 - **장기 대화 자동 요약**: 원문은 전부 보존하고, 모델에는 `누적 장기 요약 + 최근 대화 원문(메시지 단위) + 현재 질문`을 보냅니다.
@@ -108,6 +113,7 @@ Council 왼쪽 아래 **업데이트 확인 → 지금 업데이트**를 누르�
 | `ai_council_web.py` | 로컬 웹 서버와 API (주력) |
 | `council_core.py` | CLI 탐색·호출, 타임아웃·오류 처리 공용 코드 |
 | `council_store.py` | 대화 저장, 검색, 휴지통, Markdown 내보내기 (나중에 SQLite FTS로 교체 가능하도록 분리) |
+| `council_media.py` | 이미지 정보, 영상 프레임 추출(ffmpeg/ffprobe) |
 | `council_workflow.py` | ComfyUI 워크플로우 JSON 요약 (노드·색상 등급·모델·노드 팩·서브그래프) |
 | `council_attach.py` | 첨부 파일 검사·보관·프롬프트 구성 |
 | `council_update.py` | Council 자체 업데이트 (GitHub → 이 PC, 안전 검사, 자동 재시작) |
@@ -117,7 +123,7 @@ Council 왼쪽 아래 **업데이트 확인 → 지금 업데이트**를 누르�
 | `AI-Council_Web.cmd` | 실행 파일 |
 | `CLAUDE.md`, `AGENTS.md` | 수정 작업 규칙 (Claude Code·Codex 공용) |
 | `tests/` | 가짜 CLI로 하는 테스트 (`python tests/test_api.py`, `python tests/test_update.py`) |
-| `Setup.cmd`, `setup.ps1` | 처음 설치 도우미 (Python·Node.js·Git·Codex CLI·Claude Code 설치, 로그인 안내, 바로가기) |
+| `Setup.cmd`, `setup.ps1` | 처음 설치 도우미 (Python·Node.js·Git·ffmpeg·Codex CLI·Claude Code 설치, 로그인 안내, 바로가기) |
 | `AI-Council_CLI.ps1` | CLI 연결 확인·디버깅용 PowerShell 스크립트 |
 
 ## CLI 연결 확인 (디버깅)

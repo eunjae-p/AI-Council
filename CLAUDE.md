@@ -49,7 +49,8 @@
 | `council_core.py` | CLI 호출·타임아웃·중지(CancelToken)·오류 안내, 대화/작업 모드 |
 | `council_context.py` | 메시지 단위 맥락 구성, 장기 요약 |
 | `council_store.py` | 대화 저장·메타·휴지통·검색·Markdown 내보내기 |
-| `council_attach.py` | 첨부 파일 검사·보관·프롬프트 구성 |
+| `council_attach.py` | 첨부 파일 검사·보관·업로드·프롬프트 구성 |
+| `council_media.py` | 이미지 정보, 영상 프레임 추출 (ffmpeg/ffprobe) |
 | `council_workflow.py` | ComfyUI 워크플로우 JSON 요약 (색상 등급 규칙 포함) |
 | `council_versions.py` | Codex/Claude CLI 버전·로그인 상태 |
 | `council_update.py` | Council 자체 업데이트 (GitHub → PC, 안전 검사, 재시작) |

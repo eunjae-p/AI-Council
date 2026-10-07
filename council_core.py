@@ -218,6 +218,11 @@ CHAT_SYSTEM_PROMPT = (
     "You are a helpful, knowledgeable assistant in a chat app. Answer the user's question directly "
     "and conversationally. You have no tools and no file access in this mode."
 )
+CHAT_IMAGE_SYSTEM_PROMPT = (
+    "You are a helpful, knowledgeable assistant in a chat app. The user attached images; open each listed "
+    "image file with the Read tool and look at it before answering. Do not read any other files. "
+    "Answer directly and conversationally."
+)
 _UNKNOWN_FLAG = ("unknown option", "unexpected argument", "unrecognized", "unknown argument", "invalid option")
 
 
@@ -238,18 +243,32 @@ def check_workdir(workdir: str) -> Path:
 
 
 def call_model(which: str, model: str, prompt: str, mode: str = "chat", workdir: Path | None = None,
-               timeout: int = TIMEOUT_SECONDS, info: dict | None = None, cancel: CancelToken | None = None) -> str:
-    """which: gpt | claude.  mode: chat(도구 없음, 빈 폴더) | work(작업 폴더 읽기 전용)."""
+               timeout: int = TIMEOUT_SECONDS, info: dict | None = None, cancel: CancelToken | None = None,
+               images: list[str] | None = None, image_dir: Path | None = None) -> str:
+    """which: gpt | claude.  mode: chat(도구 없음, 빈 폴더) | work(작업 폴더 읽기 전용).
+    images: 모델에 보여줄 이미지 파일 경로 (GPT: --image, Claude: 파일 읽기 도구)."""
+    images = [str(p) for p in images or []]
+    cwd = workdir if mode == "work" and workdir else chat_dir()
     if which == "gpt":
         name, base = "codex", codex_args(model)
         extra: list[str] = []  # read-only 샌드박스는 기본 인수에 포함
+        for path in images:  # 이미지는 재시도 때도 빠지지 않도록 기본 인수에 넣는다
+            base += ["--image", path]
     else:
         name, base = "claude", claude_args(model)
+        if images:
+            prompt += "\n\n## Image files to open with the Read tool (in this order)\n" + "\n".join(
+                f"{i}. {p}" for i, p in enumerate(images, start=1))
         if mode == "work":
             extra = ["--tools", "Read,Glob,Grep", "--disallowedTools", "mcp__*"]
+            if images and image_dir:
+                extra += ["--add-dir", str(image_dir)]
+        elif images:
+            # 이미지 폴더 안에서만 읽기 도구 사용
+            cwd = image_dir or Path(images[0]).parent
+            extra = ["--tools", "Read", "--disallowedTools", "mcp__*", "--system-prompt", CHAT_IMAGE_SYSTEM_PROMPT]
         else:
             extra = ["--disallowedTools", "*", "--system-prompt", CHAT_SYSTEM_PROMPT]
-    cwd = workdir if mode == "work" and workdir else chat_dir()
     try:
         return run_cli(name, base + extra, prompt, timeout, cwd, info, cancel)
     except Cancelled:

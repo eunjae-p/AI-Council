@@ -36,7 +36,7 @@ import council_versions
 import council_attach
 import council_update
 
-VERSION = "0.8.0"
+VERSION = "0.9.0"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -173,6 +173,9 @@ class Handler(BaseHTTPRequestHandler):
                     "ok": True, "version": VERSION, "model": ACCOUNT_DEFAULT,
                     "cli": {"codex": cli_available("codex"), "claude": cli_available("claude")},
                 })
+            elif parsed.path == "/api/attachment":
+                self.send_attachment(arg("conversation_id"), arg("file"))
+                return
             elif parsed.path == "/api/update/check":
                 self.send_json(council_update.check(VERSION, force=arg("refresh") == "1"))
             elif parsed.path == "/api/versions":
@@ -205,6 +208,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/debate":
             self.handle_debate()
+            return
+        if path == "/api/upload":
+            self.handle_upload()
             return
         try:
             body = self.read_json()
@@ -272,6 +278,52 @@ class Handler(BaseHTTPRequestHandler):
         except (OSError, json.JSONDecodeError) as exc:
             self.send_json({"error": f"처리 실패: {exc}"}, 500)
 
+    def handle_upload(self) -> None:
+        """이미지·영상 원본 업로드 (본문 = 파일 바이트). 쿼리: conversation_id, name"""
+        query = parse_qs(urlparse(self.path).query)
+        try:
+            conversation_id = store.check_id(query.get("conversation_id", [""])[0])
+            if not store.exists(conversation_id):
+                raise ValueError("대화를 찾을 수 없습니다.")
+            length = int(self.headers.get("Content-Length", "0") or 0)
+            info = council_attach.save_upload(store.data_dir, conversation_id,
+                                              query.get("name", ["file"])[0], self.rfile, length)
+        except ValueError as exc:
+            self.close_connection = True  # 남은 본문을 읽지 않았으므로 연결을 닫는다
+            self.send_json({"error": str(exc)}, 400)
+            return
+        except OSError as exc:
+            self.close_connection = True
+            self.send_json({"error": f"저장 실패: {exc}"}, 500)
+            return
+        self.send_json(info)
+
+    def send_attachment(self, conversation_id: str, rel: str) -> None:
+        """대화에 첨부된 이미지·영상 프레임을 화면에 보여주기 위한 읽기 전용 엔드포인트."""
+        try:
+            base = council_attach.attach_dir(store.data_dir, store.check_id(conversation_id)).resolve()
+            path = (base / rel).resolve()
+            if base not in path.parents or not path.is_file():
+                raise ValueError
+        except ValueError:
+            self.send_error(404)
+            return
+        ctype = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
+                 ".gif": "image/gif", ".bmp": "image/bmp", ".mp4": "video/mp4", ".webm": "video/webm",
+                 ".mov": "video/quicktime"}.get(path.suffix.lower(), "application/octet-stream")
+        size = path.stat().st_size
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(size))
+        self.send_header("Cache-Control", "private, max-age=3600")
+        self.end_headers()
+        try:
+            with path.open("rb") as fh:
+                while chunk := fh.read(1024 * 1024):
+                    self.wfile.write(chunk)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
     @staticmethod
     def ensure_idle(conversation_id: str) -> None:
         with _busy_lock:
@@ -293,7 +345,7 @@ class Handler(BaseHTTPRequestHandler):
             if mode not in MODES:
                 raise ValueError("지원하지 않는 모드입니다.")
             workdir = check_workdir(str(body.get("workdir", ""))) if mode == "work" else None
-            files = council_attach.validate(body.get("attachments"))
+            files = council_attach.validate(body.get("attachments"), store.data_dir, conversation_id)
             if not question and files:
                 question = "첨부한 파일을 분석해줘."
         except (ValueError, json.JSONDecodeError) as exc:
@@ -337,11 +389,23 @@ class Handler(BaseHTTPRequestHandler):
         # 2) 컨텍스트는 질문 저장 전에 만든다 (질문은 별도 섹션으로 전달)
         context, info = build_context(store, conversation_id)
         attached = []
+        previous = store.load_messages(conversation_id)
         if files:
-            self.emit("stage", step=0, text="첨부 파일을 분석하는 중")
+            has_video = any(f.get("kind") == "video" for f in files)
+            self.emit("stage", step=0, text="영상에서 프레임을 뽑는 중" if has_video else "첨부 파일을 분석하는 중")
             attached = council_attach.process(files, store.data_dir, conversation_id)
         attach_block = council_attach.prompt_block(attached)
-        timeout = ATTACH_TIMEOUT if (attached or mode == "work") else TIMEOUT_SECONDS
+        images = council_attach.images_for(attached)
+        if not images:  # 새 이미지가 없으면 최근에 첨부한 이미지·영상 프레임을 다시 보여준다
+            resent = council_attach.recent_media(previous)
+            if resent:
+                images = council_attach.images_for(resent)
+                attach_block += council_attach.prompt_block(resent, resent=True)
+        image_dir = council_attach.attach_dir(store.data_dir, conversation_id) if images else None
+        for it in attached:
+            if it.get("error"):
+                self.emit("warning", text=it["summary"])
+        timeout = ATTACH_TIMEOUT if (attached or images or mode == "work") else TIMEOUT_SECONDS
         user_item = store.append_message(conversation_id, "user", question, "사용자", target=target,
                                          mode=mode, workdir=str(workdir) if workdir else None,
                                          attachments=council_attach.history_records(attached) or None)
@@ -369,7 +433,8 @@ class Handler(BaseHTTPRequestHandler):
             started = time.time()
             try:
                 run_info: dict = {}
-                answer = call_model(which, model, prompt, mode, workdir, timeout=timeout, info=run_info, cancel=token)
+                answer = call_model(which, model, prompt, mode, workdir, timeout=timeout, info=run_info, cancel=token,
+                                    images=images, image_dir=image_dir)
             except Cancelled:
                 stopped = True
                 break

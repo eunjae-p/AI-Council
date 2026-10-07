@@ -113,6 +113,10 @@ details.indiv .msg{margin-top:10px}
 .write{display:flex;gap:8px;align-items:flex-end}
 .composer.drag{outline:2px dashed var(--gpt);outline-offset:-6px;background:#0e1a30}
 .chips{display:flex;gap:6px;flex-wrap:wrap} .chips:empty{display:none}
+.chip2 img.thumb{width:28px;height:28px;object-fit:cover;border-radius:5px;margin-left:-4px}
+.attnote{font-size:11.5px;color:var(--warn)}
+.media{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px} .media img{height:110px;max-width:220px;object-fit:cover;border-radius:8px;border:1px solid var(--line2);cursor:zoom-in;background:#000}
+.media.frames img{height:64px;max-width:114px} .media .t{font-size:10.5px;color:var(--dim);text-align:center}
 .chip2{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;background:#16223d;border:1px solid var(--line2);border-radius:8px;padding:3px 6px 3px 9px}
 .chip2 .x{background:none;padding:0 4px;color:var(--muted)} .chip2 .k{color:var(--council);font-size:11px}
 .atts{margin-top:8px;display:flex;flex-direction:column;gap:4px} .atts details{font-size:13px} .atts summary{cursor:pointer;color:#c7d3f5}
@@ -211,10 +215,11 @@ details.indiv .msg{margin-top:10px}
           </label>
         </div>
         <div class="chips" id="chips"></div>
+        <div class="attnote" id="attachNote" hidden></div>
         <div class="write">
-          <button class="ghost" id="attachBtn" title="파일 첨부 (워크플로우 JSON 등 · 끌어다 놓기 가능)">📎</button>
-          <input type="file" id="fileInput" multiple hidden accept=".json,.txt,.md,.py,.yaml,.yml,.csv,.tsv,.toml,.ini,.cfg,.log,.js,.ts,.html,.css,.xml,.ps1,.bat,.cmd,.sh">
-          <textarea id="q" rows="2" placeholder="질문을 입력하세요 · 📎 또는 끌어다 놓기로 JSON 첨부 (Enter 보내기 · Shift+Enter 줄바꿈)"></textarea>
+          <button class="ghost" id="attachBtn" title="파일 첨부 (JSON·이미지·영상 · 끌어다 놓기·Ctrl+V 가능)">📎</button>
+          <input type="file" id="fileInput" multiple hidden accept=".json,.txt,.md,.py,.yaml,.yml,.csv,.tsv,.toml,.ini,.cfg,.log,.js,.ts,.html,.css,.xml,.ps1,.bat,.cmd,.sh,image/*,video/*,.mov,.mkv">
+          <textarea id="q" rows="2" placeholder="질문을 입력하세요 · 📎·끌어다 놓기·Ctrl+V로 JSON·이미지·영상 첨부 (Enter 보내기 · Shift+Enter 줄바꿈)"></textarea>
           <button class="primary" id="send">보내기</button>
         </div>
         <div class="status"><span id="spin" class="spin" hidden></span><span id="status">준비됨</span><span class="r" id="ctxInfo"></span></div>
@@ -225,7 +230,7 @@ details.indiv .msg{margin-top:10px}
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.8.0'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.9.0'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const store = { get(k){ try { return localStorage.getItem(k); } catch { return null; } }, set(k,v){ try { localStorage.setItem(k,v); } catch {} } };
@@ -282,6 +287,17 @@ function msgEl(item, index) {
   if (item.attachments && item.attachments.length) {
     const a = el('div', 'atts');
     item.attachments.forEach(att => {
+      if (att.kind === 'image' || att.kind === 'video') {
+        a.append(el('div', '', `${att.kind === 'video' ? '🎬' : '🖼'} ${att.name} · ${fmtSize(att.size || 0)}` + (att.error ? ' · 분석 준비 실패' : '')));
+        const strip = el('div', 'media' + (att.kind === 'video' ? ' frames' : ''));
+        (att.images || []).forEach((p, k) => { const u = attUrl(att, p); if (!u) return;
+          const wrap = el('div'); const im = el('img'); im.src = u; im.loading = 'lazy'; im.title = '크게 보기'; im.onclick = () => window.open(u, '_blank'); wrap.append(im);
+          if (att.frames && att.frames[k]) wrap.append(el('div', 't', att.frames[k].time.toFixed(1) + 's'));
+          strip.append(wrap); });
+        a.append(strip);
+        if (att.kind === 'video' && att.summary) { const d = el('details'); d.append(el('summary', '', '영상 정보'), el('pre', '', att.summary)); a.append(d); }
+        return;
+      }
       const label = `📎 ${att.name} · ${(att.size || 0).toLocaleString()}자` + (att.kind === 'workflow' ? ' · 워크플로우 요약됨' : '');
       if (att.summary) { const d = el('details'); d.append(el('summary', '', label), el('pre', '', att.summary)); a.append(d); }
       else a.append(el('div', '', label));
@@ -476,7 +492,7 @@ function updateModelInfo() {
 document.querySelectorAll('#target button').forEach(b => b.onclick = () => setTarget(b.dataset.v));
 function setTarget(v) { S.target = v; store.set('councilTarget', v); document.querySelectorAll('#target button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); updateModelInfo(); }
 document.querySelectorAll('#mode button').forEach(b => b.onclick = () => setMode(b.dataset.m));
-function setMode(m) { S.mode = m; store.set('councilMode', m); document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.m === m)); $('#workdir').classList.toggle('show', m === 'work'); $('#q').placeholder = m === 'work' ? '작업 폴더의 파일을 참고해 답할 질문 (Enter 보내기 · Shift+Enter 줄바꿈)' : '질문을 입력하세요 · 📎 또는 끌어다 놓기로 JSON 첨부 (Enter 보내기 · Shift+Enter 줄바꿈)'; }
+function setMode(m) { S.mode = m; store.set('councilMode', m); document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.m === m)); $('#workdir').classList.toggle('show', m === 'work'); $('#q').placeholder = m === 'work' ? '작업 폴더의 파일을 참고해 답할 질문 (Enter 보내기 · Shift+Enter 줄바꿈)' : '질문을 입력하세요 · 📎·끌어다 놓기·Ctrl+V로 JSON·이미지·영상 첨부 (Enter 보내기 · Shift+Enter 줄바꿈)'; }
 $('#workdir').addEventListener('input', () => store.set('councilWorkdir', $('#workdir').value.trim()));
 $('#modelToggle').onclick = () => { const m = $('#models'); m.classList.toggle('open'); $('#modelToggle').textContent = m.classList.contains('open') ? '모델 설정 ▴' : '모델 설정 ▾'; };
 
@@ -492,6 +508,9 @@ function pendingEl(text) { const p = el('div', 'pending'); p.id = 'pending'; p.a
 async function send() {
   const q = $('#q'), question = q.value.trim();
   if ((!question && !S.files.length) || S.running) return;
+  if (S.files.some(f => f.uploading)) { toast('파일 업로드가 끝난 뒤 보내 주세요', true); return; }
+  if (S.files.some(f => f.failed)) { toast('업로드에 실패한 첨부를 지운 뒤 보내 주세요', true); return; }
+  if (S.files.some(f => f.conv && f.conv !== S.current)) { toast('다른 대화에서 올린 이미지·영상은 그 대화에서만 보낼 수 있습니다. 다시 첨부해 주세요', true); return; }
   const gpt = modelValue($('#gptModel'), $('#gptCustom')), claude = modelValue($('#claudeModel'), $('#claudeCustom'));
   if (S.target !== 'claude' && !gpt) { $('#models').classList.add('open'); $('#gptCustom').focus(); return; }
   if (S.target !== 'gpt' && !claude) { $('#models').classList.add('open'); $('#claudeCustom').focus(); return; }
@@ -508,7 +527,7 @@ async function send() {
   let gotUser = false, wasStopped = false;
   try {
     const res = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => ({ name:f.name, content:f.content })) }) });
+      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => f.upload ? ({ name:f.name, upload:f.upload }) : ({ name:f.name, content:f.content })) }) });
     if (!res.ok) { let m = '요청 실패'; try { m = (await res.json()).error || m; } catch {} throw new Error(m); }
     const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
     for (;;) {
@@ -583,24 +602,61 @@ async function loadVersions(force) {
   if (outdated.length && !force) toast('CLI 업데이트 또는 로그인이 필요합니다. 왼쪽 아래 안내를 확인하세요.', true);
 }
 
-// ---------- 첨부 ----------
-const MAX_FILES = 5, MAX_FILE_BYTES = 2 * 1024 * 1024;
+// ---------- 첨부 (텍스트·JSON / 이미지·영상) ----------
+const MAX_FILES = 5, MAX_FILE_BYTES = 2 * 1024 * 1024, MAX_IMAGE_BYTES = 20 * 1024 * 1024, MAX_VIDEO_BYTES = 2 * 1024 * 1024 * 1024;
 const OK_EXT = /\.(json|txt|md|py|ya?ml|csv|tsv|toml|ini|cfg|log|js|ts|html|css|xml|ps1|bat|cmd|sh)$/i;
+const IMG_EXT = /\.(png|jpe?g|webp|gif|bmp)$/i, VID_EXT = /\.(mp4|mov|mkv|avi|webm|m4v|mpe?g|wmv)$/i;
+const fmtSize = n => n >= 1048576 ? (n / 1048576).toFixed(1) + 'MB' : Math.max(1, Math.round(n / 1024)) + 'KB';
 function renderChips() {
   const box = $('#chips'); box.innerHTML = '';
   S.files.forEach((f, i) => {
-    const c = el('span', 'chip2'); c.append(el('span', '', '📎 ' + f.name), el('span', 'k', `${Math.max(1, Math.round(f.size / 1024))}KB`));
-    const x = el('button', 'x', '×'); x.title = '첨부 취소'; x.onclick = () => { S.files.splice(i, 1); renderChips(); };
+    const c = el('span', 'chip2');
+    if (f.thumb) { const im = el('img', 'thumb'); im.src = f.thumb; c.append(im); }
+    c.append(el('span', '', (f.kind === 'video' ? '🎬 ' : f.kind === 'image' ? '🖼 ' : '📎 ') + f.name),
+      el('span', 'k', f.uploading ? `업로드 ${f.progress || 0}%` : f.failed ? '실패' : fmtSize(f.size)));
+    const x = el('button', 'x', '×'); x.title = '첨부 취소';
+    x.onclick = () => { if (f.xhr) f.xhr.abort(); S.files.splice(i, 1); renderChips(); };
     c.append(x); box.append(c);
+  });
+  const media = S.files.some(f => f.kind === 'image' || f.kind === 'video');
+  $('#attachNote').hidden = !S.files.length;
+  $('#attachNote').textContent = '첨부 내용은 질문과 함께 OpenAI·Anthropic 서버로 전송됩니다.' + (media ? ' 영상은 프레임 이미지로 나눠 분석하며 소리는 분석하지 않습니다.' : '');
+}
+function uploadMedia(f, file) {
+  return new Promise(resolve => {
+    const xhr = new XMLHttpRequest(); f.xhr = xhr; f.uploading = true; f.progress = 0;
+    xhr.open('POST', `/api/upload?conversation_id=${encodeURIComponent(f.conv)}&name=${encodeURIComponent(file.name)}`);
+    xhr.upload.onprogress = e => { if (e.lengthComputable) { f.progress = Math.round(e.loaded / e.total * 100); renderChips(); } };
+    xhr.onload = () => {
+      f.uploading = false; f.xhr = null;
+      let r = {}; try { r = JSON.parse(xhr.responseText); } catch {}
+      if (xhr.status === 200 && r.id) { f.upload = r.id; } else { f.failed = true; toast(`${file.name}: ${r.error || '업로드 실패'}`, true); }
+      renderChips(); resolve();
+    };
+    xhr.onerror = xhr.onabort = () => { f.uploading = false; f.failed = true; f.xhr = null; renderChips(); resolve(); };
+    xhr.send(file);
   });
 }
 async function addFiles(list) {
-  for (const file of [...list]) {
+  const files = [...list];
+  if (!files.length) return;
+  for (const file of files) {
     if (S.files.length >= MAX_FILES) { toast(`첨부는 ${MAX_FILES}개까지 가능합니다`, true); break; }
-    if (!OK_EXT.test(file.name)) { toast(`${file.name}: JSON·텍스트 파일만 첨부할 수 있습니다`, true); continue; }
-    if (file.size > MAX_FILE_BYTES) { toast(`${file.name}: 2MB 이하만 첨부할 수 있습니다`, true); continue; }
-    try { S.files.push({ name:file.name, size:file.size, content: await file.text() }); }
-    catch { toast(`${file.name}: 파일을 읽지 못했습니다`, true); }
+    const name = file.name || `붙여넣은_이미지_${Date.now()}.png`;
+    if (IMG_EXT.test(name) || VID_EXT.test(name) || (!file.name && /^image\//.test(file.type))) {
+      const kind = VID_EXT.test(name) ? 'video' : 'image';
+      if (file.size > (kind === 'image' ? MAX_IMAGE_BYTES : MAX_VIDEO_BYTES)) { toast(`${name}: ${kind === 'image' ? '이미지는 20MB' : '영상은 2GB'} 이하만 첨부할 수 있습니다`, true); continue; }
+      if (!S.current) await newConversation();
+      const f = { name, size:file.size, kind, conv:S.current, thumb: kind === 'image' ? URL.createObjectURL(file) : '' };
+      S.files.push(f); renderChips();
+      const named = file.name ? file : new File([file], name, { type:file.type });
+      uploadMedia(f, named);
+      continue;
+    }
+    if (!OK_EXT.test(name)) { toast(`${name}: JSON·텍스트·이미지·영상 파일만 첨부할 수 있습니다`, true); continue; }
+    if (file.size > MAX_FILE_BYTES) { toast(`${name}: 2MB 이하만 첨부할 수 있습니다`, true); continue; }
+    try { S.files.push({ name, size:file.size, kind:'text', content: await file.text() }); }
+    catch { toast(`${name}: 파일을 읽지 못했습니다`, true); }
   }
   renderChips(); $('#q').focus();
 }
@@ -616,7 +672,19 @@ $('#fileInput').onchange = e => { addFiles(e.target.files); e.target.value = '';
   // 화면 다른 곳에 떨어뜨려도 브라우저가 파일을 열어버리지 않게
   window.addEventListener('dragover', e => { if (has(e)) e.preventDefault(); });
   window.addEventListener('drop', e => { if (has(e)) { e.preventDefault(); if (!zone.contains(e.target)) addFiles(e.dataTransfer.files); } });
+  // Ctrl+V: 캡처 이미지나 탐색기에서 복사한 파일을 붙여넣으면 첨부, 글자는 원래대로 붙여넣기
+  document.addEventListener('paste', e => {
+    const cd = e.clipboardData; if (!cd) return;
+    let files = [...(cd.files || [])];
+    if (!files.length) files = [...(cd.items || [])].filter(it => it.kind === 'file').map(it => it.getAsFile()).filter(Boolean);
+    if (files.length) { e.preventDefault(); addFiles(files); }
+  });
 })();
+function attUrl(att, path) {
+  const p = String(path || '').replace(/\\/g, '/'), key = '/attachments/' + S.current + '/';
+  const i = p.indexOf(key);
+  return i < 0 ? '' : `/api/attachment?conversation_id=${encodeURIComponent(S.current)}&file=${encodeURIComponent(p.slice(i + key.length))}`;
+}
 
 // ---------- Council 자체 업데이트 (GitHub → 이 PC) ----------
 function modal(title, body, buttons) {

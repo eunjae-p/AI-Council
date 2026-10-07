@@ -42,6 +42,8 @@ r = u.check("9.9.9", force=True); ok(r["status"] == "latest", "latest after sync
 sh(*G, "commit", "--allow-empty", "-qm", "local", cwd=pc)
 try: u.apply("9.9.9"); ok(False, "should block ahead")
 except u.UpdateError as e: ok("커밋" in str(e), "local commit blocks")
+ok(u.is_newer("0.10.0","0.9.0") and not u.is_newer("0.8.0","0.9.0") and not u.is_newer("0.9.0","0.9.0"), "version compare")
+r = u.check("99.0.0", force=True); ok(r["status"] == "latest", "running newer than GitHub -> no downgrade offer")
 # git 저장소가 아닌 폴더
 u.ROOT = T/"dev"/"web"; ok(u.check("1")["status"] == "not_repo", "zip install detected")
 shutil.rmtree(T); print("ALL PASS")

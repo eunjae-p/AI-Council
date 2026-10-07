@@ -9,6 +9,8 @@ if "SLOWALL" in p or ("SLOWCLAUDE" in p and os.path.basename(sys.argv[0])=="clau
 if "UNSUPPORTED" in p:
     sys.stderr.write("Reading prompt from stdin...\nuser\n"+p+"\nERROR: {\"message\":\"The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account.\"}\n"); sys.exit(1)
 if "FAILGPT" in p: sys.stderr.write("fake codex error"); sys.exit(3)
+if os.environ.get("FAKE_LOG"):
+    open(os.environ["FAKE_LOG"],"a").write("=====CODEX "+repr(sys.argv[1:])+"\n")
 model = sys.argv[sys.argv.index("--model")+1] if "--model" in sys.argv else "gpt-6.1-sol"
 sys.stderr.write("OpenAI Codex\n--------\nmodel: " + model + "\nprovider: openai\n")
 print("GPT 답변: 받은 프롬프트 길이 %d" % len(p))

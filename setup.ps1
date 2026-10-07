@@ -1,6 +1,6 @@
 ﻿# AI Council 설치 도우미 (Windows PowerShell 5.1 / PowerShell 7 호환)
 # Setup.cmd 를 더블클릭하면 실행됩니다. 관리자 권한은 필요 없습니다.
-# 하는 일: Python, Node.js, Git, Codex CLI, Claude Code 확인/설치 → 로그인 안내 → 바탕화면 바로가기
+# 하는 일: Python, Node.js, Git, ffmpeg, Codex CLI, Claude Code 확인/설치 → 로그인 안내 → 바탕화면 바로가기
 
 $ErrorActionPreference = 'Continue'
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
@@ -60,7 +60,7 @@ Write-Host "이미 설치된 항목은 건너뜁니다. 인터넷 연결이 필�
 Update-SessionPath
 
 # 1) Python ------------------------------------------------------------
-Write-Step "1/6 Python 확인"
+Write-Step "1/7 Python 확인"
 $py = Find-Command 'python'
 if (-not $py) {
     Install-WithWinget 'Python.Python.3.12' 'Python 3.12' 'https://www.python.org/downloads/' | Out-Null
@@ -78,7 +78,7 @@ if ($py) {
 }
 
 # 2) Node.js (Codex CLI 설치용) ------------------------------------------
-Write-Step "2/6 Node.js 확인 (Codex CLI 설치에 필요)"
+Write-Step "2/7 Node.js 확인 (Codex CLI 설치에 필요)"
 $node = Find-Command 'node'
 if (-not $node) {
     Install-WithWinget 'OpenJS.NodeJS.LTS' 'Node.js LTS' 'https://nodejs.org/' | Out-Null
@@ -88,7 +88,7 @@ if ($node) { $v = Get-Version $node.Source '--version'; Write-Ok "Node.js $v"; A
 else { Write-Bad "Node.js 를 찾을 수 없습니다."; Add-Result 'Node.js' '실패' 'https://nodejs.org/ 에서 LTS 설치' }
 
 # 3) Git (Council 업데이트 버튼에 필요) -----------------------------------
-Write-Step "3/6 Git 확인 (Council 자체 업데이트에 필요)"
+Write-Step "3/7 Git 확인 (Council 자체 업데이트에 필요)"
 $git = Find-Command 'git'
 if (-not $git) {
     Install-WithWinget 'Git.Git' 'Git' 'https://git-scm.com/download/win' | Out-Null
@@ -100,8 +100,18 @@ if ($git -and -not (Test-Path (Join-Path $Root '.git'))) {
     Write-Warn "이 폴더는 ZIP 으로 받은 것 같습니다. 업데이트 기능을 쓰려면 'git clone https://github.com/eunjae-p/AI-Council.git' 으로 받으세요."
 }
 
+# 4) ffmpeg (영상 첨부 분석용) --------------------------------------------
+Write-Step "4/7 ffmpeg 확인 (영상 첨부를 프레임으로 나눠 분석할 때 필요)"
+$ff = Find-Command 'ffmpeg'
+if (-not $ff) {
+    Install-WithWinget 'Gyan.FFmpeg' 'ffmpeg' 'https://www.gyan.dev/ffmpeg/builds/' | Out-Null
+    $ff = Find-Command 'ffmpeg'
+}
+if ($ff) { $v = Get-Version $ff.Source '-version'; Write-Ok "ffmpeg $v"; Add-Result 'ffmpeg' 'OK' $v }
+else { Write-Warn "ffmpeg 이 없으면 영상 분석만 쓸 수 없습니다 (이미지·텍스트는 가능)."; Add-Result 'ffmpeg' '권장' 'winget install Gyan.FFmpeg' }
+
 # 3) Codex CLI ---------------------------------------------------------
-Write-Step "4/6 Codex CLI 설치/업데이트 (GPT 연결용)"
+Write-Step "5/7 Codex CLI 설치/업데이트 (GPT 연결용)"
 $npm = Find-Command 'npm'
 if ($npm) {
     & $npm.Source install -g '@openai/codex@latest'
@@ -112,7 +122,7 @@ if ($codex) { $v = Get-Version $codex.Source '--version'; Write-Ok "Codex CLI $v
 else { Write-Bad "Codex CLI 설치 실패"; Add-Result 'Codex CLI' '실패' "Node.js 설치 후 'npm i -g @openai/codex@latest'" }
 
 # 4) Claude Code -------------------------------------------------------
-Write-Step "5/6 Claude Code 확인 (Claude 연결용)"
+Write-Step "6/7 Claude Code 확인 (Claude 연결용)"
 $claude = Find-Command 'claude'
 if (-not $claude) {
     Write-Host "  공식 설치 프로그램으로 설치 중... (자동 업데이트되는 방식)"
@@ -133,7 +143,7 @@ if ($claude) { $v = Get-Version $claude.Source '--version'; Write-Ok "Claude Cod
 else { Write-Bad "Claude Code 설치 실패"; Add-Result 'Claude Code' '실패' 'https://code.claude.com/docs 의 설치 안내 참고' }
 
 # 5) 로그인 -------------------------------------------------------------
-Write-Step "6/6 로그인 확인 (각자 자기 구독 계정, 브라우저에서 진행)"
+Write-Step "7/7 로그인 확인 (각자 자기 구독 계정, 브라우저에서 진행)"
 if ($codex) {
     & $codex.Source login status *> $null
     if ($LASTEXITCODE -eq 0) { Write-Ok "Codex: 로그인됨"; Add-Result 'Codex 로그인' 'OK' '' }
