@@ -235,4 +235,17 @@ ok("error" in types and types.count("answer")==0 and log=="", f"no model call wh
 its=get("/api/conversation?id="+c10)["items"]; ok(its[-1]["role"]=="error" and its[-1].get("failed_message_id")==its[-2]["id"], "failure recorded, question excluded")
 _cm.find_tool = _orig
 ok(get("/api/status")["ffmpeg"] is True, "status reports ffmpeg")
+# 대화 목록 아이콘: 사용 모델·모드
+L = {x["id"]: x for x in get("/api/conversations?scope=all")["items"]}
+ok(L[c1]["models"]==["claude","gpt"] and L[c1]["modes"]==["chat"], f"list tags both/chat {L[c1].get('models')} {L[c1].get('modes')}")
+ok("work" in L[c6]["modes"] and L[c6]["models"]==["claude"], f"list tags work/claude {L[c6].get('models')} {L[c6].get('modes')}")
+c11 = post("/api/conversations")["id"]
+ok(get("/api/conversations")["items"][0]["models"]==[] , "new conversation has no model tag")
+post("/api/chat", {"question":"FAILGPT 만","conversation_id":c11,"target":"gpt"}, raw=True)
+ok({x["id"]: x for x in get("/api/conversations")["items"]}[c11]["models"]==["gpt"], "failed-only conversation shows asked model")
+# 이전 버전 메타(태그 없음)도 원문에서 계산
+mp = w.store.data_dir/"conversations"/f"{c1}.meta.json"; m = json.loads(mp.read_text(encoding="utf-8"))
+for k in ("models_used","models_asked","modes_used"): m.pop(k, None)
+mp.write_text(json.dumps(m), encoding="utf-8")
+ok({x["id"]: x for x in get("/api/conversations")["items"]}[c1]["models"]==["claude","gpt"], "old meta backfilled")
 srv.shutdown(); shutil.rmtree(tmp); print("ALL PASS; temp data removed")

@@ -27,6 +27,24 @@ DATA_DIR = Path(os.environ.get("AI_COUNCIL_DATA_DIR") or (ROOT / "data"))
 EXPORT_DIR = Path(os.environ.get("AI_COUNCIL_EXPORT_DIR") or (ROOT / "exports"))
 
 META_VERSION = 1
+_ANSWER_MODELS = {"GPT": ("gpt",), "Claude": ("claude",), "Council": ("gpt", "claude")}
+_TARGET_MODELS = {"gpt": ("gpt",), "claude": ("claude",), "both": ("gpt", "claude")}
+
+
+def _add(values: list, new) -> list:
+    return sorted(set(values or []) | set(new))
+
+
+def usage_tags(items: list[dict]) -> dict:
+    """대화 목록 아이콘용: 실제로 답한 모델, 질문한 대상, 사용한 모드 (대화 원문에서 계산)."""
+    models, asked, modes = [], [], []
+    for item in items:
+        if item.get("role") == "assistant":
+            models = _add(models, _ANSWER_MODELS.get(item.get("model"), ()))
+        elif item.get("role") == "user":
+            asked = _add(asked, _TARGET_MODELS.get(item.get("target"), ()))
+            modes = _add(modes, [item.get("mode") or "chat"])
+    return {"models_used": models, "models_asked": asked, "modes_used": modes}
 TITLE_MAX = 60
 _ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 _WIN_BAD = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
@@ -125,6 +143,10 @@ class ConversationStore:
             meta = self.get_meta(conversation_id)
             meta["updated_at"] = item["time"]
             meta["message_count"] = int(meta.get("message_count", 0)) + 1
+            tags = usage_tags([item])
+            for key, value in tags.items():
+                if value:
+                    meta[key] = _add(meta.get(key), value)
             if role == "user" and meta.get("title_source") != "user" and meta.get("title") in ("", "새 대화", None):
                 meta["title"] = auto_title(content)
                 meta["title_source"] = "auto"
@@ -153,6 +175,7 @@ class ConversationStore:
             "summary_model": "",
             "summary_updated_at": None,
             "summary_error": "",
+            **usage_tags(items),
         }
 
     def get_meta(self, conversation_id: str, trash: bool = False) -> dict:
@@ -178,6 +201,10 @@ class ConversationStore:
             meta.setdefault("summary_model", "")
             meta.setdefault("summary_error", "")
             meta.setdefault("archived", False)
+            if "modes_used" not in meta:  # 이전 버전에서 만든 대화 → 원문에서 한 번 계산해 저장
+                meta.update(usage_tags(self.load_messages(conversation_id, trash)))
+                if not trash:
+                    self._write_meta(conversation_id, meta)
         meta["id"] = conversation_id
         return meta
 
@@ -243,6 +270,9 @@ class ConversationStore:
             "summary_model": meta.get("summary_model", ""),
             "summary_updated_at": meta.get("summary_updated_at"),
             "summary_error": meta.get("summary_error", ""),
+            # 답변한 모델이 없으면(오류·중지만 있음) 질문한 대상으로 표시
+            "models": meta.get("models_used") or meta.get("models_asked") or [],
+            "modes": meta.get("modes_used") or [],
         }
 
     def detail(self, conversation_id: str) -> dict:
@@ -322,6 +352,7 @@ class ConversationStore:
             self.update_meta(
                 conversation_id, message_count=0, summary="", summarized_through=0,
                 summary_model="", summary_updated_at=None, summary_error="", updated_at=now(),
+                models_used=[], models_asked=[], modes_used=[],
             )
             return str(backup)
 
