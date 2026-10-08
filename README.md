@@ -51,7 +51,7 @@ PowerShell 또는 명령 프롬프트에서 실행합니다.
 
 GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록(`data/`)은 어느 방법이든 그대로 유지됩니다.
 
-1. **Council 화면에서**: 왼쪽 아래 **업데이트 확인 → 지금 업데이트**. 받은 뒤 Council이 새 창으로 자동 재시작됩니다. (앱을 켤 때 새 버전이 있으면 "새 버전 있음"이 표시됩니다.)
+1. **Council 화면에서**: 왼쪽 아래 **업데이트 확인 → 지금 업데이트**. 받은 뒤 Council이 자동으로 다시 시작됩니다. (앱을 켤 때 새 버전이 있으면 "새 버전 있음"이 표시됩니다.)
 2. **화면 없이**: 폴더의 **`Update.cmd`** 더블클릭. 변경 내역을 보여주고 `Y`를 누르면 업데이트합니다. Council이 켜져 있으면 새 버전으로 다시 시작할지 묻습니다.
 
 두 방법 모두 Git으로 받은(`git clone`) 폴더에서만 동작합니다. 이 PC에서 직접 고친 파일이 있으면 덮어쓰지 않고 멈춥니다. `Setup.cmd`는 프로그램(Python·CLI·ffmpeg 등) 설치용이며 Council 코드는 업데이트하지 않습니다.
@@ -59,7 +59,10 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록(`
 
 ## 실행
 
-`AI-Council_Web.cmd`를 더블클릭하면 로컬 서버가 시작되고 브라우저에서 `http://127.0.0.1:8765`가 열립니다. 이 PC에서만 접속할 수 있습니다. 종료는 화면 왼쪽 아래 **앱 종료** 또는 콘솔 창에서 `Ctrl+C`.
+바탕화면의 **AI Council** 바로가기(또는 `AI-Council_Web.cmd`)를 더블클릭하면 서버가 **창 없이 백그라운드로** 시작되고 브라우저에서 `http://127.0.0.1:8765`가 열립니다. 이 PC에서만 접속할 수 있습니다.
+- 브라우저 탭을 닫아도 서버는 계속 켜져 있습니다. 바로가기를 다시 누르면 화면만 다시 열립니다.
+- 종료: 화면 왼쪽 아래 **앱 종료**.
+- 문제가 생겨 서버 메시지를 봐야 할 때: `AI-Council_Debug.cmd` (콘솔 창으로 실행). 백그라운드 실행 기록은 `data/logs/server.log`에 남습니다.
 
 요구 사항
 
@@ -128,7 +131,8 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록(`
 | `council_versions.py` | 설치된 CLI 버전과 npm 최신 버전 비교 (업데이트는 하지 않고 안내만) |
 | `council_context.py` | 모델에 넘길 컨텍스트 구성과 장기 요약 |
 | `web/index.html` | 채팅 UI (HTML/CSS/JavaScript, 외부 라이브러리 없음) |
-| `AI-Council_Web.cmd` | 실행 파일 |
+| `AI-Council_Web.cmd` | 실행 파일 (창 없이 실행) |
+| `AI-Council_Debug.cmd` | 문제 확인용 실행 (콘솔 창에 서버 메시지 표시) |
 | `Update.cmd` | 화면 없이 Council 업데이트 (GitHub → 이 PC) |
 | `CLAUDE.md`, `AGENTS.md` | 수정 작업 규칙 (Claude Code·Codex 공용) |
 | `tests/` | 가짜 CLI로 하는 테스트 (`python tests/test_api.py`, `python tests/test_update.py`) |

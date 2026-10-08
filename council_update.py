@@ -159,13 +159,21 @@ def apply(running_version: str) -> dict:
 
 
 def restart_detached() -> None:
-    """새 서버를 새 창으로 띄운다. 새 서버가 이 서버를 종료시키고 포트를 넘겨받는다."""
+    """새 서버를 창 없이 띄운다. 새 서버가 이 서버를 종료시키고 포트를 넘겨받는다."""
     env = dict(os.environ, AI_COUNCIL_NO_BROWSER="1")
     if os.name == "nt":
-        subprocess.Popen(
-            ["cmd.exe", "/c", str(ROOT / "AI-Council_Web.cmd")], cwd=str(ROOT), env=env,
-            creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0x10),
-        )
+        pythonw = Path(sys.executable).with_name("pythonw.exe")
+        if pythonw.is_file():
+            subprocess.Popen(
+                [str(pythonw), str(ROOT / "ai_council_web.py")], cwd=str(ROOT), env=env, close_fds=True,
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                creationflags=0x00000008 | 0x00000200,  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+            )
+        else:  # pythonw 가 없는 설치 → 예전처럼 창으로 실행
+            subprocess.Popen(
+                ["cmd.exe", "/c", str(ROOT / "AI-Council_Debug.cmd")], cwd=str(ROOT), env=env,
+                creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0x10),
+            )
     else:
         subprocess.Popen([sys.executable, str(ROOT / "ai_council_web.py")], cwd=str(ROOT), env=env,
                          start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -252,7 +260,7 @@ def cli() -> int:
         if _ask("Council을 새 버전으로 다시 시작할까요?"):
             _stop_server()
             restart_detached()
-            print("새 창에서 Council을 다시 시작했습니다. 브라우저를 새로고침하세요.")
+            print("Council을 백그라운드에서 다시 시작했습니다. 브라우저를 새로고침하세요.")
         else:
             print("나중에 Council을 다시 시작하면 새 버전이 적용됩니다.")
     return 0

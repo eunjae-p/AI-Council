@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import threading
 import time
 import webbrowser
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -37,7 +39,7 @@ import council_attach
 import council_media
 import council_update
 
-VERSION = "0.9.4"
+VERSION = "0.9.5"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -576,11 +578,28 @@ def stop_old_server() -> str:
     return old
 
 
+def running_version() -> str:
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"http://{HOST}:{PORT}/api/status", timeout=3) as res:
+            status = json.loads(res.read().decode("utf-8"))
+        return str(status.get("version", "")) if isinstance(status, dict) and status.get("ok") else ""
+    except Exception:
+        return ""
+
+
+class AlreadyRunning(Exception):
+    pass
+
+
 def bind_server() -> ThreadingHTTPServer:
     try:
         return ThreadingHTTPServer((HOST, PORT), Handler)
     except OSError:
         pass
+    # 창 없이 실행하므로, 같은 버전이 이미 켜져 있으면 새로 띄우지 않고 브라우저만 연다
+    if running_version() == VERSION and not os.environ.get("AI_COUNCIL_NO_BROWSER"):
+        raise AlreadyRunning()
     old = stop_old_server()
     if old:
         print(f"이미 실행 중이던 AI Council V{old} 서버를 종료하고 새 버전으로 다시 시작합니다...")
@@ -596,7 +615,57 @@ def bind_server() -> ThreadingHTTPServer:
     )
 
 
+LOG_MAX_BYTES = 1_000_000
+
+
+def use_log_file() -> Path | None:
+    """창 없이(pythonw) 실행되면 출력할 곳이 없으므로 data/logs/server.log 로 보낸다."""
+    if sys.stdout is not None and sys.stderr is not None:
+        return None
+    log_dir = store.data_dir / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log = log_dir / "server.log"
+    if log.exists() and log.stat().st_size > LOG_MAX_BYTES:
+        os.replace(log, log.with_suffix(".log.1"))
+    handle = open(log, "a", encoding="utf-8", buffering=1)
+    handle.write(f"\n===== {time.strftime('%Y-%m-%d %H:%M:%S')} 시작 =====\n")
+    sys.stdout = sys.stderr = handle
+    return log
+
+
+def show_error(message: str) -> None:
+    """창 없이 실행 중일 때 시작 오류를 알림 창으로 보여 준다."""
+    print(message, flush=True)
+    if os.name == "nt":
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(None, message, "AI Council", 0x10)
+        except Exception:
+            pass
+
+
 def main() -> None:
+    log = use_log_file()
+    try:
+        run(log)
+    except AlreadyRunning:
+        print("이미 실행 중 → 브라우저만 엽니다.", flush=True)
+        if not os.environ.get("AI_COUNCIL_NO_BROWSER"):
+            webbrowser.open(f"http://{HOST}:{PORT}")
+    except SystemExit as exc:
+        if log is not None and exc.code not in (None, 0):
+            show_error(str(exc.code))
+        raise
+    except Exception as exc:
+        if log is None:
+            raise
+        import traceback
+        traceback.print_exc()
+        show_error(f"AI Council을 시작하지 못했습니다.\n\n{type(exc).__name__}: {exc}\n\n자세한 내용: {log}")
+        raise SystemExit(1)
+
+
+def run(log: Path | None) -> None:
     if not INDEX.exists():
         raise SystemExit(f"Missing UI file: {INDEX}")
     server = bind_server()

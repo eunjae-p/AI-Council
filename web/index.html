@@ -237,7 +237,7 @@ details.indiv .msg{margin-top:10px}
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.9.4'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.9.5'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const store = { get(k){ try { return localStorage.getItem(k); } catch { return null; } }, set(k,v){ try { localStorage.setItem(k,v); } catch {} } };
@@ -743,7 +743,7 @@ async function checkUpdate(force, quiet) {
 function showUpdate(r) {
   const body = `현재 V${r.running} → 새 V${r.remote || '?'}  (변경 ${r.behind}개)\n\n` +
     (r.commits && r.commits.length ? r.commits.map(c => '• ' + c).join('\n') : '변경 내역 없음 (기록 정리만 필요)') +
-    '\n\n대화 기록(data/)은 그대로 유지됩니다. 업데이트 후 Council이 새 창으로 다시 시작됩니다.';
+    '\n\n대화 기록(data/)은 그대로 유지됩니다. 업데이트 후 Council이 자동으로 다시 시작됩니다.';
   modal('Council 업데이트', body, [{ label:'나중에' }, { label:'지금 업데이트', primary:true, onClick: applyUpdate }]);
 }
 async function applyUpdate() {
@@ -756,7 +756,7 @@ async function applyUpdate() {
   const started = Date.now();
   const poll = async () => {
     try { const s = await api('/api/status'); if (s.version === r.version) { location.reload(); return; } } catch {}
-    if (Date.now() - started > 90000) { m.querySelector('pre').textContent = '재시작 확인이 늦어지고 있습니다. AI-Council_Web.cmd 를 직접 실행한 뒤 새로고침하세요.'; return; }
+    if (Date.now() - started > 90000) { m.querySelector('pre').textContent = '재시작 확인이 늦어지고 있습니다. 바탕화면의 AI Council(또는 AI-Council_Web.cmd)을 다시 실행한 뒤 새로고침하세요.'; return; }
     setTimeout(poll, 1500);
   };
   setTimeout(poll, 2500);
@@ -780,7 +780,7 @@ window.addEventListener('hashchange', () => { const id = (location.hash.match(/^
   setMode('chat'); // 기본값은 항상 대화 모드
   setTarget(['gpt','claude','both'].includes(store.get('councilTarget')) ? store.get('councilTarget') : 'both');
   api('/api/status').then(s => { $('#ver').textContent = 'V' + s.version;
-    if (s.version !== UI_VERSION) { const n = el('div', 'notice err', `서버(V${s.version})가 화면(V${UI_VERSION})보다 오래된 버전입니다. AI Council 콘솔 창을 닫고 AI-Council_Web.cmd 를 다시 실행하세요.`); $('#notices').before(n); }
+    if (s.version !== UI_VERSION) { const n = el('div', 'notice err', `서버(V${s.version})가 화면(V${UI_VERSION})보다 오래된 버전입니다. 바탕화면의 AI Council(또는 AI-Council_Web.cmd)을 다시 실행하면 새 버전으로 바뀝니다.`); $('#notices').before(n); }
     const mark = ok => ok ? '●' : '○'; $('#cli').textContent = `${mark(s.cli.codex)} Codex  ${mark(s.cli.claude)} Claude`;
     $('#cli').title = 'CLI 감지 여부 (PATH 기준)'; if (!s.cli.codex || !s.cli.claude) toast('일부 CLI를 찾지 못했습니다. PATH를 확인하세요.', true);
     S.ffmpeg = s.ffmpeg;

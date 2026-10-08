@@ -172,7 +172,16 @@ try {
     $desktop = [Environment]::GetFolderPath('Desktop')
     $shell = New-Object -ComObject WScript.Shell
     $lnk = $shell.CreateShortcut((Join-Path $desktop 'AI Council.lnk'))
-    $lnk.TargetPath = Join-Path $Root 'AI-Council_Web.cmd'
+    # 창 없이 실행: pythonw 를 직접 실행 (없으면 .cmd 를 최소화 창으로)
+    $pyw = Find-Command 'pythonw'
+    if ($pyw) {
+        $lnk.TargetPath = $pyw.Source
+        $lnk.Arguments = '"' + (Join-Path $Root 'ai_council_web.py') + '"'
+        $lnk.IconLocation = $pyw.Source + ',0'
+    } else {
+        $lnk.TargetPath = Join-Path $Root 'AI-Council_Web.cmd'
+        $lnk.WindowStyle = 7
+    }
     $lnk.WorkingDirectory = $Root
     $lnk.Save()
     Write-Ok "바탕화면에 'AI Council' 바로가기를 만들었습니다."
