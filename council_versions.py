@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import threading
@@ -16,7 +17,10 @@ import urllib.request
 from council_core import CliFailure, resolve_command
 
 PACKAGES = {"codex": "@openai/codex", "claude": "@anthropic-ai/claude-code"}
-UPDATE_COMMANDS = {"codex": "npm i -g @openai/codex@latest", "claude": "claude update"}
+# Windows PowerShell 은 npm 이 만든 codex.ps1 / npm.ps1 을 실행 정책 때문에 막는 경우가 많다.
+# .cmd 로 부르면 PowerShell·명령 프롬프트 어디서든 실행 정책과 상관없이 동작한다.
+_W = ".cmd" if os.name == "nt" else ""
+UPDATE_COMMANDS = {"codex": f"npm{_W} i -g @openai/codex@latest", "claude": "claude update"}
 _VER = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 _cache: dict[str, tuple[float, object]] = {}
 _lock = threading.Lock()
@@ -57,7 +61,7 @@ def installed_version(name: str) -> str:
 
 
 LOGIN_ARGS = {"codex": ["login", "status"], "claude": ["auth", "status"]}
-LOGIN_COMMANDS = {"codex": "codex login", "claude": "claude auth login"}
+LOGIN_COMMANDS = {"codex": f"codex{_W} login", "claude": "claude auth login"}
 
 
 def logged_in(name: str) -> bool | None:

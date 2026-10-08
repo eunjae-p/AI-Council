@@ -119,7 +119,7 @@ if ($npm) {
 }
 $codex = Find-Command 'codex'
 if ($codex) { $v = Get-Version $codex.Source '--version'; Write-Ok "Codex CLI $v"; Add-Result 'Codex CLI' 'OK' $v }
-else { Write-Bad "Codex CLI 설치 실패"; Add-Result 'Codex CLI' '실패' "Node.js 설치 후 'npm i -g @openai/codex@latest'" }
+else { Write-Bad "Codex CLI 설치 실패"; Add-Result 'Codex CLI' '실패' "Node.js 설치 후 'npm.cmd i -g @openai/codex@latest'" }
 
 # 4) Claude Code -------------------------------------------------------
 Write-Step "6/7 Claude Code 확인 (Claude 연결용)"
@@ -152,7 +152,7 @@ if ($codex) {
         if ($ans -ne 'n' -and $ans -ne 'N') { & $codex.Source login }
         & $codex.Source login status *> $null
         if ($LASTEXITCODE -eq 0) { Write-Ok "Codex: 로그인됨"; Add-Result 'Codex 로그인' 'OK' '' }
-        else { Write-Warn "Codex 로그인 안 됨"; Add-Result 'Codex 로그인' '필요' "터미널에서 'codex login'" }
+        else { Write-Warn "Codex 로그인 안 됨"; Add-Result 'Codex 로그인' '필요' "터미널에서 'codex.cmd login'" }
     }
 }
 if ($claude) {
