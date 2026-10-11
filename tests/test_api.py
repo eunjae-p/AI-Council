@@ -189,10 +189,11 @@ c9 = post("/api/conversations")["id"]
 res = {}
 def _run(q, target, key): res[key] = post("/api/chat", {"question":q,"conversation_id":c9,"target":target}, raw=True)
 th = _th.Thread(target=_run, args=("SLOWALL 질문","both","a")); t0=_t.time(); th.start(); _t.sleep(1.5)
-ok(post("/api/chat/stop", {"conversation_id":c9})["ok"], "stop accepted")
+ok(post("/api/chat/stop", {"conversation_id":c9, "reason":"esc"})["ok"], "stop accepted")
 th.join(15); el=_t.time()-t0
 types=[e["type"] for e in res["a"]]; ok("stopped" in types and types[-1]=="done" and el < 10, f"stopped quickly {el:.1f}s {types}")
 its = get("/api/conversation?id="+c9)["items"]; ok(its[-1]["role"]=="error" and its[-1].get("failed_message_id")==its[-2]["id"], "stop recorded, question excluded")
+ok("방법: Esc 키" in its[-1]["content"] and "중지 시점: 1라운드" in its[-1]["content"] and "경과 0분" in its[-1]["content"], f"stop detail recorded {its[-1]['content']}")
 th = _th.Thread(target=_run, args=("SLOWCLAUDE 질문","both","b")); th.start(); _t.sleep(2.0)
 post("/api/chat/stop", {"conversation_id":c9}); th.join(15)
 types=[e["type"] for e in res["b"]]; ok(types.count("answer")==1 and "stopped" in types, f"partial kept {types}")

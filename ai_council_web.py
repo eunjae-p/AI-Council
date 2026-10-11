@@ -44,7 +44,7 @@ import council_update
 from council_state import CliState
 from council_mcp import McpStore, valid_tool
 
-VERSION = "0.11.0"
+VERSION = "0.11.1"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -159,6 +159,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def emit(self, kind: str, **payload: object) -> None:
         # 브라우저가 끊겨도 작업과 저장은 끝까지 진행한다.
+        if kind == "stage":
+            self.last_stage = str(payload.get("text", ""))
         if not getattr(self, "stream_alive", False):
             return
         line = json.dumps({"type": kind, **payload}, ensure_ascii=False) + "\n"
@@ -296,6 +298,7 @@ class Handler(BaseHTTPRequestHandler):
                 if tok is None:
                     self.send_json({"ok": False, "message": "진행 중인 답변이 없습니다."})
                 else:
+                    tok.reason = {"esc": "Esc 키", "button": "■ 중지 버튼"}.get(str(body.get("reason")), "중지 요청")
                     tok.cancel()
                     self.send_json({"ok": True})
             elif path == "/api/conversation/rename":
@@ -444,6 +447,7 @@ class Handler(BaseHTTPRequestHandler):
                  mode: str = "chat", workdir=None, files: list | None = None, web: bool = False,
                  mcp: bool = False, allow_once: list | None = None) -> None:
         # 1) 필요할 때만 장기 요약 갱신 (실패해도 채팅은 계속)
+        started_at = time.time()
         self.emit("stage", step=0, text="대화 맥락을 준비하는 중")
         prefer = "gpt" if target == "gpt" else "claude"
         token = getattr(self, "cancel", None) or CancelToken()
@@ -636,7 +640,10 @@ class Handler(BaseHTTPRequestHandler):
 
         if stopped or token.cancelled:
             done_part = f" 완료된 답변: {', '.join(answers)}." if answers else ""
-            text = "사용자가 답변 생성을 중지했습니다." + done_part
+            elapsed = int(time.time() - started_at)
+            detail = [f"방법: {token.reason}" if token.reason else "",
+                      f"중지 시점: {getattr(self, 'last_stage', '') or '-'}", f"경과 {elapsed // 60}분 {elapsed % 60}초"]
+            text = "사용자가 답변 생성을 중지했습니다 (" + " · ".join(d for d in detail if d) + ")." + done_part
             if answers:
                 store.append_message(conversation_id, "error", text, "오류")
             else:  # 답이 하나도 없으면 질문을 다음 맥락에서 제외

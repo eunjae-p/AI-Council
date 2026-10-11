@@ -96,6 +96,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--gpt);box-shadow:0 0 0
 details.indiv{border:1px dashed var(--line2);border-radius:12px;padding:6px 10px}
 details.indiv>summary{cursor:pointer;color:var(--muted);font-size:13px;padding:2px}
 details.indiv .msg{margin-top:10px}
+.pending .ptime{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--dim);font-size:12.5px}
 .pending{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:14px;padding:10px 14px;border:1px dashed var(--line2);border-radius:12px}
 .spin{width:14px;height:14px;border-radius:50%;border:2px solid #ffffff22;border-top-color:var(--council);animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -259,7 +260,7 @@ details.indiv .msg{margin-top:10px}
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.11.0'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.11.1'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const store = { get(k){ try { return localStorage.getItem(k); } catch { return null; } }, set(k,v){ try { localStorage.setItem(k,v); } catch {} } };
@@ -668,7 +669,14 @@ function setBusy(on, text) {
   b.textContent = on ? '■ 중지' : '보내기'; b.title = on ? '답변 생성 중지 (Esc)' : '';
   $('#spin').hidden = !on; $('#status').textContent = text || (on ? '진행 중' : '준비됨');
 }
-function pendingEl(text) { const p = el('div', 'pending'); p.id = 'pending'; p.append(el('span', 'spin'), el('span', 'ptext', text)); return p; }
+function pendingEl(text) {
+  // 진행 중 표시 + 경과 시간 (웹 검색·MCP·토론은 몇 분 걸릴 수 있어 멈춘 것처럼 보이지 않게)
+  const p = el('div', 'pending'), t0 = Date.now(), clock = el('span', 'ptime', '0:00'); p.id = 'pending';
+  p.append(el('span', 'spin'), el('span', 'ptext', text), clock);
+  const tick = setInterval(() => { if (!p.isConnected && Date.now() - t0 > 3000) { clearInterval(tick); return; }
+    const sec = Math.floor((Date.now() - t0) / 1000); clock.textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; }, 1000);
+  return p;
+}
 
 async function send() {
   const q = $('#q'), question = q.value.trim();
@@ -730,14 +738,19 @@ async function send() {
     loadList().catch(() => {});
   }
 }
-$('#send').onclick = () => S.running ? stopRun() : send();
-async function stopRun() {
+$('#send').onclick = () => S.running ? stopRun('button') : send();
+async function stopRun(reason) {
   if (!S.running) return;
   const b = $('#send'); b.disabled = true; b.textContent = '중지하는 중…'; $('#status').textContent = '중지하는 중…';
-  try { const r = await api('/api/chat/stop', { conversation_id: S.running }); if (!r.ok) toast(r.message || '진행 중인 답변이 없습니다'); }
+  try { const r = await api('/api/chat/stop', { conversation_id: S.running, reason: reason || 'button' }); if (!r.ok) toast(r.message || '진행 중인 답변이 없습니다'); }
   catch (e) { toast('중지 실패: ' + e.message, true); b.disabled = false; b.textContent = '■ 중지'; }
 }
-window.addEventListener('keydown', e => { if (e.key === 'Escape' && S.running && !e.isComposing) { e.preventDefault(); stopRun(); } });
+window.addEventListener('keydown', e => {
+  if (e.key !== 'Escape' || e.isComposing) return;
+  const open = document.querySelectorAll('.modal');
+  if (open.length) { e.preventDefault(); open[open.length - 1].remove(); return; }  // 창이 열려 있으면 Esc 는 창만 닫는다
+  if (S.running) { e.preventDefault(); if (confirm('답변 생성을 중지할까요? (Esc)')) stopRun('esc'); }
+});
 const autoGrow = () => { const q = $('#q'); q.style.height = 'auto'; q.style.height = Math.min(q.scrollHeight, innerHeight * .4) + 'px'; };
 $('#q').addEventListener('input', autoGrow);
 $('#q').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });

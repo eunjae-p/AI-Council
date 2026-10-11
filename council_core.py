@@ -138,6 +138,7 @@ class CancelToken:
         self._event = threading.Event()
         self._lock = threading.Lock()
         self._processes: set[subprocess.Popen] = set()
+        self.reason = ""  # 중지 방법 (button | esc) — 기록용
 
     @property
     def cancelled(self) -> bool:
