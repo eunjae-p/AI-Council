@@ -336,10 +336,17 @@ post("/api/chat", {"question":"잔액?","conversation_id":c14,"target":"claude",
 ok("'--allowedTools', 'mcp__claude_ai_Higgsfield__balance'" in open(os.environ["FAKE_LOG"]).read(), "always-allowed tool passed")
 ok(post("/api/mcp/allow", {"tool":"Bash","allowed":True})[0]==400, "only mcp tools can be allowed")
 post("/api/mcp/allow", {"tool":"mcp__claude_ai_Higgsfield__balance","allowed":False}); ok(get("/api/mcp")["allowed"]==[], "allow revoked")
-os.environ["FAKE_CODEX_MCP"]='[{"name":"higgs","enabled":true},{"name":"bad name","enabled":true}]'
+# Codex MCP: config.toml 에 직접 적힌 서버만 끈다 (설정 밖 서버를 끄면 'invalid transport' 로 시작 실패하던 문제)
+os.environ["FAKE_CODEX_MCP"]='[{"name":"higgs","enabled":true},{"name":"plugin_srv","enabled":true}]'
+(tmp/"nocodex").mkdir(exist_ok=True); (tmp/"nocodex"/"config.toml").write_text('model = "gpt-6.1-sol"\n[mcp_servers.higgs]\ncommand = "x"\n[mcp_servers."bad name"]\nurl = "y"\n', encoding="utf-8")
 import council_core as _cc; _cc._codex_mcp_cache[:] = [0.0, []]
 open(os.environ["FAKE_LOG"],"w").close()
 post("/api/chat", {"question":"gpt mcp","conversation_id":c14,"target":"gpt","mcp":True}, raw=True)
-ok("'-c', 'mcp_servers.higgs.enabled=false', 'exec'" in open(os.environ["FAKE_LOG"]).read(), "codex mcp servers disabled for GPT")
+lg = open(os.environ["FAKE_LOG"]).read()
+ok("'-c', 'mcp_servers.higgs.enabled=false', 'exec'" in lg and "plugin_srv" not in lg and "bad name" not in lg, f"only config.toml servers disabled {lg[:300]}")
+os.environ["FAKE_CONFIG_ERR"]="1"; _cc._codex_mcp_cache[:] = [0.0, []]
+ev = post("/api/chat", {"question":"config err","conversation_id":c14,"target":"gpt"}, raw=True); del os.environ["FAKE_CONFIG_ERR"]
+ok(get("/api/conversation?id="+c14)["items"][-1]["role"]=="assistant", f"config error retries without mcp override {[e['type'] for e in ev]}")
+(tmp/"nocodex"/"config.toml").unlink()
 del os.environ["FAKE_CODEX_MCP"]
 srv.shutdown(); shutil.rmtree(tmp); print("ALL PASS; temp data removed")

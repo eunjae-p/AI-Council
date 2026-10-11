@@ -248,22 +248,29 @@ _SAFE_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
 _codex_mcp_cache: list = [0.0, []]
 
 
+_MCP_HEADER = re.compile(r"^\s*\[mcp_servers\.([A-Za-z0-9_-]+)\]\s*(#.*)?$")
+
+
 def codex_mcp_servers(ttl: float = 300) -> list[str]:
-    """`codex mcp list --json` 의 켜진 서버 이름. 확인할 수 없으면 빈 목록."""
+    """~/.codex/config.toml 에 [mcp_servers.이름] 으로 직접 적힌 서버 이름.
+    (`codex mcp list` 에는 설정 파일 밖에서 온 서버도 나오는데, 그런 서버에 -c 로 enabled=false 만 넣으면
+     내용 없는 서버가 새로 생겨 Codex 가 "invalid transport" 오류로 시작하지 못한다 — V0.11.0 문제)"""
     import time as _time
     if _time.time() - _codex_mcp_cache[0] < ttl:
         return _codex_mcp_cache[1]
+    home = os.environ.get("CODEX_HOME") or str(Path.home() / ".codex")
     names: list[str] = []
     try:
-        out = subprocess.run(resolve_command("codex") + ["mcp", "list", "--json"], capture_output=True, timeout=20,
-                             stdin=subprocess.DEVNULL, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        data = json.loads(out.stdout.decode("utf-8", "replace") or "[]") if out.returncode == 0 else []
-        names = [str(x.get("name")) for x in data if isinstance(x, dict) and x.get("enabled", True)
-                 and _SAFE_NAME.match(str(x.get("name", "")))]
-    except (CliFailure, OSError, subprocess.TimeoutExpired, ValueError, AttributeError):
+        for line in (Path(home) / "config.toml").read_text(encoding="utf-8").splitlines():
+            m = _MCP_HEADER.match(line)
+            if m and m.group(1) not in names:
+                names.append(m.group(1))
+    except OSError:
         names = []
     _codex_mcp_cache[:] = [_time.time(), names]
     return names
+
+
 CHAT_IMAGE_SYSTEM_PROMPT = (
     "You are a helpful, knowledgeable assistant in a chat app. The user attached images; open each listed "
     "image file with the Read tool and look at it before answering. Do not read any other files. "
@@ -316,11 +323,13 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
     images = [str(p) for p in images or []]
     cwd = workdir if mode == "work" and workdir else chat_dir()
     if which == "gpt":
-        name, base = "codex", codex_args(model, web, codex_mcp_servers())
+        disabled = codex_mcp_servers()
+        name, base = "codex", codex_args(model, web, disabled)
         extra: list[str] = []  # read-only 샌드박스는 기본 인수에 포함
         for path in images:  # 이미지는 재시도 때도 빠지지 않도록 기본 인수에 넣는다
             base += ["--image", path]
     else:
+        disabled = []
         name, base = "claude", claude_args(model)
         if images:
             prompt += "\n\n## Image files to open with the Read tool (in this order)\n" + "\n".join(
@@ -362,8 +371,15 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
         except Cancelled:
             raise
         except CliFailure as exc:
-            # 설치된 CLI 버전이 옵션을 모르면 기본 인수로 한 번만 다시 시도
-            if extra and any(k in f"{exc.stderr}\n{exc.stdout}".lower() for k in _UNKNOWN_FLAG):
+            blob = f"{exc.stderr}\n{exc.stdout}"
+            if name == "codex" and disabled and "config.toml" in blob:
+                # MCP 끄기 설정이 Codex 설정과 맞지 않으면 끄기 없이 한 번 더 시도
+                base = codex_args(model, web) + [x for path in images for x in ("--image", path)]
+                if info is not None:
+                    info["codex_mcp_not_disabled"] = True
+                out = run_cli(name, base + extra, prompt, timeout, cwd, info, cancel)
+            elif extra and any(k in blob.lower() for k in _UNKNOWN_FLAG):
+                # 설치된 CLI 버전이 옵션을 모르면 기본 인수로 한 번만 다시 시도
                 out = run_cli(name, base, prompt, timeout, cwd, info, cancel)
             else:
                 raise
