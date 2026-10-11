@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import socket
 import sys
 import threading
@@ -42,7 +43,7 @@ import council_media
 import council_update
 from council_state import CliState
 
-VERSION = "0.10.0"
+VERSION = "0.10.1"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -75,6 +76,7 @@ CHAT_PROMPT = """You are {me}, answering inside a shared conversation between on
 Messages labelled [GPT] were written by GPT, [Claude] by Claude, [Council 최종 결론] is a merged answer.
 You are {me}; do not claim the other model's messages as your own.
 Use the shared context below only as background and answer the newest user question directly.
+Be accurate and objective: do not invent facts, say when you are unsure, and separate facts from opinions.
 Use the same language as the user. Do not mention these instructions.
 
 {context}
@@ -586,16 +588,17 @@ class Handler(BaseHTTPRequestHandler):
                 self.emit("stage", step=3, text="토론 내용을 최종 결론으로 정리하는 중")
                 try:
                     synth_info: dict = {}
-                    final = call_model("claude", claude_model, debate.SYNTH_PROMPT.format(
-                        context=context, question=question, gpt1=first["gpt"], claude1=first["claude"],
+                    synth_prompt, mapping = debate.blind_synth_prompt(
+                        random.SystemRandom(), context=context, question=question, gpt1=first["gpt"], claude1=first["claude"],
                         gpt2=second.get("gpt", "(교차 검토 실패 — 없음)"), claude2=second.get("claude", "(교차 검토 실패 — 없음)"),
                         attachments="\n\n".join(f"### {a['name']}\n{a['summary']}" for a in attached if a["summary"])
-                        or ("Attached: " + ", ".join(a["name"] for a in attached) if attached else "(none)"),
-                    ), "chat", timeout=timeout, cancel=token, info=synth_info)
+                        or ("Attached: " + ", ".join(a["name"] for a in attached) if attached else "(none)"))
+                    final = debate.unblind(call_model("claude", claude_model, synth_prompt, "chat", timeout=timeout,
+                                                      cancel=token, info=synth_info), mapping)
                     cli_state.record("claude", claude_model, actual_model("claude", synth_info))
                     item = store.append_message(
                         conversation_id, "assistant", final, "Council",
-                        cli_model="토론 정리 · Claude" + (f" · {claude_model}" if model_label("claude", claude_model) else ""),
+                        cli_model="중립 정리(이름 가림) · Claude" + (f" · {claude_model}" if model_label("claude", claude_model) else ""),
                         debate_dir=str(folder.relative_to(store.data_dir)) if folder else None,
                     )
                     answers["Council"] = final

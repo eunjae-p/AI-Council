@@ -20,5 +20,5 @@ open(os.environ["FAKE_LOG"],"a").write("=====CLAUDE "+repr(sys.argv[1:])+" CWD="
 if "long-term memory" in p:
     if os.environ.get("FAIL_SUMMARY"): sys.stderr.write("summary boom"); sys.exit(2)
     out("- 사용자 선호: 한국어\n- 결정: 요약 테스트"); sys.exit(0)
-if "Create one final answer" in p or "moderator of a discussion" in p: out("Council 결론입니다"); sys.exit(0)
+if "Create one final answer" in p or "moderator of a discussion" in p: out("Council 결론입니다 · 모델 A 의견이 더 타당"); sys.exit(0)
 out("Claude 답변 ✓ 한글")

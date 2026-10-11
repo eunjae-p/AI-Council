@@ -111,6 +111,11 @@ details.indiv .msg{margin-top:10px}
 .seg button.on[data-v=gpt]{background:#16304d;color:var(--gpt)}
 .seg button.on[data-v=claude]{background:#3a2a17;color:var(--claude)}
 .seg button.on[data-v=both]{background:#12352a;color:var(--council)}
+.warn-ico{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:var(--warn);color:#1a1300;font-size:11px;font-weight:800;margin-left:3px;vertical-align:1px}
+.tip{position:relative}
+.tip:hover::after{content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 10px);transform:translateX(-50%);width:340px;white-space:pre-line;text-align:left;
+  background:#2a2210;border:1px solid #6b5a1e;color:#ffe3a3;font-size:12.5px;line-height:1.55;padding:10px 12px;border-radius:9px;box-shadow:0 8px 24px #0008;z-index:40;pointer-events:none}
+.tip:hover::before{content:'';position:absolute;left:50%;bottom:calc(100% + 4px);transform:translateX(-50%);border:6px solid transparent;border-top-color:#6b5a1e;z-index:40}
 .webtog{background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:6px 11px;font-size:13px;color:var(--muted)}
 .webtog.on{background:#123247;border-color:#2d6a8f;color:#8fd3ff}
 .msg .badge.web{background:#123247;color:#8fd3ff}
@@ -190,7 +195,7 @@ details.indiv .msg{margin-top:10px}
             <button data-m="chat" class="on">💬 대화</button><button data-m="work">🛠 작업</button>
           </div>
           <div class="seg" id="target">
-            <button data-v="gpt">GPT</button><button data-v="claude">Claude</button><button data-v="both" class="on" title="1라운드 독립 의견 → 2라운드 교차 검토 → 최종 결론">토론 (Discussion)</button>
+            <button data-v="gpt">GPT</button><button data-v="claude">Claude</button><button data-v="both" class="on tip" data-tip="⚠ 사용량 주의 — 토론은 GPT·Claude를 총 5번 호출합니다 (1차 의견 2 + 교차 검토 2 + 결론 1).&#10;단독 질문보다 구독 사용량이 약 5배, 시간도 더 걸립니다. 웹 검색까지 켜면 더 늘어납니다.&#10;간단한 질문·워크플로우 분석·프롬프트 작성은 GPT나 Claude 단독을, 판단이 필요한 주제에만 토론을 쓰세요.">토론 (Discussion) <span class="warn-ico">!</span></button>
           </div>
           <button class="webtog" id="webToggle" title="켜면 GPT·Claude가 웹을 검색해 근거를 확인합니다 (시간·사용량 증가)">🌐 웹 검색 끔</button>
           <button class="ghost small" id="modelToggle">모델 설정 ▾</button>
@@ -244,7 +249,7 @@ details.indiv .msg{margin-top:10px}
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.10.0'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.10.1'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const store = { get(k){ try { return localStorage.getItem(k); } catch { return null; } }, set(k,v){ try { localStorage.setItem(k,v); } catch {} } };

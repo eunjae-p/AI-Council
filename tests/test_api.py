@@ -44,7 +44,9 @@ c_r1 = next(x for x in parts if "round 1 (independent opinion)" in x); c_r2 = ne
 ok("GPT 답변" not in c_r1 and "GPT 답변: 받은 프롬프트" in c_r2 and "Claude 답변 ✓ 한글" in c_r2, "round1 independent, round2 sees both answers")
 ok("No web access" in c_r1 and "--search" not in log, "web search off by default in discussion")
 syn = next(x for x in parts if "moderator of a discussion" in x)
-ok("GPT — round 2 review of Claude" in syn and "## 의견이 갈린 점" in syn, "synthesis gets reviews")
+ok("모델 A — round 2 review of 모델 B" in syn and "## 의견이 갈린 점" in syn and "GPT — round" not in syn and "Claude — round" not in syn, "synthesis is blind (모델 A/B) and gets reviews")
+ok("Council discussion rules" in c_r1 and "Council discussion rules" in c_r2 and "Agreement between you is NOT" in c_r2, "discussion rules in both rounds")
+fin = its[5]["content"]; ok("모델 A" not in fin and ("GPT 의견이 더 타당" in fin or "Claude 의견이 더 타당" in fin), f"conclusion unblinded {fin}")
 ddir = w.store.data_dir/its[5]["debate_dir"]
 ok(sorted(f.name for f in ddir.iterdir())==sorted(["질문.md","1_GPT.md","1_Claude.md","2_GPT_검토.md","2_Claude_검토.md","결론.md"]), f"debate log files {list(ddir.iterdir())}")
 ok(ddir.parent.name.endswith("첫 질문입니다 ComfyUI") and "Council 결론입니다" in (ddir/"결론.md").read_text(encoding="utf-8"), "debate folder named by conversation")
