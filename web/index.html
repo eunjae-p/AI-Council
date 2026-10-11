@@ -54,6 +54,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--gpt);box-shadow:0 0 0
 .modal h3{margin:0 0 10px;font-size:16px} .modal pre{white-space:pre-wrap;background:#0b1326;border:1px solid var(--line);border-radius:8px;padding:10px;font:12.5px/1.55 ui-monospace,Consolas,monospace;margin:8px 0}
 .modal .row{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
 .side .foot .cli{flex:1;line-height:1.5} .side .foot .cli b{font-weight:600;color:var(--muted)}
+.side .foot .usage{margin-top:4px;padding-top:4px;border-top:1px dashed var(--line);color:var(--muted)}
 .upd{display:block;margin-top:2px;color:var(--warn);cursor:pointer;text-decoration:underline dotted} .upd:hover{color:#ffe3a3}
 .empty-list{color:var(--dim);font-size:13px;padding:14px 10px}
 
@@ -237,7 +238,7 @@ details.indiv .msg{margin-top:10px}
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.9.7'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.9.8'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const store = { get(k){ try { return localStorage.getItem(k); } catch { return null; } }, set(k,v){ try { localStorage.setItem(k,v); } catch {} } };
@@ -509,10 +510,50 @@ function bindModel(sel, custom, key) {
   custom.oninput = () => { store.set(key, custom.value.trim()); updateModelInfo(); };
   sync();
 }
+// 모델 ID → 보기 좋은 이름 (선택 목록에 있는 이름 사용, 없으면 ID 그대로)
+function prettyModel(id) {
+  if (!id) return '';
+  for (const sel of [$('#gptModel'), $('#claudeModel')]) {
+    const o = [...sel.options].find(o => o.value === id && o.value !== 'account default' && o.value !== 'custom');
+    if (o) return o.textContent.trim();
+  }
+  return id;
+}
+function defaultLabel(which) {
+  const d = (S.defaults || {})[which] || {};
+  return d.model ? prettyModel(d.model) : '';
+}
 function updateModelInfo() {
   const g = modelValue($('#gptModel'), $('#gptCustom')) || '?', c = modelValue($('#claudeModel'), $('#claudeCustom')) || '?';
-  const short = v => v === 'account default' ? '기본' : v;
-  $('#modelInfo').textContent = S.target === 'gpt' ? `GPT: ${short(g)}` : S.target === 'claude' ? `Claude: ${short(c)}` : `GPT: ${short(g)} · Claude: ${short(c)}`;
+  const show = (v, which) => v === 'account default' ? (defaultLabel(which) ? `${defaultLabel(which)} (계정 기본)` : '계정 기본 (첫 답변 후 표시)') : prettyModel(v);
+  $('#modelInfo').textContent = S.target === 'gpt' ? `GPT: ${show(g, 'gpt')}` : S.target === 'claude' ? `Claude: ${show(c, 'claude')}` : `GPT: ${show(g, 'gpt')} · Claude: ${show(c, 'claude')}`;
+  const src = which => { const d = (S.defaults || {})[which] || {}; return d.source === 'config' ? 'CLI 설정 파일의 기본 모델' : d.source === 'seen' ? '최근 답변에서 실제로 쓰인 모델' : '아직 확인 전'; };
+  $('#modelInfo').title = `계정 기본값 → GPT: ${src('gpt')} / Claude: ${src('claude')}`;
+  // 모델 설정 목록의 '계정 기본값'에도 실제 모델 표시
+  [['gpt', $('#gptModel')], ['claude', $('#claudeModel')]].forEach(([w, sel]) => {
+    const o = sel.querySelector('option[value="account default"]'); if (o) o.textContent = defaultLabel(w) ? `계정 기본값 (${defaultLabel(w)})` : '계정 기본값';
+  });
+}
+async function refreshStatusInfo() {
+  try { const s = await api('/api/status'); S.defaults = s.default_models; S.usage = s.usage; updateModelInfo(); renderUsage(); } catch {}
+}
+const USAGE_PAGES = { gpt: 'https://chatgpt.com/codex/settings/usage', claude: 'https://claude.ai/settings/usage' };
+function renderUsage() {
+  const box = $('#cli'); if (!box || !S.usage) return;
+  let line = $('#usageLine'); if (!line) { line = el('div'); line.id = 'usageLine'; line.className = 'usage'; }
+  const u = S.usage; line.innerHTML = '';
+  line.append(el('span', '', `오늘 사용 GPT ${u.today.gpt}회 · Claude ${u.today.claude}회`));
+  line.title = `Council에서 모델을 부른 횟수 (최근 7일: GPT ${u.week.gpt}회 · Claude ${u.week.claude}회)`;
+  const link = el('span', 'upd', '남은 사용량 보기'); link.style.color = 'var(--muted)';
+  link.onclick = () => {
+    const body = el('div');
+    body.append(el('pre', '', 'ChatGPT·Claude 구독은 "크레딧"이 아니라 일정 시간마다 초기화되는 사용 한도가 있습니다.\nCLI가 남은 한도를 알려 주지 않아 Council에서는 직접 표시할 수 없어서, 공식 사용량 페이지를 열어 드립니다.\n(브라우저에 해당 계정으로 로그인되어 있어야 합니다)'));
+    modal('남은 사용량 확인', body, [{ label:'닫기' },
+      { label:'GPT (Codex) 사용량', onClick: () => window.open(USAGE_PAGES.gpt, '_blank') },
+      { label:'Claude 사용량', primary:true, onClick: () => window.open(USAGE_PAGES.claude, '_blank') }]);
+  };
+  line.append(link);
+  const again = box.querySelector('.recheck'); if (again) box.insertBefore(line, again); else box.append(line);
 }
 document.querySelectorAll('#target button').forEach(b => b.onclick = () => setTarget(b.dataset.v));
 function setTarget(v) { S.target = v; store.set('councilTarget', v); document.querySelectorAll('#target button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); updateModelInfo(); }
@@ -570,7 +611,7 @@ async function send() {
         else if (e.type === 'stopped') { wasStopped = true; if (here()) pend.before(el('div', 'inline-warn', e.text)); }
         else if (e.type === 'model_error') { if (here()) pend.before(el('div', 'inline-err', `${e.model} 오류\n${e.text}`)); }
         else if (e.type === 'error') { throw new Error(e.text); }
-        else if (e.type === 'done') { if (e.errors && Object.keys(e.errors).length) toast('일부 모델 호출이 실패했습니다', true); }
+        else if (e.type === 'done') { if (e.errors && Object.keys(e.errors).length) toast('일부 모델 호출이 실패했습니다', true); refreshStatusInfo(); }
       }
     }
     pend.remove();
@@ -628,7 +669,8 @@ async function loadVersions(force) {
     f.onclick = () => modal('ffmpeg 설치', 'Council 폴더의 Setup.cmd를 실행하면 ffmpeg가 설치됩니다.\n설치 후 Council을 다시 시작하세요.\n\n직접 설치: winget install Gyan.FFmpeg'); box.append(f); }
   const both = ['codex', 'claude'].filter(k => v[k].outdated);
   if (both.length === 2) { const a = el('span', 'upd', '⬆ 둘 다 업데이트하기'); a.onclick = () => confirmCliUpdate(both, v); box.append(a); }
-  const r = el('span', 'upd', '버전 다시 확인'); r.style.color = 'var(--dim)'; r.onclick = () => loadVersions(true); box.append(r);
+  const r = el('span', 'upd recheck', '버전 다시 확인'); r.style.color = 'var(--dim)'; r.onclick = () => loadVersions(true); box.append(r);
+  renderUsage();
   if (outdated.length && !force) toast('GPT/Claude 프로그램 업데이트 또는 로그인이 필요합니다. 왼쪽 아래 노란·빨간 글씨를 누르세요.', true);
 }
 const CLI_NAMES = { codex:'GPT (Codex CLI)', claude:'Claude (Claude Code)' };
@@ -843,7 +885,7 @@ window.addEventListener('hashchange', () => { const id = (location.hash.match(/^
     if (s.version !== UI_VERSION) { const n = el('div', 'notice err', `서버(V${s.version})가 화면(V${UI_VERSION})보다 오래된 버전입니다. 바탕화면의 AI Council(또는 AI-Council_Web.cmd)을 다시 실행하면 새 버전으로 바뀝니다.`); $('#notices').before(n); }
     const mark = ok => ok ? '●' : '○'; $('#cli').textContent = `${mark(s.cli.codex)} Codex  ${mark(s.cli.claude)} Claude`;
     $('#cli').title = 'CLI 감지 여부 (PATH 기준)'; if (!s.cli.codex || !s.cli.claude) toast('일부 CLI를 찾지 못했습니다. PATH를 확인하세요.', true);
-    S.ffmpeg = s.ffmpeg;
+    S.ffmpeg = s.ffmpeg; S.defaults = s.default_models; S.usage = s.usage; updateModelInfo();
     loadVersions(false);
     $('#appVer').textContent = 'Council V' + s.version;
     checkUpdate(false, true);

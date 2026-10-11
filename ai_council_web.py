@@ -39,8 +39,9 @@ import council_versions
 import council_attach
 import council_media
 import council_update
+from council_state import CliState
 
-VERSION = "0.9.7"
+VERSION = "0.9.8"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -48,6 +49,7 @@ MAX_BODY = 12_000_000
 ATTACH_TIMEOUT = 300  # 첨부·작업 모드는 분석량이 많아 제한 시간을 늘림
 
 store = ConversationStore()
+cli_state = CliState(store.data_dir)
 _busy: set[str] = set()
 _cli_updating: set[str] = set()  # 업데이트 중인 CLI (그동안 새 질문을 받지 않음)
 _tokens: dict[str, CancelToken] = {}  # 대화 ID → 진행 중인 작업의 중지 토큰
@@ -178,6 +180,7 @@ class Handler(BaseHTTPRequestHandler):
                     "ok": True, "version": VERSION, "model": ACCOUNT_DEFAULT,
                     "cli": {"codex": cli_available("codex"), "claude": cli_available("claude")},
                     "ffmpeg": council_media.ffmpeg_available(),
+                    "default_models": cli_state.defaults(), "usage": cli_state.usage(),
                 })
             elif parsed.path == "/api/attachment":
                 self.send_attachment(arg("conversation_id"), arg("file"))
@@ -482,6 +485,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.emit("model_error", model=label, text=errors[label])
                 continue
             answers[label] = answer
+            cli_state.record(which, model, actual_model(which, run_info))
             item = store.append_message(
                 conversation_id, "assistant", answer, label,
                 cli_model=actual_model(which, run_info) or model_label(name, model) or (f"기본값 {selected}" if selected else ""),
@@ -496,7 +500,8 @@ class Handler(BaseHTTPRequestHandler):
                     context=context, question=question, gpt=answers["GPT"], claude=answers["Claude"],
                     attachments="\n\n".join(f"### {a['name']}\n{a['summary']}" for a in attached if a["summary"])
                     or ("Attached: " + ", ".join(a["name"] for a in attached) if attached else "(none)"),
-                ), "chat", timeout=timeout, cancel=token)
+                ), "chat", timeout=timeout, cancel=token, info=(synth_info := {}))
+                cli_state.record("claude", claude_model, actual_model("claude", synth_info))
                 item = store.append_message(
                     conversation_id, "assistant", final, "Council",
                     cli_model="Claude" + (f" · {claude_model}" if model_label("claude", claude_model) else ""),

@@ -260,4 +260,20 @@ w._busy.add("x"); r = post("/api/cli/update", {"name":"codex"}); w._busy.discard
 w._cli_updating.add("codex"); r = post("/api/chat", {"question":"q","conversation_id":c1,"target":"gpt"}); w._cli_updating.discard("codex")
 ok(r[0]==409 and "업데이트" in r[1]["error"], "chat blocked while updating")
 r = post("/api/cli/login", {"name":"codex"}); ok(r["opened"] is False and "login" in r["command"], "login returns command off Windows")
+# 계정 기본 모델 표시 · 사용 횟수
+os.environ["CODEX_HOME"] = str(tmp/"nocodex"); os.environ["CLAUDE_CONFIG_DIR"] = str(tmp/"noclaude")
+c12 = post("/api/conversations")["id"]
+post("/api/chat", {"question":"기본 모델 확인","conversation_id":c12,"target":"both","gpt_model":"account default","claude_model":"account default"}, raw=True)
+d = get("/api/conversation?id="+c12)["items"]
+ok(d[2]["content"]=="Claude 답변 ✓ 한글" and d[2].get("cli_model")=="claude-opus-5-5", f"claude json parsed + real model {d[2].get('cli_model')}")
+s = get("/api/status")
+ok(s["default_models"]["gpt"]=={"model":"gpt-6.1-sol","source":"seen"} and s["default_models"]["claude"]=={"model":"claude-opus-5-5","source":"seen"}, f"default models {s['default_models']}")
+ok(s["usage"]["today"]["gpt"]>=1 and s["usage"]["today"]["claude"]>=2, f"usage counted {s['usage']}")
+(tmp/"noclaude").mkdir(); (tmp/"noclaude"/"settings.json").write_text('{"model":"opus"}')
+ok(get("/api/status")["default_models"]["claude"]=={"model":"opus","source":"config"}, "claude default from settings.json")
+os.environ["FAKE_PLAIN"]="1"; post("/api/chat", {"question":"구버전 출력","conversation_id":c12,"target":"claude"}, raw=True); del os.environ["FAKE_PLAIN"]
+ok(get("/api/conversation?id="+c12)["items"][-1]["content"]=="Claude 답변 ✓ 한글", "plain text output still works")
+import council_core as core
+try: core._claude_result('{"type":"result","is_error":true,"result":"Usage limit reached"}', {}); ok(False, "json error raises")
+except core.CliFailure as e: ok("Usage limit" in e.stdout and "사용량" in e.hint(), "json error raises with hint")
 srv.shutdown(); shutil.rmtree(tmp); print("ALL PASS; temp data removed")

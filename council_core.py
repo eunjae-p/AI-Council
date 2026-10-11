@@ -5,6 +5,7 @@ API 키를 사용하지 않으며, CLI 실패 시 다른 경로로 우회하지 
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -96,7 +97,8 @@ def codex_args(model: str = "") -> list[str]:
 
 
 def claude_args(model: str = "") -> list[str]:
-    args = ["-p", "--no-session-persistence"]
+    # JSON 출력: 답변 본문(result)과 실제로 쓴 모델(modelUsage)을 함께 받는다
+    args = ["-p", "--no-session-persistence", "--output-format", "json"]
     if model and model != ACCOUNT_DEFAULT:
         args += ["--model", model]
     return args
@@ -270,14 +272,56 @@ def call_model(which: str, model: str, prompt: str, mode: str = "chat", workdir:
         else:
             extra = ["--disallowedTools", "*", "--system-prompt", CHAT_SYSTEM_PROMPT]
     try:
-        return run_cli(name, base + extra, prompt, timeout, cwd, info, cancel)
-    except Cancelled:
-        raise
+        try:
+            out = run_cli(name, base + extra, prompt, timeout, cwd, info, cancel)
+        except Cancelled:
+            raise
+        except CliFailure as exc:
+            # 설치된 CLI 버전이 옵션을 모르면 기본 인수로 한 번만 다시 시도
+            if extra and any(k in f"{exc.stderr}\n{exc.stdout}".lower() for k in _UNKNOWN_FLAG):
+                out = run_cli(name, base, prompt, timeout, cwd, info, cancel)
+            else:
+                raise
     except CliFailure as exc:
-        # 설치된 CLI 버전이 옵션을 모르면 기본 인수로 한 번만 다시 시도
-        if extra and any(k in f"{exc.stderr}\n{exc.stdout}".lower() for k in _UNKNOWN_FLAG):
-            return run_cli(name, base, prompt, timeout, cwd, info, cancel)
+        if name == "claude" and not isinstance(exc, Cancelled):
+            parsed = _claude_json(exc.stdout)
+            if parsed:  # JSON 오류 응답이면 사람이 읽을 본문만 남긴다
+                exc.stdout = str(parsed.get("result") or exc.stdout)
         raise
+    if name == "claude":
+        return _claude_result(out, info)
+    return out
+
+
+def _claude_json(text: str) -> dict | None:
+    text = (text or "").strip()
+    if not text.startswith("{"):
+        return None
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) and "result" in data else None
+
+
+def _claude_result(stdout: str, info: dict | None) -> str:
+    """claude --output-format json 출력에서 답변과 실제 모델을 꺼낸다. JSON 이 아니면 그대로 (구버전 호환)."""
+    data = _claude_json(stdout)
+    if data is None:
+        return stdout
+    text = str(data.get("result") or "").strip()
+    if data.get("is_error"):
+        raise CliFailure("claude", "Claude가 오류를 반환했습니다.", text, "")
+    if not text:
+        raise CliFailure("claude", "CLI가 빈 응답을 반환했습니다.", stdout, "")
+    usage = data.get("modelUsage") or {}
+    if isinstance(usage, dict) and usage and info is not None:
+        def score(item):
+            name, u = item
+            out = (u or {}).get("outputTokens", 0) if isinstance(u, dict) else 0
+            return ("haiku" not in name.lower(), out)  # 보조로 쓰인 작은 모델보다 본 답변 모델 우선
+        info["claude_model"] = max(usage.items(), key=score)[0]
+    return text
 
 
 # ---------- 실제 사용 모델 확인 ----------
@@ -303,5 +347,19 @@ def actual_model(which: str, info: dict | None) -> str:
     """CLI 로그에서 실제 사용된 모델명 추출 (Codex는 stderr 머리말에 'model: ...'을 찍음)."""
     if not info:
         return ""
+    if which == "claude":
+        return str(info.get("claude_model") or "")
     m = re.search(r"^model:\s*(\S+)", info.get("stderr", ""), re.MULTILINE)
     return m.group(1) if m else ""
+
+
+def claude_default_model() -> str:
+    """Claude Code 기본 모델 설정 (~/.claude/settings.json 의 model, 또는 ANTHROPIC_MODEL). 없으면 빈 문자열."""
+    if os.environ.get("ANTHROPIC_MODEL"):
+        return os.environ["ANTHROPIC_MODEL"]
+    home = os.environ.get("CLAUDE_CONFIG_DIR") or str(Path.home() / ".claude")
+    try:
+        data = json.loads((Path(home) / "settings.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    return str(data.get("model") or "") if isinstance(data, dict) else ""
