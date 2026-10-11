@@ -237,7 +237,7 @@ details.indiv .msg{margin-top:10px}
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.9.6'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.9.7'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const store = { get(k){ try { return localStorage.getItem(k); } catch { return null; } }, set(k,v){ try { localStorage.setItem(k,v); } catch {} } };
@@ -816,7 +816,7 @@ async function applyUpdate() {
   const started = Date.now();
   const poll = async () => {
     try { const s = await api('/api/status'); if (s.version === r.version) { location.reload(); return; } } catch {}
-    if (Date.now() - started > 90000) { m.querySelector('pre').textContent = '재시작 확인이 늦어지고 있습니다. 바탕화면의 AI Council(또는 AI-Council_Web.cmd)을 다시 실행한 뒤 새로고침하세요.'; return; }
+    if (Date.now() - started > 90000) { m.querySelector('pre').textContent = '재시작 확인이 늦어지고 있습니다.\n1. 바탕화면의 AI Council(또는 AI-Council_Web.cmd)을 다시 실행한 뒤 새로고침하세요.\n2. 그래도 그대로면 작업 관리자 → 세부 정보에서 pythonw.exe 를 모두 끝낸 뒤 다시 실행하세요.'; return; }
     setTimeout(poll, 1500);
   };
   setTimeout(poll, 2500);

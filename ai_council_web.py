@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import sys
 import threading
 import time
@@ -39,7 +40,7 @@ import council_attach
 import council_media
 import council_update
 
-VERSION = "0.9.6"
+VERSION = "0.9.7"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -616,23 +617,36 @@ class AlreadyRunning(Exception):
     pass
 
 
+class CouncilServer(ThreadingHTTPServer):
+    """포트를 이 서버 하나만 쓰도록 연다.
+    Windows 에서는 기본 설정(SO_REUSEADDR)이면 이미 켜진 서버가 있어도 같은 포트를 또 열 수 있어서,
+    업데이트 후 새 서버가 뜨더라도 요청은 계속 예전 서버로 가는 문제가 있었다 (V0.9.5 까지)."""
+    allow_reuse_address = os.name != "nt"
+
+    def server_bind(self) -> None:
+        if os.name == "nt" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 def bind_server() -> ThreadingHTTPServer:
-    try:
-        return ThreadingHTTPServer((HOST, PORT), Handler)
-    except OSError:
-        pass
-    # 창 없이 실행하므로, 같은 버전이 이미 켜져 있으면 새로 띄우지 않고 브라우저만 연다
-    if running_version() == VERSION and not os.environ.get("AI_COUNCIL_NO_BROWSER"):
-        raise AlreadyRunning()
-    old = stop_old_server()
-    if old:
-        print(f"이미 실행 중이던 AI Council V{old} 서버를 종료하고 새 버전으로 다시 시작합니다...")
-    for _ in range(20):
-        time.sleep(0.5)
+    # 먼저 이미 켜진 Council 이 있는지 확인한다 (포트를 열 수 있는지로만 판단하면 Windows 에서 겹쳐 뜰 수 있음)
+    running = running_version()
+    if running == VERSION and not os.environ.get("AI_COUNCIL_NO_BROWSER"):
+        raise AlreadyRunning()  # 같은 버전이 켜져 있으면 새로 띄우지 않고 브라우저만 연다
+    if running:
+        print(f"이미 실행 중이던 AI Council V{running} 서버를 종료하고 새 버전으로 다시 시작합니다...", flush=True)
+        # 예전 버전 문제로 여러 개가 겹쳐 떠 있을 수 있으므로 응답이 없을 때까지 모두 종료
+        for _ in range(40):
+            if not running_version():
+                break
+            stop_old_server()
+            time.sleep(0.5)
+    for attempt in range(20):
         try:
-            return ThreadingHTTPServer((HOST, PORT), Handler)
+            return CouncilServer((HOST, PORT), Handler)
         except OSError:
-            continue
+            time.sleep(0.5)
     raise SystemExit(
         f"포트 {PORT}을(를) 사용할 수 없습니다. 다른 프로그램이 사용 중이거나 이전 서버가 응답하지 않습니다.\n"
         "작업 관리자에서 python.exe / pythonw.exe 를 종료한 뒤 다시 실행하세요."
