@@ -111,6 +111,11 @@ details.indiv .msg{margin-top:10px}
 .seg button.on[data-v=gpt]{background:#16304d;color:var(--gpt)}
 .seg button.on[data-v=claude]{background:#3a2a17;color:var(--claude)}
 .seg button.on[data-v=both]{background:#12352a;color:var(--council)}
+.webtog{background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:6px 11px;font-size:13px;color:var(--muted)}
+.webtog.on{background:#123247;border-color:#2d6a8f;color:#8fd3ff}
+.msg .badge.web{background:#123247;color:#8fd3ff}
+.indiv .round{font-size:12px;color:var(--muted);margin:10px 4px 4px;font-weight:600}
+.indiv .dlog{margin:6px 4px 2px}
 .seg button.on[data-m]{background:#1d2a4b;color:var(--text)}
 .workdir{display:none;flex:1;min-width:220px;padding:6px 10px;font-size:13.5px} .workdir.show{display:block}
 .badge{font-size:11px;border:1px solid #6b5a2a;color:var(--warn);border-radius:6px;padding:0 6px}
@@ -185,8 +190,9 @@ details.indiv .msg{margin-top:10px}
             <button data-m="chat" class="on">💬 대화</button><button data-m="work">🛠 작업</button>
           </div>
           <div class="seg" id="target">
-            <button data-v="gpt">GPT</button><button data-v="claude">Claude</button><button data-v="both" class="on">둘 다 + 최종 결론</button>
+            <button data-v="gpt">GPT</button><button data-v="claude">Claude</button><button data-v="both" class="on" title="1라운드 독립 의견 → 2라운드 교차 검토 → 최종 결론">토론 (Discussion)</button>
           </div>
+          <button class="webtog" id="webToggle" title="켜면 GPT·Claude가 웹을 검색해 근거를 확인합니다 (시간·사용량 증가)">🌐 웹 검색 끔</button>
           <button class="ghost small" id="modelToggle">모델 설정 ▾</button>
           <span class="status" id="modelInfo"></span>
           <input class="workdir" id="workdir" placeholder="작업 폴더 (예: D:\ComfyUI\user\default\workflows) — 읽기 전용">
@@ -238,7 +244,7 @@ details.indiv .msg{margin-top:10px}
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.9.8'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.10.0'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const store = { get(k){ try { return localStorage.getItem(k); } catch { return null; } }, set(k,v){ try { localStorage.setItem(k,v); } catch {} } };
@@ -279,12 +285,14 @@ function renderText(container, text) {
 // ---------- 메시지 ----------
 const KIND = { user:'user', GPT:'gpt', Claude:'claude', Council:'council', '오류':'error' };
 const LABEL = { user:'나', GPT:'GPT', Claude:'Claude', Council:'Council 최종 결론', '오류':'오류 기록 · 모델에는 전달되지 않음' };
+const ROUND = { 1:'1차 의견', 2:'교차 검토' };
 function who(item) { return item.role === 'user' ? 'user' : (item.model || 'assistant'); }
 function msgEl(item, index) {
   const w = who(item), box = el('article', 'msg ' + (KIND[w] || ''));
   if (index != null) box.dataset.index = index;
   const head = el('div', 'head');
-  head.append(el('span', 'who', LABEL[w] || w));
+  head.append(el('span', 'who', (LABEL[w] || w) + (item.round ? ' · ' + ROUND[item.round] : '')));
+  if (item.web) head.append(el('span', 'badge web', '🌐 웹 검색'));
   if (item.mode === 'work') head.append(el('span', 'badge', '작업' + (item.workdir ? ' · ' + item.workdir : '')));
   if (item.cli_model) head.append(el('span', '', item.cli_model));
   if (item.elapsed) head.append(el('span', '', `${item.elapsed}s`));
@@ -320,7 +328,7 @@ function renderThread() {
   const box = $('#msgs'); box.innerHTML = '';
   if (!S.items.length) {
     const w = el('div', 'welcome'); w.append(el('h3', '', '무엇을 물어볼까요?'),
-      el('div', '', '질문마다 GPT, Claude, 또는 둘 다를 고를 수 있습니다. 모든 모델이 이 대화의 기록을 함께 읽습니다.'));
+      el('div', '', '질문마다 GPT, Claude, 또는 토론을 고를 수 있습니다. 토론은 두 모델이 각자 답한 뒤 서로의 답을 검토하고 최종 결론을 냅니다. 최신 정보가 필요하면 🌐 웹 검색을 켜세요.'));
     box.append(w); return;
   }
   // 사용자 질문 하나 + 뒤따르는 답변들을 한 묶음으로 표시
@@ -335,8 +343,26 @@ function renderThread() {
       box.append(msgEl(council[0], council[1]));
       const rest = group.filter(g => g !== council);
       if (rest.length) {
-        const d = el('details', 'indiv'); d.append(el('summary', '', `개별 답변 보기 (${rest.map(([x]) => x.model).join(' · ')})`));
-        rest.forEach(([x, idx]) => d.append(msgEl(x, idx))); box.append(d);
+        const d = el('details', 'indiv'), rounds = rest.some(([x]) => x.round);
+        if (rounds) {
+          // 토론: 1차 의견(GPT·Claude) → 교차 검토(GPT·Claude) 순서로
+          const order = ([x]) => (x.round || 9) * 10 + (x.model === 'GPT' ? 0 : x.model === 'Claude' ? 1 : 2);
+          const sorted = [...rest].sort((a, b) => order(a) - order(b));
+          const names = r => sorted.filter(([x]) => x.round === r).map(([x]) => x.model).join('·');
+          d.append(el('summary', '', `토론 과정 보기 · 1차 의견 ${names(1) || '-'} → 교차 검토 ${names(2) || '-'}`));
+          let last = 0;
+          sorted.forEach(([x, idx]) => { if (x.round && x.round !== last) { last = x.round; d.append(el('div', 'round', x.round === 1 ? '1라운드 · 서로 보지 않고 낸 독립 의견' : '2라운드 · 상대 답변을 읽고 쓴 교차 검토')); } d.append(msgEl(x, idx)); });
+          if (council[0].debate_dir) {
+            const b = el('button', 'ghost small dlog', '📁 토론 기록 폴더 열기');
+            b.onclick = async () => { try { const r = await api('/api/debate/open', { dir: council[0].debate_dir });
+              if (!r.opened) { copyText(r.path); toast('폴더 경로를 복사했습니다: ' + r.path); } } catch (e) { toast(e.message, true); } };
+            d.append(b);
+          }
+        } else {
+          d.append(el('summary', '', `개별 답변 보기 (${rest.map(([x]) => x.model).join(' · ')})`));
+          rest.forEach(([x, idx]) => d.append(msgEl(x, idx)));
+        }
+        box.append(d);
       }
     } else group.forEach(([x, idx]) => box.append(msgEl(x, idx)));
   }
@@ -556,6 +582,8 @@ function renderUsage() {
   const again = box.querySelector('.recheck'); if (again) box.insertBefore(line, again); else box.append(line);
 }
 document.querySelectorAll('#target button').forEach(b => b.onclick = () => setTarget(b.dataset.v));
+function setWeb(on) { S.web = !!on; store.set('councilWeb', S.web ? '1' : ''); const b = $('#webToggle'); b.classList.toggle('on', S.web); b.textContent = S.web ? '🌐 웹 검색 켬' : '🌐 웹 검색 끔'; }
+$('#webToggle').onclick = () => setWeb(!S.web);
 function setTarget(v) { S.target = v; store.set('councilTarget', v); document.querySelectorAll('#target button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); updateModelInfo(); }
 document.querySelectorAll('#mode button').forEach(b => b.onclick = () => setMode(b.dataset.m));
 function setMode(m) { S.mode = m; store.set('councilMode', m); document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.m === m)); $('#workdir').classList.toggle('show', m === 'work'); $('#q').placeholder = m === 'work' ? '작업 폴더의 파일을 참고해 답할 질문 (Enter 보내기 · Shift+Enter 줄바꿈)' : '질문을 입력하세요 · 📎·끌어다 놓기·Ctrl+V로 JSON·이미지·영상 첨부 (Enter 보내기 · Shift+Enter 줄바꿈)'; }
@@ -594,7 +622,7 @@ async function send() {
   let gotUser = false, wasStopped = false;
   try {
     const res = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => f.upload ? ({ name:f.name, upload:f.upload }) : ({ name:f.name, content:f.content })) }) });
+      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, web:!!S.web, workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => f.upload ? ({ name:f.name, upload:f.upload }) : ({ name:f.name, content:f.content })) }) });
     if (!res.ok) { let m = '요청 실패'; try { m = (await res.json()).error || m; } catch {} throw new Error(m); }
     const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
     for (;;) {
@@ -880,6 +908,7 @@ window.addEventListener('hashchange', () => { const id = (location.hash.match(/^
   bindModel($('#claudeModel'), $('#claudeCustom'), 'councilClaudeModel');
   $('#workdir').value = store.get('councilWorkdir') || '';
   setMode('chat'); // 기본값은 항상 대화 모드
+  setWeb(store.get('councilWeb') === '1');
   setTarget(['gpt','claude','both'].includes(store.get('councilTarget')) ? store.get('councilTarget') : 'both');
   api('/api/status').then(s => { $('#ver').textContent = 'V' + s.version;
     if (s.version !== UI_VERSION) { const n = el('div', 'notice err', `서버(V${s.version})가 화면(V${UI_VERSION})보다 오래된 버전입니다. 바탕화면의 AI Council(또는 AI-Council_Web.cmd)을 다시 실행하면 새 버전으로 바뀝니다.`); $('#notices').before(n); }

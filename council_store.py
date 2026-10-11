@@ -50,6 +50,7 @@ _ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 _WIN_BAD = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 _WIN_RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 
+ROUND_NAMES = {1: "1차 의견", 2: "교차 검토"}
 SPEAKER_LABELS = {"user": "사용자", "GPT": "GPT", "Claude": "Claude", "Council": "Council 최종 결론", "오류": "오류 기록"}
 
 
@@ -332,9 +333,16 @@ class ConversationStore:
             t_jsonl, t_meta = self._paths(conversation_id, trash=True)
             if not t_jsonl.exists():
                 raise ValueError("휴지통에 있는 대화만 영구 삭제할 수 있습니다.")
+            debate = ""
+            try:
+                debate = str(json.loads(t_meta.read_text(encoding="utf-8")).get("debate_dir") or "")
+            except (OSError, ValueError, AttributeError):
+                pass
             t_jsonl.unlink()
             if t_meta.exists():
                 t_meta.unlink()
+            if debate and debate == Path(debate).name:  # 토론 기록 폴더도 함께 삭제
+                shutil.rmtree(self.data_dir / "debates" / debate, ignore_errors=True)
             attach_dir = self.data_dir / "attachments" / conversation_id
             if attach_dir.is_dir():
                 shutil.rmtree(attach_dir, ignore_errors=True)
@@ -430,7 +438,7 @@ class ConversationStore:
         lines += ["## 대화", ""]
         for item in items:
             who = speaker(item)
-            label = SPEAKER_LABELS.get(who, who)
+            label = SPEAKER_LABELS.get(who, who) + (f" · {ROUND_NAMES.get(item.get('round'), '')}" if item.get("round") else "")
             extra = f" · {item['cli_model']}" if item.get("cli_model") else ""
             lines += [f"### {label}{extra}", f"_{fmt_time(item.get('time'))}_", "", str(item.get("content", "")).rstrip(), ""]
             for att in item.get("attachments") or []:

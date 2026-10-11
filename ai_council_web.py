@@ -35,18 +35,21 @@ from council_core import (
     run_cli,
 )
 from council_store import ConversationStore
+import council_debate as debate
 import council_versions
 import council_attach
 import council_media
 import council_update
 from council_state import CliState
 
-VERSION = "0.9.8"
+VERSION = "0.10.0"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
 MAX_BODY = 12_000_000
 ATTACH_TIMEOUT = 300  # 첨부·작업 모드는 분석량이 많아 제한 시간을 늘림
+WEB_TIMEOUT = 480     # 웹 검색을 켜면 검색·페이지 읽기 시간이 더 걸림
+_emit_lock = threading.Lock()  # 토론 모드는 두 모델이 동시에 결과를 보냄
 
 store = ConversationStore()
 cli_state = CliState(store.data_dir)
@@ -155,11 +158,12 @@ class Handler(BaseHTTPRequestHandler):
         if not getattr(self, "stream_alive", False):
             return
         line = json.dumps({"type": kind, **payload}, ensure_ascii=False) + "\n"
-        try:
-            self.wfile.write(line.encode("utf-8"))
-            self.wfile.flush()
-        except (BrokenPipeError, ConnectionResetError, OSError):
-            self.stream_alive = False
+        with _emit_lock:
+            try:
+                self.wfile.write(line.encode("utf-8"))
+                self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                self.stream_alive = False
 
     # ---------- GET ----------
     def do_GET(self) -> None:
@@ -215,8 +219,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/chat":
             self.handle_chat()
             return
-        if path == "/api/debate":
-            self.handle_debate()
+        if path == "/api/debate":  # V0.4 자동 토론 API 는 토론 모드(target=both)로 대체됨
+            self.send_json({"error": "이 API는 더 이상 쓰지 않습니다. /api/chat 에 target=both(토론)를 사용하세요."}, 410)
             return
         if path == "/api/upload":
             self.handle_upload()
@@ -255,6 +259,18 @@ class Handler(BaseHTTPRequestHandler):
                 finally:
                     with _busy_lock:
                         _cli_updating.discard(name)
+            elif path == "/api/debate/open":
+                # 토론 기록 폴더를 탐색기로 연다 (data/debates 아래만)
+                rel = str(body.get("dir", "")).replace("\\", "/")
+                base = (store.data_dir / "debates").resolve()
+                target = (store.data_dir / rel).resolve()
+                if not rel.startswith("debates/") or base not in target.parents or not target.is_dir():
+                    raise ValueError("토론 기록 폴더를 찾을 수 없습니다.")
+                opened = False
+                if os.name == "nt":
+                    os.startfile(str(target))  # noqa: S606 — 로컬 탐색기 열기
+                    opened = True
+                self.send_json({"opened": opened, "path": str(target)})
             elif path == "/api/cli/login":
                 name = str(body.get("name", ""))
                 if name not in ("codex", "claude"):
@@ -375,6 +391,7 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("지원하지 않는 모드입니다.")
             workdir = check_workdir(str(body.get("workdir", ""))) if mode == "work" else None
             files = council_attach.validate(body.get("attachments"), store.data_dir, conversation_id)
+            web = bool(body.get("web"))
             if not question and files:
                 question = "첨부한 파일을 분석해줘."
         except (ValueError, json.JSONDecodeError) as exc:
@@ -398,7 +415,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             self.start_stream()
             try:
-                self.run_chat(conversation_id, question, target, gpt_model, claude_model, mode, workdir, files)
+                self.run_chat(conversation_id, question, target, gpt_model, claude_model, mode, workdir, files, web)
             except Exception as exc:  # 예상 못 한 오류도 화면에 정확히 보이게
                 self.emit("error", text=f"서버 내부 오류: {type(exc).__name__}: {exc}")
         finally:
@@ -407,7 +424,7 @@ class Handler(BaseHTTPRequestHandler):
                 _tokens.pop(conversation_id, None)
 
     def run_chat(self, conversation_id: str, question: str, target: str, gpt_model: str, claude_model: str,
-                 mode: str = "chat", workdir=None, files: list | None = None) -> None:
+                 mode: str = "chat", workdir=None, files: list | None = None, web: bool = False) -> None:
         # 1) 필요할 때만 장기 요약 갱신 (실패해도 채팅은 계속)
         self.emit("stage", step=0, text="대화 맥락을 준비하는 중")
         prefer = "gpt" if target == "gpt" else "claude"
@@ -448,70 +465,147 @@ class Handler(BaseHTTPRequestHandler):
             self.emit("done", meta=store.detail(conversation_id)["meta"], errors={})
             return
         timeout = ATTACH_TIMEOUT if (attached or images or mode == "work") else TIMEOUT_SECONDS
+        if web:
+            timeout = max(timeout, WEB_TIMEOUT)
         user_item = store.append_message(conversation_id, "user", question, "사용자", target=target,
-                                         mode=mode, workdir=str(workdir) if workdir else None,
+                                         mode=mode, workdir=str(workdir) if workdir else None, web=web or None,
                                          attachments=council_attach.history_records(attached) or None)
         self.emit("saved", item=user_item, context=info)
 
+        models = {"gpt": ("GPT", "codex", gpt_model), "claude": ("Claude", "claude", claude_model)}
         answers: dict[str, str] = {}
         errors: dict[str, str] = {}
-        plan = [m for m in ("gpt", "claude") if target in (m, "both")]
         stopped = token.cancelled
-        for index, which in enumerate(plan, start=1):
-            if token.cancelled:
-                stopped = True
-                break
-            label, model = ("GPT", gpt_model) if which == "gpt" else ("Claude", claude_model)
-            name = "codex" if which == "gpt" else "claude"
+        discussion = target == "both"
+
+        def base_prompt(which: str) -> str:
+            label, name, model = models[which]
             prompt = CHAT_PROMPT.format(me=label, context=context, question=question, attachments=attach_block)
             if mode == "work":
                 prompt += WORK_NOTE.format(workdir=workdir)
             selected = model_label(name, model) or (codex_default_model() if which == "gpt" else "")
             if selected:
                 prompt += MODEL_NOTE.format(model=selected, source="selected in the app" if model_label(name, model) else "from the CLI default config")
-            if which == "claude" and "GPT" in answers:
-                prompt += f"\n## GPT's answer to the same question (for reference)\n{answers['GPT']}\n"
-            self.emit("stage", step=index, text=f"{label}가 답변하는 중")
+            if web:
+                prompt += debate.WEB_ON_NOTE
+            elif discussion:
+                prompt += debate.WEB_OFF_NOTE
+            return prompt
+
+        def ask(which: str, prompt: str, round_no: int | None = None) -> tuple[str, dict]:
+            """모델 1회 호출 + 기록. 성공하면 (답변, 저장된 항목). 실패하면 CliFailure."""
+            label, name, model = models[which]
             started = time.time()
-            try:
-                run_info: dict = {}
-                answer = call_model(which, model, prompt, mode, workdir, timeout=timeout, info=run_info, cancel=token,
-                                    images=images, image_dir=image_dir)
-            except Cancelled:
-                stopped = True
-                break
-            except CliFailure as exc:
-                errors[label] = exc.details()
-                self.emit("model_error", model=label, text=errors[label])
-                continue
-            answers[label] = answer
-            cli_state.record(which, model, actual_model(which, run_info))
+            run_info: dict = {}
+            answer = call_model(which, model, prompt, mode, workdir, timeout=timeout, info=run_info, cancel=token,
+                                images=images, image_dir=image_dir, web=web)
+            real = actual_model(which, run_info)
+            cli_state.record(which, model, real)
+            if run_info.get("web_fallback"):
+                self.emit("warning", text=f"{label} CLI가 웹 검색을 지원하지 않아 검색 없이 답했습니다. "
+                                          "왼쪽 아래에서 CLI를 업데이트하세요.")
+            selected = model_label(name, model) or (codex_default_model() if which == "gpt" else "")
             item = store.append_message(
                 conversation_id, "assistant", answer, label,
-                cli_model=actual_model(which, run_info) or model_label(name, model) or (f"기본값 {selected}" if selected else ""),
-                elapsed=round(time.time() - started, 1), mode=mode,
+                cli_model=real or model_label(name, model) or (f"기본값 {selected}" if selected else ""),
+                elapsed=round(time.time() - started, 1), mode=mode, round=round_no,
+                web=(web and not run_info.get("web_fallback")) or None,
             )
-            self.emit("answer", item=item)
+            return answer, item
 
-        if target == "both" and len(answers) == 2 and not token.cancelled:
-            self.emit("stage", step=3, text="두 답변을 최종 결론으로 정리하는 중")
+        def run_parallel(jobs: dict[str, str], round_no: int, on_done) -> dict[str, str]:
+            """두 모델을 동시에 호출한다. jobs: which → prompt. 반환: which → 답변 (성공한 것만)."""
+            results: dict[str, str] = {}
+
+            def work(which: str, prompt: str) -> None:
+                label = models[which][0]
+                try:
+                    answer, item = ask(which, prompt, round_no)
+                except Cancelled:
+                    return
+                except CliFailure as exc:
+                    key = label if round_no == 1 else f"{label} 교차 검토"
+                    errors[key] = exc.details()
+                    self.emit("model_error", model=key, text=errors[key])
+                    return
+                except Exception as exc:  # 예상 못 한 오류도 다른 모델 진행은 막지 않음
+                    key = label if round_no == 1 else f"{label} 교차 검토"
+                    errors[key] = f"{type(exc).__name__}: {exc}"
+                    self.emit("model_error", model=key, text=errors[key])
+                    return
+                results[which] = answer
+                on_done(which, answer, item)
+                self.emit("answer", item=item)
+
+            threads = [threading.Thread(target=work, args=(w, p), daemon=True) for w, p in jobs.items()]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+            return results
+
+        if not discussion:
+            which = target
+            label = models[which][0]
+            self.emit("stage", step=1, text=f"{label}가 답변하는 중" + (" (웹 검색 사용)" if web else ""))
             try:
-                final = call_model("claude", claude_model, SYNTH_PROMPT.format(
-                    context=context, question=question, gpt=answers["GPT"], claude=answers["Claude"],
-                    attachments="\n\n".join(f"### {a['name']}\n{a['summary']}" for a in attached if a["summary"])
-                    or ("Attached: " + ", ".join(a["name"] for a in attached) if attached else "(none)"),
-                ), "chat", timeout=timeout, cancel=token, info=(synth_info := {}))
-                cli_state.record("claude", claude_model, actual_model("claude", synth_info))
-                item = store.append_message(
-                    conversation_id, "assistant", final, "Council",
-                    cli_model="Claude" + (f" · {claude_model}" if model_label("claude", claude_model) else ""),
-                )
+                answer, item = ask(which, base_prompt(which))
+                answers[label] = answer
                 self.emit("answer", item=item)
             except Cancelled:
                 stopped = True
             except CliFailure as exc:
-                errors["Council"] = exc.details()
-                self.emit("model_error", model="Council", text=errors["Council"])
+                errors[label] = exc.details()
+                self.emit("model_error", model=label, text=errors[label])
+        else:
+            try:
+                folder = debate.turn_dir(store, conversation_id)
+            except OSError:
+                folder = None
+            debate.write_log(folder, "질문.md", "질문", question + (f"\n\n(첨부: {', '.join(a['name'] for a in attached)})" if attached else "")
+                             + ("\n\n- 웹 검색: 사용" if web else "") + (f"\n- 작업 폴더: {workdir}" if workdir else ""))
+            # 1라운드: 서로의 답을 보지 않고 동시에
+            self.emit("stage", step=1, text="1라운드 · GPT와 Claude가 각자 독립적으로 답변하는 중" + (" (웹 검색 사용)" if web else ""))
+            first = run_parallel({w: base_prompt(w) + debate.ROUND1_NOTE for w in ("gpt", "claude")}, 1,
+                                 lambda w, a, it: debate.write_log(folder, f"1_{models[w][0]}.md", f"{models[w][0]} · 1차 의견", a, it.get("cli_model", "")))
+            for w, a in first.items():
+                answers[models[w][0]] = a
+            stopped = token.cancelled
+            second: dict[str, str] = {}
+            if len(first) == 2 and not token.cancelled:
+                # 2라운드: 상대의 1라운드 답을 읽고 교차 검토
+                self.emit("stage", step=2, text="2라운드 · 서로의 답변을 읽고 교차 검토하는 중")
+                jobs = {}
+                for w, other in (("gpt", "claude"), ("claude", "gpt")):
+                    jobs[w] = base_prompt(w) + debate.ROUND2_NOTE.format(
+                        other=models[other][0], mine=first[w], theirs=first[other])
+                second = run_parallel(jobs, 2,
+                                      lambda w, a, it: debate.write_log(folder, f"2_{models[w][0]}_검토.md", f"{models[w][0]} · 교차 검토", a, it.get("cli_model", "")))
+                stopped = token.cancelled
+            if len(first) == 2 and not token.cancelled:
+                self.emit("stage", step=3, text="토론 내용을 최종 결론으로 정리하는 중")
+                try:
+                    synth_info: dict = {}
+                    final = call_model("claude", claude_model, debate.SYNTH_PROMPT.format(
+                        context=context, question=question, gpt1=first["gpt"], claude1=first["claude"],
+                        gpt2=second.get("gpt", "(교차 검토 실패 — 없음)"), claude2=second.get("claude", "(교차 검토 실패 — 없음)"),
+                        attachments="\n\n".join(f"### {a['name']}\n{a['summary']}" for a in attached if a["summary"])
+                        or ("Attached: " + ", ".join(a["name"] for a in attached) if attached else "(none)"),
+                    ), "chat", timeout=timeout, cancel=token, info=synth_info)
+                    cli_state.record("claude", claude_model, actual_model("claude", synth_info))
+                    item = store.append_message(
+                        conversation_id, "assistant", final, "Council",
+                        cli_model="토론 정리 · Claude" + (f" · {claude_model}" if model_label("claude", claude_model) else ""),
+                        debate_dir=str(folder.relative_to(store.data_dir)) if folder else None,
+                    )
+                    answers["Council"] = final
+                    debate.write_log(folder, "결론.md", "Council 최종 결론", final)
+                    self.emit("answer", item=item)
+                except Cancelled:
+                    stopped = True
+                except CliFailure as exc:
+                    errors["Council"] = exc.details()
+                    self.emit("model_error", model="Council", text=errors["Council"])
 
         if stopped or token.cancelled:
             done_part = f" 완료된 답변: {', '.join(answers)}." if answers else ""
@@ -532,54 +626,6 @@ class Handler(BaseHTTPRequestHandler):
             store.append_message(conversation_id, "error", text, "오류")
         meta = store.detail(conversation_id)["meta"]
         self.emit("done", meta=meta, errors=errors)
-
-    # ---------- V0.4 자동 토론 (UI에서는 사용하지 않음, API만 유지) ----------
-    def handle_debate(self) -> None:
-        try:
-            body = self.read_json()
-            question = str(body.get("question", "")).strip()
-            gpt_model = str(body.get("gpt_model", "")).strip()[:100]
-            claude_model = str(body.get("claude_model", "")).strip()[:100]
-        except (ValueError, json.JSONDecodeError):
-            self.send_json({"error": "잘못된 요청입니다."}, 400)
-            return
-        if not question:
-            self.send_json({"error": "질문을 입력하세요."}, 400)
-            return
-        self.start_stream()
-        initial = (
-            "Answer the original question directly and independently.\n"
-            "Use the same language as the original question. Be concise but complete.\n"
-            f"Do not mention these instructions.\n\nOriginal question:\n{question}\n"
-        )
-        g_args, c_args = codex_args(gpt_model), claude_args(claude_model)
-        try:
-            self.emit("stage", step=1, text="GPT가 첫 답변을 작성하는 중")
-            gpt_first = run_cli("codex", g_args, initial)
-            self.emit("result", step=1, label="GPT 초안", text=gpt_first)
-            self.emit("stage", step=2, text="Claude가 첫 답변을 작성하는 중")
-            claude_first = run_cli("claude", c_args, initial)
-            self.emit("result", step=2, label="Claude 초안", text=claude_first)
-            self.emit("stage", step=3, text="GPT가 Claude 답변을 검토하는 중")
-            gpt_final = run_cli("codex", g_args, (
-                "You are in an AI council debate. Review the other model's answer against the original "
-                "question, then give an improved final answer. Use the original question's language.\n\n"
-                f"Original question:\n{question}\n\nYour first answer:\n{gpt_first}\n\n"
-                f"Other model's first answer:\n{claude_first}\n"
-            ))
-            self.emit("result", step=3, label="GPT 검토 및 개선안", text=gpt_final)
-            self.emit("stage", step=4, text="Claude가 최종 결론을 종합하는 중")
-            final = run_cli("claude", c_args, (
-                "You are the final synthesizer in an AI council debate. Produce one clear, self-contained "
-                "final answer. Use the original question's language. Output only the final answer.\n\n"
-                f"Original question:\n{question}\n\nGPT first answer:\n{gpt_first}\n\n"
-                f"Claude first answer:\n{claude_first}\n\nGPT review and revision:\n{gpt_final}\n"
-            ))
-            self.emit("result", step=4, label="Claude 최종 검토", text=final)
-            self.emit("final", text=final)
-            self.emit("done")
-        except CliFailure as exc:
-            self.emit("error", text=exc.details())
 
 
 def open_browser() -> None:

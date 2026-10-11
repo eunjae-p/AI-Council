@@ -32,10 +32,22 @@ c1 = post("/api/conversations")["id"]; c2 = post("/api/conversations")["id"]
 ok(len(get("/api/conversations")["items"]) == 2, "create+list")
 # chat both
 ev = post("/api/chat", {"question":"첫 질문입니다 ComfyUI","conversation_id":c1,"target":"both","gpt_model":"gpt-6.1-sol","claude_model":"account default"}, raw=True)
-types = [e["type"] for e in ev]; ok(types.count("answer")==3 and types[-1]=="done", f"chat both events {types}")
-d = get("/api/conversation?id="+c1); ok([i["model"] for i in d["items"]]==["사용자","GPT","Claude","Council"], "saved 4 messages")
+types = [e["type"] for e in ev]; ok(types.count("answer")==5 and types[-1]=="done", f"discussion events {types}")
+d = get("/api/conversation?id="+c1); its = d["items"]
+ok(its[0]["model"]=="사용자" and sorted(i["model"] for i in its[1:3])==["Claude","GPT"] and all(i.get("round")==1 for i in its[1:3])
+   and sorted(i["model"] for i in its[3:5])==["Claude","GPT"] and all(i.get("round")==2 for i in its[3:5]) and its[5]["model"]=="Council", "discussion saved: round1 x2, round2 x2, conclusion")
 ok(d["meta"]["title"]=="첫 질문입니다 ComfyUI", "auto title")
-ok(d["items"][1].get("cli_model")=="gpt-6.1-sol", "cli_model recorded")
+g1 = next(i for i in its if i["model"]=="GPT" and i.get("round")==1)
+ok(g1.get("cli_model")=="gpt-6.1-sol", "cli_model recorded")
+log = open(os.environ["FAKE_LOG"]).read(); parts = log.split("=====CLAUDE")
+c_r1 = next(x for x in parts if "round 1 (independent opinion)" in x); c_r2 = next(x for x in parts if "round 2 (cross review)" in x)
+ok("GPT 답변" not in c_r1 and "GPT 답변: 받은 프롬프트" in c_r2 and "Claude 답변 ✓ 한글" in c_r2, "round1 independent, round2 sees both answers")
+ok("No web access" in c_r1 and "--search" not in log, "web search off by default in discussion")
+syn = next(x for x in parts if "moderator of a discussion" in x)
+ok("GPT — round 2 review of Claude" in syn and "## 의견이 갈린 점" in syn, "synthesis gets reviews")
+ddir = w.store.data_dir/its[5]["debate_dir"]
+ok(sorted(f.name for f in ddir.iterdir())==sorted(["질문.md","1_GPT.md","1_Claude.md","2_GPT_검토.md","2_Claude_검토.md","결론.md"]), f"debate log files {list(ddir.iterdir())}")
+ok(ddir.parent.name.endswith("첫 질문입니다 ComfyUI") and "Council 결론입니다" in (ddir/"결론.md").read_text(encoding="utf-8"), "debate folder named by conversation")
 # chat claude only — check shared context contains GPT label
 open(os.environ["FAKE_LOG"],"w").close()
 post("/api/chat", {"question":"두번째","conversation_id":c1,"target":"claude"}, raw=True)
@@ -61,7 +73,7 @@ ok(get("/api/search?q="+urllib.parse.quote("워크플로우"))["items"][0]["kind
 # export twice -> collision
 e1 = post("/api/export", {"id":c1}); e2 = post("/api/export", {"id":c1})
 ok(e1["filename"]!=e2["filename"] and e2["filename"].endswith("_2.md"), f"export collision {e1['filename']} {e2['filename']}")
-md = pathlib.Path(e1["path"]).read_text(encoding="utf-8"); ok("# 워크플로우 분석" in md and "### Council 최종 결론" in md and "### GPT · gpt-6.1-sol" in md and "한글" in md, "markdown content")
+md = pathlib.Path(e1["path"]).read_text(encoding="utf-8"); ok("# 워크플로우 분석" in md and "### Council 최종 결론" in md and "### GPT · 1차 의견 · gpt-6.1-sol" in md and "### Claude · 교차 검토" in md and "한글" in md, "markdown content")
 from council_store import safe_filename
 ok(safe_filename('a<b>:c"/d\\e|f?g*') == "a_b__c__d_e_f_g_" and safe_filename("CON").startswith("_") and safe_filename("...") == "대화", "safe filename")
 # delete -> trash -> restore -> delete -> purge
@@ -150,7 +162,7 @@ wf = open(HERE/"fixtures"/"sample_workflow.json", encoding="utf-8").read()
 c8 = post("/api/conversations")["id"]
 open(os.environ["FAKE_LOG"],"w").close()
 ev = post("/api/chat", {"question":"이 워크플로우 분석해줘","conversation_id":c8,"target":"both","attachments":[{"name":"[GenVideo] _ test_v01.json","content":wf}]}, raw=True)
-types=[e["type"] for e in ev]; ok(types.count("answer")==3, f"attach both {types}")
+types=[e["type"] for e in ev]; ok(types.count("answer")==5, f"attach discussion {types}")
 log = open(os.environ["FAKE_LOG"]).read()
 ok("Parsed summary" in log and "### MUST (2개)" in log and "wan2.1_vace_14B_fp16.safetensors" in log and "Attached file summaries" in log, "attachment summary sent to models")
 it = get("/api/conversation?id="+c8)["items"][0]
@@ -199,7 +211,7 @@ c10 = post("/api/conversations")["id"]
 img = upload(c10, media_dir/"shot.png", "캡처 화면.png"); ok(img.get("kind")=="image" and img["id"].endswith("캡처 화면.png"), f"image upload {img}")
 open(os.environ["FAKE_LOG"],"w").close()
 ev = post("/api/chat", {"question":"이 이미지 설명해줘","conversation_id":c10,"target":"both","attachments":[{"name":"캡처 화면.png","upload":img["id"]}]}, raw=True)
-types=[e["type"] for e in ev]; ok(types.count("answer")==3, f"image chat both {types}")
+types=[e["type"] for e in ev]; ok(types.count("answer")==5, f"image discussion {types}")
 log = open(os.environ["FAKE_LOG"]).read()
 ok("'--image'" in log and img["id"] in log, "codex got --image")
 ok("'--tools', 'Read'" in log and "Image files to open with the Read tool" in log and ("CWD="+os.path.realpath(str(w.store.data_dir/"attachments"/c10))) in log, "claude reads image in attachment folder only")
@@ -265,7 +277,8 @@ os.environ["CODEX_HOME"] = str(tmp/"nocodex"); os.environ["CLAUDE_CONFIG_DIR"] =
 c12 = post("/api/conversations")["id"]
 post("/api/chat", {"question":"기본 모델 확인","conversation_id":c12,"target":"both","gpt_model":"account default","claude_model":"account default"}, raw=True)
 d = get("/api/conversation?id="+c12)["items"]
-ok(d[2]["content"]=="Claude 답변 ✓ 한글" and d[2].get("cli_model")=="claude-opus-5-5", f"claude json parsed + real model {d[2].get('cli_model')}")
+cr = next(i for i in d if i["model"]=="Claude" and i.get("round")==1)
+ok(cr["content"]=="Claude 답변 ✓ 한글" and cr.get("cli_model")=="claude-opus-5-5", f"claude json parsed + real model {cr.get('cli_model')}")
 s = get("/api/status")
 ok(s["default_models"]["gpt"]=={"model":"gpt-6.1-sol","source":"seen"} and s["default_models"]["claude"]=={"model":"claude-opus-5-5","source":"seen"}, f"default models {s['default_models']}")
 ok(s["usage"]["today"]["gpt"]>=1 and s["usage"]["today"]["claude"]>=2, f"usage counted {s['usage']}")
@@ -276,4 +289,22 @@ ok(get("/api/conversation?id="+c12)["items"][-1]["content"]=="Claude 답변 ✓ 
 import council_core as core
 try: core._claude_result('{"type":"result","is_error":true,"result":"Usage limit reached"}', {}); ok(False, "json error raises")
 except core.CliFailure as e: ok("Usage limit" in e.stdout and "사용량" in e.hint(), "json error raises with hint")
+# 웹 검색 옵션
+c13 = post("/api/conversations")["id"]
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"최신 정보 확인","conversation_id":c13,"target":"both","web":True}, raw=True)
+log = open(os.environ["FAKE_LOG"]).read()
+ok("=====CODEX ['--search', 'exec'" in log and "'--tools', 'WebSearch,WebFetch'" in log and "'--allowedTools', 'WebSearch,WebFetch'" in log, "web search flags passed")
+its = get("/api/conversation?id="+c13)["items"]
+ok(its[0].get("web") is True and all(i.get("web") for i in its if i.get("round")), "web flag recorded")
+ok("## Web search" in log, "web note in prompt")
+os.environ["FAKE_NO_SEARCH"]="1"; ev = post("/api/chat", {"question":"구버전 codex","conversation_id":c13,"target":"gpt","web":True}, raw=True); del os.environ["FAKE_NO_SEARCH"]
+types=[e["type"] for e in ev]; ok("warning" in types and types.count("answer")==1 and not get("/api/conversation?id="+c13)["items"][-1].get("web"), f"old codex falls back without search {types}")
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"단독","conversation_id":c13,"target":"claude"}, raw=True)
+ok("'--disallowedTools', '*'" in open(os.environ["FAKE_LOG"]).read(), "web off for single chat by default")
+ok(post("/api/debate", {"question":"x"})[0]==410, "legacy debate api retired")
+r = post("/api/debate/open", {"dir":"debates/../../etc"}); ok(r[0]==400, "debate open rejects outside path")
+dd = next(i for i in get("/api/conversation?id="+c1)["items"] if i.get("debate_dir"))["debate_dir"]
+ok(post("/api/debate/open", {"dir":dd})["opened"] is False, "debate open returns path off Windows")
 srv.shutdown(); shutil.rmtree(tmp); print("ALL PASS; temp data removed")

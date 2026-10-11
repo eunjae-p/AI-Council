@@ -88,8 +88,8 @@ def resolve_command(name: str) -> list[str]:
     raise CliFailure(name, f"{name} CLI를 찾을 수 없습니다. PATH 설정을 확인하세요.")
 
 
-def codex_args(model: str = "") -> list[str]:
-    args = ["exec"]
+def codex_args(model: str = "", web: bool = False) -> list[str]:
+    args = ["--search", "exec"] if web else ["exec"]  # --search 는 exec 앞에 오는 전체 옵션
     if model and model != ACCOUNT_DEFAULT:
         args += ["--model", model]
     args += ["--ephemeral", "--skip-git-repo-check", "--sandbox", "read-only", "--color", "never"]
@@ -128,12 +128,13 @@ class Cancelled(CliFailure):
 
 
 class CancelToken:
-    """진행 중인 CLI 프로세스를 중지하기 위한 토큰 (대화 하나당 하나)."""
+    """진행 중인 CLI 프로세스를 중지하기 위한 토큰 (대화 하나당 하나).
+    토론 모드에서는 GPT·Claude 가 동시에 돌기 때문에 여러 프로세스를 함께 관리한다."""
 
     def __init__(self) -> None:
         self._event = threading.Event()
         self._lock = threading.Lock()
-        self._process: subprocess.Popen | None = None
+        self._processes: set[subprocess.Popen] = set()
 
     @property
     def cancelled(self) -> bool:
@@ -142,19 +143,22 @@ class CancelToken:
     def cancel(self) -> None:
         self._event.set()
         with self._lock:
-            process = self._process
-        if process is not None:
+            processes = list(self._processes)
+        for process in processes:
             _kill_tree(process)
 
     def attach(self, process: subprocess.Popen) -> None:
         with self._lock:
-            self._process = process
+            self._processes.add(process)
         if self._event.is_set():  # 시작 직전에 중지된 경우
             _kill_tree(process)
 
-    def detach(self) -> None:
+    def detach(self, process: subprocess.Popen | None = None) -> None:
         with self._lock:
-            self._process = None
+            if process is None:
+                self._processes.clear()
+            else:
+                self._processes.discard(process)
 
 
 def run_cli(name: str, arguments: list[str], prompt: str, timeout: int = TIMEOUT_SECONDS, cwd: Path | str | None = None,
@@ -199,7 +203,7 @@ def run_cli(name: str, arguments: list[str], prompt: str, timeout: int = TIMEOUT
         raise
     finally:
         if cancel is not None:
-            cancel.detach()
+            cancel.detach(process)
     if cancel is not None and cancel.cancelled:
         raise Cancelled(name)
 
@@ -220,6 +224,12 @@ CHAT_SYSTEM_PROMPT = (
     "You are a helpful, knowledgeable assistant in a chat app. Answer the user's question directly "
     "and conversationally. You have no tools and no file access in this mode."
 )
+CHAT_WEB_SYSTEM_PROMPT = (
+    "You are a helpful, knowledgeable assistant in a chat app. You may use web search and web fetch to "
+    "verify facts. Prefer official documentation and primary sources, cite the URLs you relied on, and "
+    "clearly mark anything you could not verify. Do not read or modify local files."
+)
+WEB_TOOLS = "WebSearch,WebFetch"
 CHAT_IMAGE_SYSTEM_PROMPT = (
     "You are a helpful, knowledgeable assistant in a chat app. The user attached images; open each listed "
     "image file with the Read tool and look at it before answering. Do not read any other files. "
@@ -246,13 +256,29 @@ def check_workdir(workdir: str) -> Path:
 
 def call_model(which: str, model: str, prompt: str, mode: str = "chat", workdir: Path | None = None,
                timeout: int = TIMEOUT_SECONDS, info: dict | None = None, cancel: CancelToken | None = None,
-               images: list[str] | None = None, image_dir: Path | None = None) -> str:
+               images: list[str] | None = None, image_dir: Path | None = None, web: bool = False) -> str:
     """which: gpt | claude.  mode: chat(도구 없음, 빈 폴더) | work(작업 폴더 읽기 전용).
-    images: 모델에 보여줄 이미지 파일 경로 (GPT: --image, Claude: 파일 읽기 도구)."""
+    images: 모델에 보여줄 이미지 파일 경로 (GPT: --image, Claude: 파일 읽기 도구).
+    web: 웹 검색 허용 (GPT: codex --search, Claude: WebSearch·WebFetch 도구).
+    CLI가 웹 검색 옵션을 모르면 웹 검색 없이 다시 시도하고 info["web_fallback"]=True 로 알린다."""
+    if web:
+        try:
+            return _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, True)
+        except Cancelled:
+            raise
+        except CliFailure as exc:
+            if not any(k in f"{exc.stderr}\n{exc.stdout}".lower() for k in _UNKNOWN_FLAG):
+                raise
+            if info is not None:
+                info["web_fallback"] = True
+    return _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, False)
+
+
+def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, web) -> str:
     images = [str(p) for p in images or []]
     cwd = workdir if mode == "work" and workdir else chat_dir()
     if which == "gpt":
-        name, base = "codex", codex_args(model)
+        name, base = "codex", codex_args(model, web)
         extra: list[str] = []  # read-only 샌드박스는 기본 인수에 포함
         for path in images:  # 이미지는 재시도 때도 빠지지 않도록 기본 인수에 넣는다
             base += ["--image", path]
@@ -261,14 +287,18 @@ def call_model(which: str, model: str, prompt: str, mode: str = "chat", workdir:
         if images:
             prompt += "\n\n## Image files to open with the Read tool (in this order)\n" + "\n".join(
                 f"{i}. {p}" for i, p in enumerate(images, start=1))
+        web_tools = ["--allowedTools", WEB_TOOLS] if web else []
         if mode == "work":
-            extra = ["--tools", "Read,Glob,Grep", "--disallowedTools", "mcp__*"]
+            extra = ["--tools", "Read,Glob,Grep" + ("," + WEB_TOOLS if web else ""), "--disallowedTools", "mcp__*"] + web_tools
             if images and image_dir:
                 extra += ["--add-dir", str(image_dir)]
         elif images:
             # 이미지 폴더 안에서만 읽기 도구 사용
             cwd = image_dir or Path(images[0]).parent
-            extra = ["--tools", "Read", "--disallowedTools", "mcp__*", "--system-prompt", CHAT_IMAGE_SYSTEM_PROMPT]
+            extra = ["--tools", "Read" + ("," + WEB_TOOLS if web else ""), "--disallowedTools", "mcp__*", *web_tools,
+                     "--system-prompt", CHAT_IMAGE_SYSTEM_PROMPT + (" You may also search the web." if web else "")]
+        elif web:
+            extra = ["--tools", WEB_TOOLS, "--disallowedTools", "mcp__*", *web_tools, "--system-prompt", CHAT_WEB_SYSTEM_PROMPT]
         else:
             extra = ["--disallowedTools", "*", "--system-prompt", CHAT_SYSTEM_PROMPT]
     try:
