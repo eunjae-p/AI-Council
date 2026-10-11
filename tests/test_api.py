@@ -248,4 +248,16 @@ mp = w.store.data_dir/"conversations"/f"{c1}.meta.json"; m = json.loads(mp.read_
 for k in ("models_used","models_asked","modes_used"): m.pop(k, None)
 mp.write_text(json.dumps(m), encoding="utf-8")
 ok({x["id"]: x for x in get("/api/conversations")["items"]}[c1]["models"]==["claude","gpt"], "old meta backfilled")
+# CLI 업데이트·로그인 버튼
+open(os.environ["FAKE_LOG"],"w").close()
+r = post("/api/cli/update", {"name":"codex"})
+ok(r["ok"] and r["after"]=="0.154.0" and "'install', '-g', '@openai/codex@latest'" in open(os.environ["FAKE_LOG"]).read(), f"cli update codex {r}")
+r = post("/api/cli/update", {"name":"claude"}); ok(r["ok"] and r["after"]=="2.1.290", f"cli update claude {r}")
+os.environ["FAKE_NPM_FAIL"]="1"; r = post("/api/cli/update", {"name":"codex"}); del os.environ["FAKE_NPM_FAIL"]
+ok(not r["ok"] and "사용 중" in r["hint"] and "EBUSY" in r["output"], "cli update failure hint")
+ok(post("/api/cli/update", {"name":"rm"})[0]==400, "cli update rejects unknown name")
+w._busy.add("x"); r = post("/api/cli/update", {"name":"codex"}); w._busy.discard("x"); ok(r[0]==409, "cli update blocked while answering")
+w._cli_updating.add("codex"); r = post("/api/chat", {"question":"q","conversation_id":c1,"target":"gpt"}); w._cli_updating.discard("codex")
+ok(r[0]==409 and "업데이트" in r[1]["error"], "chat blocked while updating")
+r = post("/api/cli/login", {"name":"codex"}); ok(r["opened"] is False and "login" in r["command"], "login returns command off Windows")
 srv.shutdown(); shutil.rmtree(tmp); print("ALL PASS; temp data removed")

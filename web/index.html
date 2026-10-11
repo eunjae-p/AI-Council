@@ -237,7 +237,7 @@ details.indiv .msg{margin-top:10px}
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.9.5'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.9.6'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const store = { get(k){ try { return localStorage.getItem(k); } catch { return null; } }, set(k,v){ try { localStorage.setItem(k,v); } catch {} } };
@@ -533,6 +533,7 @@ function pendingEl(text) { const p = el('div', 'pending'); p.id = 'pending'; p.a
 async function send() {
   const q = $('#q'), question = q.value.trim();
   if ((!question && !S.files.length) || S.running) return;
+  if (S.cliUpdating) { toast('GPT/Claude 프로그램을 업데이트하는 중입니다. 끝난 뒤 보내 주세요', true); return; }
   if (S.files.some(f => f.uploading)) { toast('파일 업로드가 끝난 뒤 보내 주세요', true); return; }
   if (S.files.some(f => f.failed)) { toast('업로드에 실패한 첨부를 지운 뒤 보내 주세요', true); return; }
   if (S.files.some(f => f.conv && f.conv !== S.current)) { toast('다른 대화에서 올린 이미지·영상은 그 대화에서만 보낼 수 있습니다. 다시 첨부해 주세요', true); return; }
@@ -600,7 +601,7 @@ const autoGrow = () => { const q = $('#q'); q.style.height = 'auto'; q.style.hei
 $('#q').addEventListener('input', autoGrow);
 $('#q').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
 
-// ---------- CLI 버전 확인 (업데이트는 직접 실행) ----------
+// ---------- CLI 버전 확인 · 버튼으로 업데이트/로그인 ----------
 async function loadVersions(force) {
   let v; try { v = await api('/api/versions' + (force ? '?refresh=1' : '')); } catch { $('#cli').append(el('span', 'upd', '버전 확인 불가 · 서버 재시작 필요')); return; }
   const box = $('#cli'); box.innerHTML = '';
@@ -611,22 +612,81 @@ async function loadVersions(force) {
     line.title = `설치: ${x.installed || '-'} / 최신: ${x.latest || '확인 불가'}`;
     box.append(line);
     if (x.installed && x.logged_in === false) {
-      const g = el('span', 'upd', `로그인 필요 · 명령 복사`); g.style.color = 'var(--danger)'; g.title = x.login_command;
-      g.onclick = async () => { try { await navigator.clipboard.writeText(x.login_command); toast(`복사됨: ${x.login_command}\n터미널에 붙여넣어 로그인한 뒤 '버전 다시 확인'을 누르세요.`); } catch { toast(x.login_command); } };
+      const g = el('span', 'upd', `로그인 필요 · 로그인하기`); g.style.color = 'var(--danger)'; g.title = '누르면 로그인 창이 열립니다';
+      g.onclick = () => startLogin(k, x);
       box.append(g); outdated.push(k + '-login');
     }
     if (!x.installed) { const m = el('span', 'upd', 'CLI 없음 · Setup.cmd 실행'); m.style.color = 'var(--danger)'; box.append(m); }
     if (x.outdated) {
       outdated.push(k);
-      const u = el('span', 'upd', `${x.latest} 업데이트 있음 · 명령 복사`); u.title = x.update_command;
-      u.onclick = async () => { try { await navigator.clipboard.writeText(x.update_command); toast(`복사됨: ${x.update_command}\n터미널에 붙여넣어 실행한 뒤 AI Council을 다시 시작하세요.`); } catch { toast(x.update_command); } };
+      const u = el('span', 'upd', `⬆ ${x.latest} 업데이트하기`); u.title = `${x.installed} → ${x.latest} · 누르면 자동으로 업데이트합니다`;
+      u.onclick = () => confirmCliUpdate([k], v);
       box.append(u);
     }
   }
   if (S.ffmpeg === false) { const f = el('span', 'upd', 'ffmpeg 없음 · 영상 분석 불가'); f.style.color = 'var(--warn)'; f.title = 'Setup.cmd를 실행해 설치한 뒤 Council을 다시 시작하세요';
     f.onclick = () => modal('ffmpeg 설치', 'Council 폴더의 Setup.cmd를 실행하면 ffmpeg가 설치됩니다.\n설치 후 Council을 다시 시작하세요.\n\n직접 설치: winget install Gyan.FFmpeg'); box.append(f); }
+  const both = ['codex', 'claude'].filter(k => v[k].outdated);
+  if (both.length === 2) { const a = el('span', 'upd', '⬆ 둘 다 업데이트하기'); a.onclick = () => confirmCliUpdate(both, v); box.append(a); }
   const r = el('span', 'upd', '버전 다시 확인'); r.style.color = 'var(--dim)'; r.onclick = () => loadVersions(true); box.append(r);
-  if (outdated.length && !force) toast('CLI 업데이트 또는 로그인이 필요합니다. 왼쪽 아래 안내를 확인하세요.', true);
+  if (outdated.length && !force) toast('GPT/Claude 프로그램 업데이트 또는 로그인이 필요합니다. 왼쪽 아래 노란·빨간 글씨를 누르세요.', true);
+}
+const CLI_NAMES = { codex:'GPT (Codex CLI)', claude:'Claude (Claude Code)' };
+function confirmCliUpdate(keys, v) {
+  const lines = keys.map(k => `• ${CLI_NAMES[k]}: ${v[k].installed} → ${v[k].latest}`).join('\n');
+  modal('GPT/Claude 프로그램 업데이트', `${lines}\n\n'지금 업데이트'를 누르면 이 PC에서 자동으로 설치합니다. 명령어를 입력할 필요가 없습니다.\n· 보통 1~2분 걸립니다. 그동안 질문은 잠시 보낼 수 없습니다.\n· 대화 기록과 로그인은 그대로 유지됩니다.\n· 끝나면 바로 새 버전이 쓰입니다 (Council 재시작 필요 없음).`,
+    [{ label:'나중에' }, { label:'지금 업데이트', primary:true, onClick: () => runCliUpdate(keys, v) }]);
+}
+async function runCliUpdate(keys, v) {
+  if (S.running) { toast('답변 생성 중에는 업데이트할 수 없습니다. 끝나거나 중지한 뒤 다시 시도하세요', true); return; }
+  S.cliUpdating = true;
+  const m = modal('업데이트 중…', '', [{ label:'기다리는 중…', keep:true }]);
+  const pre = m.querySelector('pre') || (() => { const p = el('pre'); m.querySelector('h3').after(p); return p; })();
+  m.onclick = null; m.querySelector('.row button').disabled = true;
+  const results = [], t0 = Date.now();
+  const tick = setInterval(() => { pre.textContent = progressText(); }, 1000);
+  let current = '', itemStart = t0;
+  function progressText() {
+    const sec = Math.round((Date.now() - itemStart) / 1000);
+    return results.map(r => `${r.ok ? '✓' : '✗'} ${r.name}`).concat(current ? [`… ${CLI_NAMES[current]} 업데이트 중 (${sec}초)`] : []).join('\n') +
+      '\n\n창을 닫거나 새로고침하지 마세요.';
+  }
+  try {
+    for (const k of keys) {
+      current = k; itemStart = Date.now(); pre.textContent = progressText();
+      try { results.push({ key:k, ...(await api('/api/cli/update', { name:k })) }); }
+      catch (e) { results.push({ key:k, name:CLI_NAMES[k], ok:false, hint:e.message, output:'' }); }
+    }
+  } finally { clearInterval(tick); S.cliUpdating = false; m.remove(); }
+  const fail = results.filter(r => !r.ok);
+  const body = results.map(r => r.ok
+    ? (r.after === r.before && r.latest && r.after !== r.latest
+        ? `△ ${r.name}: 설치는 끝났지만 버전이 아직 ${r.after} 입니다.\n  잠시 후 왼쪽 아래 '버전 다시 확인'을 눌러 보세요.`
+        : `✓ ${r.name}: ${r.before || '?'} → ${r.after} 완료`)
+    : `✗ ${r.name}: 업데이트하지 못했습니다\n  ${r.hint}`).join('\n\n');
+  const log = fail.filter(r => r.output).map(r => `[${r.name}]\n${r.output}`).join('\n\n');
+  const box = el('div'); box.append(el('pre', '', body));
+  if (log) { const d = el('details'), sm = el('summary', '', '자세한 기록 보기'); sm.style.cursor = 'pointer'; d.append(sm, el('pre', '', log)); box.append(d); }
+  const buttons = [{ label:'닫기', primary:!fail.length }];
+  if (fail.length) buttons.unshift({ label:'다시 시도', onClick: () => runCliUpdate(fail.map(r => r.key), v) });
+  modal(fail.length ? '일부 업데이트 실패' : '업데이트 완료', box, buttons);
+  loadVersions(true);
+}
+async function startLogin(k, x) {
+  let r; try { r = await api('/api/cli/login', { name:k }); } catch (e) { toast('로그인 창을 열지 못했습니다: ' + e.message, true); return; }
+  if (!r.opened) {
+    try { await navigator.clipboard.writeText(r.command); } catch {}
+    modal(`${CLI_NAMES[k]} 로그인`, `이 PC에서는 로그인 창을 자동으로 열 수 없습니다.\n터미널에서 아래 명령을 실행하세요 (복사됨):\n\n${r.command}`); return;
+  }
+  const m = modal(`${CLI_NAMES[k]} 로그인`, `검은 로그인 창을 열었습니다.\n\n1. 잠시 후 브라우저가 열리면 ${k === 'codex' ? 'ChatGPT' : 'Claude'} 계정으로 로그인하세요.\n2. 로그인이 끝나면 검은 창은 닫아도 됩니다.\n\n로그인이 확인되면 이 안내는 자동으로 닫힙니다…`,
+    [{ label:'닫기' }]);
+  const t0 = Date.now();
+  const poll = async () => {
+    if (!m.isConnected) return;
+    try { const v = await api('/api/versions?refresh=1'); if (v[k] && v[k].logged_in) { m.remove(); toast(`${CLI_NAMES[k]} 로그인 완료`); loadVersions(true); return; } } catch {}
+    if (Date.now() - t0 < 300000) setTimeout(poll, 4000);
+  };
+  setTimeout(poll, 5000);
 }
 
 // ---------- 첨부 (텍스트·JSON / 이미지·영상) ----------
@@ -752,7 +812,7 @@ async function applyUpdate() {
   let r; try { r = await api('/api/update/apply', {}); }
   catch (e) { m.remove(); modal('업데이트를 멈췄습니다', e.message); return; }
   if (!r.restarting) { m.remove(); modal('최신 버전입니다', `현재 V${r.version}`); $('#upNew').hidden = true; return; }
-  m.querySelector('pre').textContent = `V${r.version} 받기 완료 (${r.from} → ${r.to}).\nCouncil을 다시 시작하는 중… 잠시 후 화면이 새로고침됩니다.\n(새 콘솔 창이 열리고 이전 창은 닫힙니다)`;
+  m.querySelector('pre').textContent = `V${r.version} 받기 완료 (${r.from} → ${r.to}).\nCouncil을 다시 시작하는 중… 잠시 후 화면이 새로고침됩니다.`;
   const started = Date.now();
   const poll = async () => {
     try { const s = await api('/api/status'); if (s.version === r.version) { location.reload(); return; } } catch {}

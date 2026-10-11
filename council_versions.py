@@ -2,13 +2,15 @@
 
 - 설치 버전: `codex --version`, `claude --version`
 - 최신 버전: npm 레지스트리 조회 (인터넷이 안 되면 건너뜀)
-업데이트는 하지 않는다. 화면에 안내만 한다.
+- 업데이트: 화면의 버튼으로 이 PC에서 바로 실행 (update_cli). 터미널 명령을 몰라도 된다.
+- 로그인: 로그인 창(터미널)을 대신 열어 준다 (open_login). 브라우저 로그인은 사용자가 직접.
 """
 from __future__ import annotations
 
 import json
 import os
 import re
+import shutil
 import subprocess
 import threading
 import time
@@ -107,3 +109,101 @@ def check(force: bool = False) -> dict:
         }
     result["checked_at"] = time.time()
     return result
+
+
+# ---------- 화면 버튼으로 업데이트 ----------
+UPDATE_TIMEOUT = 600
+NAMES = {"codex": "GPT (Codex CLI)", "claude": "Claude (Claude Code)"}
+
+
+def _npm_command() -> list[str]:
+    exe = shutil.which("npm")
+    if not exe and os.name == "nt":  # Node.js 를 방금 설치해 PATH 가 아직 반영되지 않은 경우
+        for base in (os.environ.get("ProgramFiles", r"C:\Program Files"), os.environ.get("APPDATA", "")):
+            for cand in (os.path.join(base, "nodejs", "npm.cmd"), os.path.join(base, "npm", "npm.cmd")):
+                if base and os.path.isfile(cand):
+                    exe = cand
+                    break
+            if exe:
+                break
+    if not exe:
+        raise CliFailure("npm", "Node.js(npm)를 찾을 수 없습니다. Council 폴더의 Setup.cmd를 실행해 설치하세요.")
+    if exe.lower().endswith((".cmd", ".bat")):
+        return [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/s", "/c", exe]
+    return [exe]
+
+
+def update_args(name: str) -> list[str]:
+    if name == "codex":
+        return _npm_command() + ["install", "-g", f"{PACKAGES['codex']}@latest"]
+    return resolve_command("claude") + ["update"]
+
+
+def failure_hint(text: str) -> str:
+    low = text.lower()
+    if any(k in low for k in ("ebusy", "eperm", "resource busy", "being used by another process")):
+        return "CLI 파일이 사용 중이라 바꾸지 못했습니다. 다른 터미널에서 실행 중인 codex/claude를 모두 닫고 다시 시도하세요."
+    if "eacces" in low or "permission denied" in low or "access is denied" in low:
+        return "설치 폴더에 쓸 권한이 없습니다. Setup.cmd를 다시 실행하거나 담당자에게 문의하세요."
+    if any(k in low for k in ("enotfound", "etimedout", "econnreset", "econnrefused", "network", "getaddrinfo", "unable to connect")):
+        return "인터넷 연결 문제로 받지 못했습니다. 회사 네트워크(방화벽)에서 막혔을 수 있습니다."
+    return "아래 기록을 확인하세요. 계속 실패하면 Setup.cmd를 다시 실행해 보세요."
+
+
+def update_cli(name: str) -> dict:
+    """CLI 를 최신 버전으로 업데이트한다. 반환: {ok, before, after, latest, output, hint}"""
+    if name not in PACKAGES:
+        raise ValueError("알 수 없는 CLI 입니다.")
+    before = installed_version(name)
+    try:
+        args = update_args(name)
+    except CliFailure as exc:
+        return {"ok": False, "before": before, "after": before, "output": "", "hint": str(exc)}
+    try:
+        proc = subprocess.run(args, capture_output=True, timeout=UPDATE_TIMEOUT, stdin=subprocess.DEVNULL,
+                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        output = (proc.stdout + proc.stderr).decode("utf-8", "replace")
+        code = proc.returncode
+    except subprocess.TimeoutExpired:
+        output, code = f"{UPDATE_TIMEOUT // 60}분 안에 끝나지 않아 중단했습니다.", -1
+    except OSError as exc:
+        output, code = f"실행 실패: {exc}", -1
+    with _lock:
+        _cache.clear()  # 다음 버전 확인은 새로 조회
+    after = installed_version(name)
+    latest = latest_version(name)
+    ok = code == 0 and bool(after)
+    return {
+        "ok": ok, "name": NAMES[name], "before": before, "after": after, "latest": latest,
+        "output": output.strip()[-3000:], "hint": "" if ok else failure_hint(output),
+    }
+
+
+# ---------- 로그인 창 열기 ----------
+LOGIN_RUN = {"codex": ["login"], "claude": ["auth", "login"]}
+
+
+def open_login(name: str) -> dict:
+    """Windows: 로그인 명령이 실행된 터미널 창을 새로 연다 (브라우저 로그인이 이어서 열림).
+    그 외 OS: 열 수 없으므로 명령만 돌려준다."""
+    if name not in PACKAGES:
+        raise ValueError("알 수 없는 CLI 입니다.")
+    if os.name != "nt":
+        return {"opened": False, "command": LOGIN_COMMANDS[name]}
+    import tempfile
+    exe = resolve_command(name)[-1]
+    lines = [
+        "@echo off", "chcp 65001 >nul", f"title {NAMES[name]} 로그인",
+        f"echo {NAMES[name]} 로그인을 시작합니다. 브라우저가 열리면 계정으로 로그인하세요.", "echo.",
+        f'call "{exe}" {" ".join(LOGIN_RUN[name])}', "echo.",
+        "echo 로그인이 끝났으면 이 창을 닫고 AI Council 화면으로 돌아가세요.", "pause",
+    ]
+    bat = os.path.join(tempfile.gettempdir(), f"ai-council-login-{name}.cmd")
+    with open(bat, "w", encoding="utf-8", newline="\r\n") as fh:
+        fh.write("\n".join(lines) + "\n")
+    subprocess.Popen([os.environ.get("COMSPEC", "cmd.exe"), "/d", "/c", bat],
+                     creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0x10))
+    with _lock:
+        for key in [k for k in _cache if k.startswith("login:")]:
+            _cache.pop(key, None)
+    return {"opened": True, "command": LOGIN_COMMANDS[name]}

@@ -39,7 +39,7 @@ import council_attach
 import council_media
 import council_update
 
-VERSION = "0.9.5"
+VERSION = "0.9.6"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -48,6 +48,7 @@ ATTACH_TIMEOUT = 300  # 첨부·작업 모드는 분석량이 많아 제한 시�
 
 store = ConversationStore()
 _busy: set[str] = set()
+_cli_updating: set[str] = set()  # 업데이트 중인 CLI (그동안 새 질문을 받지 않음)
 _tokens: dict[str, CancelToken] = {}  # 대화 ID → 진행 중인 작업의 중지 토큰
 _busy_lock = threading.Lock()
 
@@ -235,6 +236,26 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(result)
                 if restart:  # 새 서버가 뜨면서 이 서버를 종료시키고 포트를 넘겨받는다
                     threading.Timer(0.5, council_update.restart_detached).start()
+            elif path == "/api/cli/update":
+                name = str(body.get("name", ""))
+                if name not in ("codex", "claude"):
+                    raise ValueError("알 수 없는 CLI 입니다.")
+                with _busy_lock:
+                    if _busy:
+                        raise RuntimeError("답변을 생성하는 중에는 업데이트할 수 없습니다. 완료되거나 중지한 뒤 다시 시도하세요.")
+                    if _cli_updating:
+                        raise RuntimeError("이미 업데이트가 진행 중입니다. 잠시 기다려 주세요.")
+                    _cli_updating.add(name)
+                try:
+                    self.send_json(council_versions.update_cli(name))
+                finally:
+                    with _busy_lock:
+                        _cli_updating.discard(name)
+            elif path == "/api/cli/login":
+                name = str(body.get("name", ""))
+                if name not in ("codex", "claude"):
+                    raise ValueError("알 수 없는 CLI 입니다.")
+                self.send_json(council_versions.open_login(name))
             elif path == "/api/chat/stop":
                 with _busy_lock:
                     tok = _tokens.get(cid())
@@ -362,6 +383,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"error": "지원하지 않는 답변 모델입니다."}, 400)
             return
         with _busy_lock:
+            if _cli_updating:
+                self.send_json({"error": "GPT/Claude 프로그램을 업데이트하는 중입니다. 끝난 뒤 다시 보내 주세요."}, 409)
+                return
             if conversation_id in _busy:
                 self.send_json({"error": "이 대화는 이미 답변을 생성하는 중입니다."}, 409)
                 return

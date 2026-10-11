@@ -2,6 +2,7 @@
 import sys,os
 if "--version" in sys.argv: print("2.1.290 (Claude Code)"); sys.exit(0)
 if sys.argv[1:3]==["auth","status"]: sys.exit(1)
+if sys.argv[1:2]==["update"]: print("Successfully updated"); sys.exit(0)
 p=sys.stdin.read()
 import time
 if "SLOWALL" in p or ("SLOWCLAUDE" in p and os.path.basename(sys.argv[0])=="claude"): time.sleep(30)
