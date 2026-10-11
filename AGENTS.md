@@ -20,11 +20,14 @@
 1. 코드 수정
 2. 버전 올리기 — `ai_council_web.py` 의 `VERSION` 과 `web/index.html` 의 `UI_VERSION` 을 **항상 같은 값으로** 함께 올립니다.
    (값이 다르면 화면에 "서버를 재시작하세요" 경고가 뜹니다. 업데이트 기능도 이 값으로 새 버전을 판단합니다.)
-3. `CHANGELOG.md` 맨 위에 변경 내역 추가, 필요하면 `README.md` 갱신
+3. 문서 갱신
+   - `CHANGELOG.md`: 맨 위 **버전 한눈에 보기** 표에 한 줄 + 아래에 상세 항목 추가
+   - `README.md`: 맨 위 **현재 버전** 줄과 **최근 업데이트** 표(최근 5개) 갱신, 기능이 바뀌면 해당 설명도 수정
 4. 테스트 (실제 GPT/Claude를 호출하지 않음)
    ```
    python tests/test_api.py
    python tests/test_update.py
+   python tests/test_docs.py   # 문서의 버전 표기 검사
    ```
 5. 커밋하고 `main` 에 push
 6. 작업한 PC가 Council을 실행 중이면 재시작(또는 업데이트 버튼)으로 반영 확인
