@@ -42,8 +42,9 @@ import council_attach
 import council_media
 import council_update
 from council_state import CliState
+from council_mcp import McpStore, valid_tool
 
-VERSION = "0.10.1"
+VERSION = "0.11.0"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -54,6 +55,7 @@ _emit_lock = threading.Lock()  # 토론 모드는 두 모델이 동시에 결과
 
 store = ConversationStore()
 cli_state = CliState(store.data_dir)
+mcp_store = McpStore(store.data_dir)
 _busy: set[str] = set()
 _cli_updating: set[str] = set()  # 업데이트 중인 CLI (그동안 새 질문을 받지 않음)
 _tokens: dict[str, CancelToken] = {}  # 대화 ID → 진행 중인 작업의 중지 토큰
@@ -193,6 +195,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
             elif parsed.path == "/api/update/check":
                 self.send_json(council_update.check(VERSION, force=arg("refresh") == "1"))
+            elif parsed.path == "/api/mcp":
+                self.send_json(mcp_store.state())
             elif parsed.path == "/api/versions":
                 self.send_json(council_versions.check(force=arg("refresh") == "1"))
             elif parsed.path == "/api/conversations":
@@ -273,6 +277,14 @@ class Handler(BaseHTTPRequestHandler):
                     os.startfile(str(target))  # noqa: S606 — 로컬 탐색기 열기
                     opened = True
                 self.send_json({"opened": opened, "path": str(target)})
+            elif path == "/api/mcp/refresh":
+                self.send_json(mcp_store.refresh())
+            elif path == "/api/mcp/allow":
+                tool = body.get("tool")
+                if not valid_tool(tool):
+                    raise ValueError("도구 이름이 올바르지 않습니다.")
+                mcp_store.set_allowed(tool, bool(body.get("allowed", True)))
+                self.send_json(mcp_store.state())
             elif path == "/api/cli/login":
                 name = str(body.get("name", ""))
                 if name not in ("codex", "claude"):
@@ -394,6 +406,8 @@ class Handler(BaseHTTPRequestHandler):
             workdir = check_workdir(str(body.get("workdir", ""))) if mode == "work" else None
             files = council_attach.validate(body.get("attachments"), store.data_dir, conversation_id)
             web = bool(body.get("web"))
+            mcp = bool(body.get("mcp"))
+            allow_once = [t for t in body.get("allow_once") or [] if valid_tool(t)][:20] if mcp else []
             if not question and files:
                 question = "첨부한 파일을 분석해줘."
         except (ValueError, json.JSONDecodeError) as exc:
@@ -417,7 +431,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             self.start_stream()
             try:
-                self.run_chat(conversation_id, question, target, gpt_model, claude_model, mode, workdir, files, web)
+                self.run_chat(conversation_id, question, target, gpt_model, claude_model, mode, workdir, files, web,
+                              mcp, allow_once)
             except Exception as exc:  # 예상 못 한 오류도 화면에 정확히 보이게
                 self.emit("error", text=f"서버 내부 오류: {type(exc).__name__}: {exc}")
         finally:
@@ -426,7 +441,8 @@ class Handler(BaseHTTPRequestHandler):
                 _tokens.pop(conversation_id, None)
 
     def run_chat(self, conversation_id: str, question: str, target: str, gpt_model: str, claude_model: str,
-                 mode: str = "chat", workdir=None, files: list | None = None, web: bool = False) -> None:
+                 mode: str = "chat", workdir=None, files: list | None = None, web: bool = False,
+                 mcp: bool = False, allow_once: list | None = None) -> None:
         # 1) 필요할 때만 장기 요약 갱신 (실패해도 채팅은 계속)
         self.emit("stage", step=0, text="대화 맥락을 준비하는 중")
         prefer = "gpt" if target == "gpt" else "claude"
@@ -467,10 +483,13 @@ class Handler(BaseHTTPRequestHandler):
             self.emit("done", meta=store.detail(conversation_id)["meta"], errors={})
             return
         timeout = ATTACH_TIMEOUT if (attached or images or mode == "work") else TIMEOUT_SECONDS
-        if web:
+        if web or mcp:
             timeout = max(timeout, WEB_TIMEOUT)
+        # MCP: 사용자가 "항상 허용"한 도구 + 이번 질문에서만 허용한 도구
+        mcp_allow = sorted(set(mcp_store.allowed()) | set(allow_once or [])) if mcp else None
         user_item = store.append_message(conversation_id, "user", question, "사용자", target=target,
                                          mode=mode, workdir=str(workdir) if workdir else None, web=web or None,
+                                         mcp=mcp or None, allow_once=allow_once or None,
                                          attachments=council_attach.history_records(attached) or None)
         self.emit("saved", item=user_item, context=info)
 
@@ -500,7 +519,8 @@ class Handler(BaseHTTPRequestHandler):
             started = time.time()
             run_info: dict = {}
             answer = call_model(which, model, prompt, mode, workdir, timeout=timeout, info=run_info, cancel=token,
-                                images=images, image_dir=image_dir, web=web)
+                                images=images, image_dir=image_dir, web=web,
+                                mcp_allow=mcp_allow if which == "claude" else None)
             real = actual_model(which, run_info)
             cli_state.record(which, model, real)
             if run_info.get("web_fallback"):
@@ -512,6 +532,10 @@ class Handler(BaseHTTPRequestHandler):
                 cli_model=real or model_label(name, model) or (f"기본값 {selected}" if selected else ""),
                 elapsed=round(time.time() - started, 1), mode=mode, round=round_no,
                 web=(web and not run_info.get("web_fallback")) or None,
+                mcp=(mcp and which == "claude") or None,
+                # 허용되지 않아 막힌 MCP 호출 → 화면에서 허용 여부를 묻는다
+                mcp_denials=[{"tool": d["tool"], "input": json.dumps(d["input"], ensure_ascii=False)[:600]}
+                             for d in run_info.get("permission_denials", [])][:10] or None,
             )
             return answer, item
 

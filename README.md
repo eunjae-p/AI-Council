@@ -1,6 +1,6 @@
 # AI Council
 
-> **현재 버전: V0.10.1** (2026-10-11) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.11.0** (2026-10-11) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -9,11 +9,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.11.0](CHANGELOG.md#v0110-2026-10-11) | 10-11 | **🔌 MCP** — Claude에 연결된 도구 사용, 허용한 도구만 실행·나머지는 실행 전 승인 |
 | [V0.10.1](CHANGELOG.md#v0101-2026-10-11) | 10-11 | 토론 행동 지침(근거로만 판단·양보 금지), 이름을 가린 중립 결론 정리, 토론 사용량 주의 표시 |
 | [V0.10.0](CHANGELOG.md#v0100-2026-10-11) | 10-11 | **토론(Discussion) 모드** — 독립 의견 → 교차 검토 → 결론, **🌐 웹 검색**, 토론 기록 폴더 |
 | [V0.9.8](CHANGELOG.md#v098-2026-10-11) | 10-11 | 계정 기본값의 실제 모델 이름 표시, 오늘 사용 횟수·남은 사용량 페이지 링크 |
 | [V0.9.7](CHANGELOG.md#v097-2026-10-11) | 10-11 | 수정: 업데이트 후 예전 버전이 계속 뜨던 문제 (Windows) |
-| [V0.9.6](CHANGELOG.md#v096-2026-10-11) | 10-11 | GPT·Claude CLI **버튼 하나로 업데이트·로그인** |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -42,6 +42,7 @@
 - **ComfyUI 워크플로우 JSON 분석** — 노드·색상 등급(MUST/SHOULD)·모델 파일을 코드가 먼저 정리해 정확하게 분석
 - **이미지·영상 분석** — 끌어다 놓기·Ctrl+V 붙여넣기, 영상은 프레임 12장으로 분석
 - **🌐 웹 검색** — 최신 정보·공식 문서 확인이 필요할 때 켜기
+- **🔌 MCP** — Claude에 연결된 도구(Higgsfield·Notion 등) 사용, 허용한 도구만 실행
 - **대화 관리** — 자동 제목, 보관·휴지통, 전체 검색, Markdown 내보내기, 긴 대화 자동 요약
 
 ## 📦 처음 설치하기 (팀원용)
@@ -115,6 +116,13 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 - 입력창 위 **웹 검색 켬/끔**. 켜면 GPT(Codex `--search`)·Claude(WebSearch·WebFetch)가 웹을 검색하고 출처를 밝힙니다.
 - 가격·API·약관처럼 바뀔 수 있는 정보에 켜세요. 답변 시간과 사용량이 늘어납니다.
 
+### 🔌 MCP (연결된 도구)
+- 입력창 위 **🔌 MCP 켬/끔** (기본 꺼짐). 켜면 Claude 계정(claude.ai 커넥터)·Claude Code에 연결된 도구(예: Higgsfield, Notion)를 Claude가 쓸 수 있습니다.
+- **⚙ (MCP 도구 관리)** → **도구 목록 가져오기** → 바로 실행해도 되는 도구에 **"항상 허용"** 체크. 조회 도구(잔액·내역 조회 등)만 허용해 두는 것을 권장합니다.
+- 허용하지 않은 도구를 Claude가 쓰려 하면 **실행하지 않고** 답변 아래에 도구·입력 내용을 보여 줍니다 → **이번만 허용 / 항상 허용 / 허용 안 함**.
+- ⚠ 생성·수정·결제처럼 크레딧이 들 수 있는 도구는 빨간 **실행·비용 가능** 표시가 붙습니다. 입력 내용을 확인하고 허용하세요.
+- GPT(Codex)의 MCP는 아직 지원하지 않습니다.
+
 ### 첨부 (📎 · 끌어다 놓기 · Ctrl+V)
 | 종류 | 형식 · 크기 | 처리 |
 |---|---|---|
@@ -152,6 +160,7 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 | `data/debates/` | 토론 기록 (`질문.md`, `1_GPT.md`, `1_Claude.md`, `2_*_검토.md`, `결론.md`) |
 | `data/trash/` | 삭제한 대화 (복구 가능, 영구 삭제 시 첨부·토론 기록도 삭제) |
 | `data/cli_state.json` | 사용 횟수, 계정 기본 모델 이름 |
+| `data/mcp_settings.json`, `data/mcp_state.json` | MCP "항상 허용" 도구, 마지막으로 확인한 도구 목록 |
 | `exports/` | Markdown 내보내기 |
 
 - `data/` 와 `exports/` 는 **GitHub에 올라가지 않습니다** (`.gitignore`).
@@ -174,6 +183,7 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 | `council_attach.py` / `council_media.py` | 첨부 처리 / 이미지·영상(ffmpeg) |
 | `council_workflow.py` | ComfyUI 워크플로우 JSON 요약 |
 | `council_state.py` | 사용 횟수, 계정 기본 모델 기억 |
+| `council_mcp.py` | MCP 도구 목록 확인, 항상 허용 목록 |
 | `council_versions.py` | CLI 버전 확인·버튼 업데이트·로그인 |
 | `council_update.py` | Council 자체 업데이트 (`Update.cmd` 가 화면 없이 실행) |
 | `Setup.cmd` · `setup.ps1` | 처음 설치 도우미 |

@@ -88,8 +88,11 @@ def resolve_command(name: str) -> list[str]:
     raise CliFailure(name, f"{name} CLI를 찾을 수 없습니다. PATH 설정을 확인하세요.")
 
 
-def codex_args(model: str = "", web: bool = False) -> list[str]:
-    args = ["--search", "exec"] if web else ["exec"]  # --search 는 exec 앞에 오는 전체 옵션
+def codex_args(model: str = "", web: bool = False, disable_mcp: list[str] | tuple = ()) -> list[str]:
+    args = ["--search"] if web else []  # --search, -c 는 exec 앞에 오는 전체 옵션
+    for server in disable_mcp:  # Codex 에 등록된 MCP 서버는 이번 실행에서 끈다 (GPT 쪽 MCP 는 아직 미지원)
+        args += ["-c", f"mcp_servers.{server}.enabled=false"]
+    args.append("exec")
     if model and model != ACCOUNT_DEFAULT:
         args += ["--model", model]
     args += ["--ephemeral", "--skip-git-repo-check", "--sandbox", "read-only", "--color", "never"]
@@ -230,6 +233,36 @@ CHAT_WEB_SYSTEM_PROMPT = (
     "clearly mark anything you could not verify. Do not read or modify local files."
 )
 WEB_TOOLS = "WebSearch,WebFetch"
+MCP_RULE = (
+    "\n\n## Connected tools (MCP)\n"
+    "You may use MCP tools connected to the user's account when they help answer the question. Some tools are "
+    "pre-approved; if you call one that is not approved, it will be blocked and the user will be asked to approve it, "
+    "so do not retry it — just explain what you wanted to look up and why. Never use tools to create, generate, "
+    "modify, delete, send, publish, purchase or spend credits/money unless the user's newest message explicitly asks "
+    "for that exact action. Say which tool results your answer relies on.\n"
+)
+
+# ---------- Codex 에 등록된 MCP 서버 목록 (GPT 실행 때 끄기 위해) ----------
+_SAFE_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
+_codex_mcp_cache: list = [0.0, []]
+
+
+def codex_mcp_servers(ttl: float = 300) -> list[str]:
+    """`codex mcp list --json` 의 켜진 서버 이름. 확인할 수 없으면 빈 목록."""
+    import time as _time
+    if _time.time() - _codex_mcp_cache[0] < ttl:
+        return _codex_mcp_cache[1]
+    names: list[str] = []
+    try:
+        out = subprocess.run(resolve_command("codex") + ["mcp", "list", "--json"], capture_output=True, timeout=20,
+                             stdin=subprocess.DEVNULL, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        data = json.loads(out.stdout.decode("utf-8", "replace") or "[]") if out.returncode == 0 else []
+        names = [str(x.get("name")) for x in data if isinstance(x, dict) and x.get("enabled", True)
+                 and _SAFE_NAME.match(str(x.get("name", "")))]
+    except (CliFailure, OSError, subprocess.TimeoutExpired, ValueError, AttributeError):
+        names = []
+    _codex_mcp_cache[:] = [_time.time(), names]
+    return names
 CHAT_IMAGE_SYSTEM_PROMPT = (
     "You are a helpful, knowledgeable assistant in a chat app. The user attached images; open each listed "
     "image file with the Read tool and look at it before answering. Do not read any other files. "
@@ -256,14 +289,17 @@ def check_workdir(workdir: str) -> Path:
 
 def call_model(which: str, model: str, prompt: str, mode: str = "chat", workdir: Path | None = None,
                timeout: int = TIMEOUT_SECONDS, info: dict | None = None, cancel: CancelToken | None = None,
-               images: list[str] | None = None, image_dir: Path | None = None, web: bool = False) -> str:
+               images: list[str] | None = None, image_dir: Path | None = None, web: bool = False,
+               mcp_allow: list[str] | None = None) -> str:
     """which: gpt | claude.  mode: chat(도구 없음, 빈 폴더) | work(작업 폴더 읽기 전용).
     images: 모델에 보여줄 이미지 파일 경로 (GPT: --image, Claude: 파일 읽기 도구).
     web: 웹 검색 허용 (GPT: codex --search, Claude: WebSearch·WebFetch 도구).
-    CLI가 웹 검색 옵션을 모르면 웹 검색 없이 다시 시도하고 info["web_fallback"]=True 로 알린다."""
+    CLI가 웹 검색 옵션을 모르면 웹 검색 없이 다시 시도하고 info["web_fallback"]=True 로 알린다.
+    mcp_allow: None 이면 MCP 끔. 목록이면 Claude 의 MCP 를 켜고 그 도구들만 승인 없이 실행 허용
+               (나머지 MCP 도구는 CLI 가 막고, 막힌 호출은 info["permission_denials"] 로 돌려준다)."""
     if web:
         try:
-            return _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, True)
+            return _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, True, mcp_allow)
         except Cancelled:
             raise
         except CliFailure as exc:
@@ -271,14 +307,15 @@ def call_model(which: str, model: str, prompt: str, mode: str = "chat", workdir:
                 raise
             if info is not None:
                 info["web_fallback"] = True
-    return _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, False)
+    return _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, False, mcp_allow)
 
 
-def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, web) -> str:
+def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, web,
+                mcp_allow=None) -> str:
     images = [str(p) for p in images or []]
     cwd = workdir if mode == "work" and workdir else chat_dir()
     if which == "gpt":
-        name, base = "codex", codex_args(model, web)
+        name, base = "codex", codex_args(model, web, codex_mcp_servers())
         extra: list[str] = []  # read-only 샌드박스는 기본 인수에 포함
         for path in images:  # 이미지는 재시도 때도 빠지지 않도록 기본 인수에 넣는다
             base += ["--image", path]
@@ -287,20 +324,37 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
         if images:
             prompt += "\n\n## Image files to open with the Read tool (in this order)\n" + "\n".join(
                 f"{i}. {p}" for i, p in enumerate(images, start=1))
-        web_tools = ["--allowedTools", WEB_TOOLS] if web else []
-        if mode == "work":
-            extra = ["--tools", "Read,Glob,Grep" + ("," + WEB_TOOLS if web else ""), "--disallowedTools", "mcp__*"] + web_tools
-            if images and image_dir:
-                extra += ["--add-dir", str(image_dir)]
-        elif images:
-            # 이미지 폴더 안에서만 읽기 도구 사용
-            cwd = image_dir or Path(images[0]).parent
-            extra = ["--tools", "Read" + ("," + WEB_TOOLS if web else ""), "--disallowedTools", "mcp__*", *web_tools,
-                     "--system-prompt", CHAT_IMAGE_SYSTEM_PROMPT + (" You may also search the web." if web else "")]
-        elif web:
-            extra = ["--tools", WEB_TOOLS, "--disallowedTools", "mcp__*", *web_tools, "--system-prompt", CHAT_WEB_SYSTEM_PROMPT]
+        mcp = mcp_allow is not None
+        if mcp:
+            prompt += MCP_RULE
+        builtin = ["Read", "Glob", "Grep"] if mode == "work" else (["Read"] if images else [])
+        if web:
+            builtin += WEB_TOOLS.split(",")
+        if mode != "work" and images:
+            cwd = image_dir or Path(images[0]).parent  # 이미지 폴더 안에서만 읽기 도구 사용
+        if not builtin and not mcp:
+            # 순수 대화: 도구·MCP 모두 없음
+            extra = ["--disallowedTools", "*", "--strict-mcp-config", "--system-prompt", CHAT_SYSTEM_PROMPT]
         else:
-            extra = ["--disallowedTools", "*", "--system-prompt", CHAT_SYSTEM_PROMPT]
+            extra = ["--tools", ",".join(builtin)]  # 기본 도구는 읽기·웹 검색만 (빈 문자열이면 없음)
+            if mode == "work" and images and image_dir:
+                extra += ["--add-dir", str(image_dir)]
+            approved = (WEB_TOOLS.split(",") if web else []) + [t for t in (mcp_allow or []) if t.startswith("mcp__")]
+            if approved:
+                extra += ["--allowedTools", ",".join(approved)]
+            if not mcp:
+                extra += ["--strict-mcp-config", "--disallowedTools", "mcp__*"]
+            if mode != "work":
+                if images:
+                    system = CHAT_IMAGE_SYSTEM_PROMPT + (" You may also search the web." if web else "")
+                elif web:
+                    system = CHAT_WEB_SYSTEM_PROMPT
+                else:
+                    system = CHAT_SYSTEM_PROMPT.replace("You have no tools and no file access in this mode.",
+                                                        "You have no file access in this mode.")
+                if mcp:
+                    system += " You may use the MCP tools connected to the user's account, following the rules in the prompt."
+                extra += ["--system-prompt", system]
     try:
         try:
             out = run_cli(name, base + extra, prompt, timeout, cwd, info, cancel)
@@ -344,6 +398,11 @@ def _claude_result(stdout: str, info: dict | None) -> str:
         raise CliFailure("claude", "Claude가 오류를 반환했습니다.", text, "")
     if not text:
         raise CliFailure("claude", "CLI가 빈 응답을 반환했습니다.", stdout, "")
+    denials = data.get("permission_denials") or []
+    if info is not None and isinstance(denials, list):
+        info["permission_denials"] = [
+            {"tool": str(d.get("tool_name", "")), "input": d.get("tool_input") if isinstance(d.get("tool_input"), dict) else {}}
+            for d in denials if isinstance(d, dict) and str(d.get("tool_name", "")).startswith("mcp__")]
     usage = data.get("modelUsage") or {}
     if isinstance(usage, dict) and usage and info is not None:
         def score(item):

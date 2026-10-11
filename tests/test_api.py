@@ -309,4 +309,36 @@ ok(post("/api/debate", {"question":"x"})[0]==410, "legacy debate api retired")
 r = post("/api/debate/open", {"dir":"debates/../../etc"}); ok(r[0]==400, "debate open rejects outside path")
 dd = next(i for i in get("/api/conversation?id="+c1)["items"] if i.get("debate_dir"))["debate_dir"]
 ok(post("/api/debate/open", {"dir":dd})["opened"] is False, "debate open returns path off Windows")
+# ---- MCP (승인 기반) ----
+import time as _t2
+t0=_t2.time(); st = post("/api/mcp/refresh", {}); el=_t2.time()-t0
+ok(el < 15 and [t["name"] for t in st["tools"]]==["mcp__claude_ai_Higgsfield__balance","mcp__claude_ai_Higgsfield__generate_video"], f"mcp discovery stops after init ({el:.1f}s) {st}")
+kinds = {t["tool"]: t["kind"] for t in st["tools"]}; ok(kinds=={"balance":"read","generate_video":"action"} and st["servers"][0]["name"]=="claude.ai Higgsfield", f"mcp tool kinds {kinds}")
+ok(get("/api/mcp")["allowed"]==[], "nothing allowed by default")
+c14 = post("/api/conversations")["id"]
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"MCP 끄고 질문","conversation_id":c14,"target":"claude"}, raw=True)
+log = open(os.environ["FAKE_LOG"]).read(); ok("--strict-mcp-config" in log and "bypassPermissions" not in log, "mcp off: strict mcp config")
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"USE_MCP 영상 만들어줘","conversation_id":c14,"target":"claude","mcp":True}, raw=True)
+log = open(os.environ["FAKE_LOG"]).read()
+ok("--strict-mcp-config" not in log and "bypassPermissions" not in log and "Connected tools (MCP)" in log, "mcp on: servers loaded, no bypass, rule in prompt")
+it = get("/api/conversation?id="+c14)["items"][-1]
+ok(it.get("mcp") and it.get("mcp_denials") and it["mcp_denials"][0]["tool"]=="mcp__claude_ai_Higgsfield__generate_video" and "고양이" in it["mcp_denials"][0]["input"], f"denied tool recorded {it.get('mcp_denials')}")
+post("/api/chat", {"question":"USE_MCP 영상 만들어줘","conversation_id":c14,"target":"claude","mcp":True,"allow_once":["mcp__claude_ai_Higgsfield__generate_video","rm -rf"]}, raw=True)
+its = get("/api/conversation?id="+c14)["items"]
+ok(its[-1]["content"]=="MCP 실행 결과: 생성 완료" and not its[-1].get("mcp_denials") and its[-2].get("allow_once")==["mcp__claude_ai_Higgsfield__generate_video"], "allow once runs the tool, invalid names dropped")
+ok(get("/api/mcp")["allowed"]==[], "allow once is not saved")
+ok(post("/api/mcp/allow", {"tool":"mcp__claude_ai_Higgsfield__balance","allowed":True})["allowed"]==["mcp__claude_ai_Higgsfield__balance"], "always allow saved")
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"잔액?","conversation_id":c14,"target":"claude","mcp":True}, raw=True)
+ok("'--allowedTools', 'mcp__claude_ai_Higgsfield__balance'" in open(os.environ["FAKE_LOG"]).read(), "always-allowed tool passed")
+ok(post("/api/mcp/allow", {"tool":"Bash","allowed":True})[0]==400, "only mcp tools can be allowed")
+post("/api/mcp/allow", {"tool":"mcp__claude_ai_Higgsfield__balance","allowed":False}); ok(get("/api/mcp")["allowed"]==[], "allow revoked")
+os.environ["FAKE_CODEX_MCP"]='[{"name":"higgs","enabled":true},{"name":"bad name","enabled":true}]'
+import council_core as _cc; _cc._codex_mcp_cache[:] = [0.0, []]
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"gpt mcp","conversation_id":c14,"target":"gpt","mcp":True}, raw=True)
+ok("'-c', 'mcp_servers.higgs.enabled=false', 'exec'" in open(os.environ["FAKE_LOG"]).read(), "codex mcp servers disabled for GPT")
+del os.environ["FAKE_CODEX_MCP"]
 srv.shutdown(); shutil.rmtree(tmp); print("ALL PASS; temp data removed")
