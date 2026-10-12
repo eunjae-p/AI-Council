@@ -19,7 +19,7 @@ import threading
 import time
 from pathlib import Path
 
-from council_core import ROOT
+from council_core import ROOT, SETUP_NAME
 
 BRANCH = "main"
 _fetch_cache: dict[str, object] = {"time": 0.0, "ok": False, "error": ""}
@@ -33,7 +33,7 @@ class UpdateError(RuntimeError):
 def _git(*args: str, timeout: int = 60, check: bool = True) -> subprocess.CompletedProcess:
     exe = shutil.which("git")
     if not exe:
-        raise UpdateError("Git이 설치되어 있지 않습니다. Setup.cmd를 다시 실행하거나 https://git-scm.com 에서 설치하세요.")
+        raise UpdateError(f"Git이 설치되어 있지 않습니다. {SETUP_NAME}를 다시 실행하거나 https://git-scm.com 에서 설치하세요.")
     proc = subprocess.run(
         [exe, "-C", str(ROOT), *args], capture_output=True, timeout=timeout, stdin=subprocess.DEVNULL,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
@@ -175,8 +175,11 @@ def restart_detached() -> None:
                 creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0x10),
             )
     else:
+        log_dir = Path(os.environ.get("AI_COUNCIL_DATA_DIR") or ROOT / "data") / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log = open(log_dir / "server.log", "a", encoding="utf-8")  # Mac·Linux: 기록을 남기며 백그라운드 실행
         subprocess.Popen([sys.executable, str(ROOT / "ai_council_web.py")], cwd=str(ROOT), env=env,
-                         start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                         start_new_session=True, stdin=subprocess.DEVNULL, stdout=log, stderr=log)
 
 
 # ---------- 화면 없이 업데이트 (Update.cmd) ----------

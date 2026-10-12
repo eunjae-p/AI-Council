@@ -1,6 +1,6 @@
 # AI Council
 
-> **현재 버전: V0.12.3** (2026-10-12) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.13.0** (2026-10-12) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -9,18 +9,18 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.13.0](CHANGELOG.md#v0130-2026-10-12) | 10-12 | **🍎 Mac 지원** — `Setup-mac.command` 설치·실행·업데이트 |
 | [V0.12.3](CHANGELOG.md#v0123-2026-10-12) | 10-12 | 답변별 Markdown 내려받기(⤓ MD), 전체 대화는 `Chat_md` |
 | [V0.12.2](CHANGELOG.md#v0122-2026-10-12) | 10-12 | 수정: 공백 있는 경로(`C:\Program Files`)에서 GPT 업데이트 버튼 실패 |
 | [V0.12.1](CHANGELOG.md#v0121-2026-10-11) | 10-11 | **화면 테마** — 다크 / 라이트 / 시스템 설정 따르기 |
 | [V0.12.0](CHANGELOG.md#v0120-2026-10-11) | 10-11 | **답변 가독성 개선** — 제목·목록·표·굵은 글씨 표시, 넓은 화면 |
-| [V0.11.2](CHANGELOG.md#v0112-2026-10-11) | 10-11 | 수정: GPT가 `config.toml: invalid transport` 로 바로 실패하던 문제 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
 ## 목차
 
 1. [무엇을 할 수 있나요](#-무엇을-할-수-있나요)
-2. [처음 설치하기](#-처음-설치하기-팀원용)
+2. [처음 설치하기](#-처음-설치하기-팀원용) (Windows · [Mac](#-mac에서-설치하기))
 3. [GPT·Claude 로그인](#-gptclaude-로그인-pc마다-처음-한-번)
 4. [실행 · 종료](#-실행--종료)
 5. [Council 업데이트](#-council-업데이트)
@@ -63,6 +63,23 @@
 3. 바탕화면의 **AI Council** 을 실행합니다. 왼쪽 아래에 빨간 "로그인 필요"가 없으면 준비 완료입니다.
 
 설치가 중간에 실패하면 마지막 표에 실패 항목과 해결 방법이 나옵니다. 새로 설치한 프로그램이 인식되지 않으면 `Setup.cmd` 를 한 번 더 실행하세요.
+
+### 🍎 Mac에서 설치하기
+
+1. **터미널**(응용 프로그램 → 유틸리티)을 열고 원하는 폴더에서 받습니다.
+   ```bash
+   git clone https://github.com/eunjae-p/AI-Council.git
+   ```
+   `git` 이 없다는 창이 뜨면 **설치**를 누르고(Xcode 명령줄 도구), 끝나면 같은 명령을 다시 실행하세요.
+2. Finder에서 받은 폴더의 **`Setup-mac.command`** 를 더블클릭합니다. 자동으로:
+   - Homebrew(Mac 프로그램 설치 도구)가 없으면 공식 설치 프로그램 실행 — Mac 로그인 비밀번호를 물을 수 있습니다
+   - Python 3.10 이상, Node.js, ffmpeg, Codex CLI, Claude Code 설치
+   - 로그인 안내, 바탕화면에 **AI Council** 실행 아이콘 생성
+   - "확인되지 않은 개발자" 경고로 열리지 않으면: 파일을 **우클릭 → 열기** 한 번
+3. 바탕화면의 **AI Council** 을 더블클릭하면 서버가 백그라운드로 켜지고 브라우저가 열립니다. (뜨는 터미널 창은 닫아도 됩니다)
+
+- 업데이트: 화면의 **업데이트 확인 → 지금 업데이트**, 또는 **`Update-mac.command`** 더블클릭
+- 종료: 화면 왼쪽 아래 **앱 종료**. 기록은 `data/logs/server.log`
 
 ## 🔑 GPT·Claude 로그인 (PC마다 처음 한 번)
 
@@ -188,7 +205,8 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 | `council_mcp.py` | MCP 도구 목록 확인, 항상 허용 목록 |
 | `council_versions.py` | CLI 버전 확인·버튼 업데이트·로그인 |
 | `council_update.py` | Council 자체 업데이트 (`Update.cmd` 가 화면 없이 실행) |
-| `Setup.cmd` · `setup.ps1` | 처음 설치 도우미 |
+| `Setup.cmd` · `setup.ps1` | 처음 설치 도우미 (Windows) |
+| `Setup-mac.command` · `AI-Council.command` · `Update-mac.command` | Mac 설치 · 실행 · 업데이트 |
 | `AI-Council_Web.cmd` · `AI-Council_Debug.cmd` · `Update.cmd` | 실행 · 문제 확인용 실행 · 업데이트 |
 | `AI-Council_CLI.ps1` | CLI 연결 확인용 PowerShell 스크립트 |
 | `tests/` | 가짜 CLI(`fake_bin`)를 쓰는 테스트 |

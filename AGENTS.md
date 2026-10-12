@@ -43,6 +43,7 @@
 - `git reset --hard`, 사용자 파일에 대한 `git checkout --` 등 되돌릴 수 없는 명령은 사용자 확인 없이 쓰지 않습니다.
 - 대화 원문 JSONL을 다시 쓰는 마이그레이션 금지 (추가만 함).
 - `.cmd` / `.ps1` 은 CRLF 유지 (`.gitattributes`), `setup.ps1` 은 UTF-8 BOM 유지 (Windows PowerShell 5.1 한글).
+- Mac용 `.command` 는 LF 와 실행 권한(755) 유지. Windows 전용 처리(`os.name == "nt"`)를 추가하면 Mac(`IS_MAC`)·Linux 동작도 확인.
 
 ## 파일 구성
 | 파일 | 역할 |
@@ -60,7 +61,8 @@
 | `council_mcp.py` | MCP 도구 목록·"항상 허용" 목록 (`data/mcp_*.json`). 모든 도구 자동 실행(bypassPermissions)은 쓰지 않음 |
 | `council_versions.py` | Codex/Claude CLI 버전·로그인 상태 |
 | `council_update.py` | Council 자체 업데이트 (GitHub → PC, 안전 검사, 재시작) · `Update.cmd` 가 화면 없이 실행 |
-| `Setup.cmd`, `setup.ps1` | 처음 설치 도우미 |
+| `Setup.cmd`, `setup.ps1` | 처음 설치 도우미 (Windows) |
+| `Setup-mac.command`, `AI-Council.command`, `Update-mac.command` | Mac 설치 · 실행 · 업데이트 |
 | `tests/` | 가짜 CLI(`fake_bin`)를 쓰는 테스트 |
 
 ## 팀 워크플로우 규칙 (워크플로우 파서 관련)

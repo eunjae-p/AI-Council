@@ -355,4 +355,10 @@ cl = _c3.win_cmdline(["C:\\Windows\\system32\\cmd.exe","/d","/s","/c","C:\\Progr
 ok(cl == 'C:\\Windows\\system32\\cmd.exe /d /s /c ""C:\\Program Files\\nodejs\\npm.cmd" install -g @openai/codex@latest"', f"cmd /s quoting {cl}")
 ok(_c3.win_cmdline(["/usr/bin/codex","exec"]) == ["/usr/bin/codex","exec"], "non-cmd commands unchanged")
 ok(_c3.decode_output("'C:\\Program'은(는) 내부 또는 외부 명령".encode("cp949")).startswith("'C:\\Program'은(는)"), "cp949 error text decoded")
+# macOS 실행 파일
+import subprocess as _sp2, stat as _st
+st = get("/api/status"); ok(st["platform"] in ("windows","mac","linux") and st["setup"], "status reports platform/setup")
+for f in ("Setup-mac.command", "AI-Council.command", "Update-mac.command"):
+    fp = ROOT/f; ok(fp.exists() and fp.stat().st_mode & _st.S_IXUSR and b"\r\n" not in fp.read_bytes(), f"{f} exists, executable, LF")
+    ok(_sp2.run(["bash","-n",str(fp)]).returncode == 0, f"{f} bash syntax")
 srv.shutdown(); shutil.rmtree(tmp); print("ALL PASS; temp data removed")

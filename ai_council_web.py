@@ -9,6 +9,7 @@ import json
 import os
 import random
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -29,6 +30,7 @@ from council_core import (
     check_workdir,
     codex_default_model,
     ROOT,
+    SETUP_NAME,
     CliFailure,
     claude_args,
     codex_args,
@@ -44,7 +46,7 @@ import council_update
 from council_state import CliState
 from council_mcp import McpStore, valid_tool
 
-VERSION = "0.12.3"
+VERSION = "0.13.0"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -191,6 +193,8 @@ class Handler(BaseHTTPRequestHandler):
                     "cli": {"codex": cli_available("codex"), "claude": cli_available("claude")},
                     "ffmpeg": council_media.ffmpeg_available(),
                     "default_models": cli_state.defaults(), "usage": cli_state.usage(),
+                    "platform": "windows" if os.name == "nt" else ("mac" if sys.platform == "darwin" else "linux"),
+                    "setup": SETUP_NAME,
                 })
             elif parsed.path == "/api/attachment":
                 self.send_attachment(arg("conversation_id"), arg("file"))
@@ -277,6 +281,9 @@ class Handler(BaseHTTPRequestHandler):
                 opened = False
                 if os.name == "nt":
                     os.startfile(str(target))  # noqa: S606 — 로컬 탐색기 열기
+                    opened = True
+                elif sys.platform == "darwin":
+                    subprocess.Popen(["open", str(target)])  # Finder 로 열기
                     opened = True
                 self.send_json({"opened": opened, "path": str(target)})
             elif path == "/api/mcp/refresh":
@@ -734,7 +741,8 @@ def bind_server() -> ThreadingHTTPServer:
             time.sleep(0.5)
     raise SystemExit(
         f"포트 {PORT}을(를) 사용할 수 없습니다. 다른 프로그램이 사용 중이거나 이전 서버가 응답하지 않습니다.\n"
-        "작업 관리자에서 python.exe / pythonw.exe 를 종료한 뒤 다시 실행하세요."
+        + ("작업 관리자에서 python.exe / pythonw.exe 를 종료한 뒤 다시 실행하세요." if os.name == "nt"
+           else "활성 상태 보기(Activity Monitor)에서 Python 을 종료한 뒤 다시 실행하세요.")
     )
 
 

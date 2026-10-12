@@ -10,13 +10,14 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import threading
 import time
 import urllib.request
 
-from council_core import CliFailure, decode_output, resolve_command, win_cmdline
+from council_core import IS_MAC, SETUP_NAME, CliFailure, decode_output, resolve_command, win_cmdline
 
 PACKAGES = {"codex": "@openai/codex", "claude": "@anthropic-ai/claude-code"}
 # Windows PowerShell 은 npm 이 만든 codex.ps1 / npm.ps1 을 실행 정책 때문에 막는 경우가 많다.
@@ -127,7 +128,7 @@ def _npm_command() -> list[str]:
             if exe:
                 break
     if not exe:
-        raise CliFailure("npm", "Node.js(npm)를 찾을 수 없습니다. Council 폴더의 Setup.cmd를 실행해 설치하세요.")
+        raise CliFailure("npm", f"Node.js(npm)를 찾을 수 없습니다. Council 폴더의 {SETUP_NAME}를 실행해 설치하세요.")
     if exe.lower().endswith((".cmd", ".bat")):
         return [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/s", "/c", exe]
     return [exe]
@@ -146,10 +147,10 @@ def failure_hint(text: str) -> str:
     if "is not recognized" in low or "내부 또는 외부 명령" in text:
         return "프로그램 경로를 실행하지 못했습니다. Council을 최신 버전으로 업데이트한 뒤 다시 시도하세요."
     if "eacces" in low or "permission denied" in low or "access is denied" in low:
-        return "설치 폴더에 쓸 권한이 없습니다. Setup.cmd를 다시 실행하거나 담당자에게 문의하세요."
+        return f"설치 폴더에 쓸 권한이 없습니다. {SETUP_NAME}를 다시 실행하거나 담당자에게 문의하세요."
     if any(k in low for k in ("enotfound", "etimedout", "econnreset", "econnrefused", "network", "getaddrinfo", "unable to connect")):
         return "인터넷 연결 문제로 받지 못했습니다. 회사 네트워크(방화벽)에서 막혔을 수 있습니다."
-    return "아래 기록을 확인하세요. 계속 실패하면 Setup.cmd를 다시 실행해 보세요."
+    return f"아래 기록을 확인하세요. 계속 실패하면 {SETUP_NAME}를 다시 실행해 보세요."
 
 
 def update_cli(name: str) -> dict:
@@ -190,6 +191,14 @@ def open_login(name: str) -> dict:
     그 외 OS: 열 수 없으므로 명령만 돌려준다."""
     if name not in PACKAGES:
         raise ValueError("알 수 없는 CLI 입니다.")
+    if IS_MAC:
+        # Mac: 터미널 앱을 열어 로그인 명령을 실행 (브라우저 로그인이 이어서 열림)
+        exe = resolve_command(name)[-1]
+        cmd = f"clear; echo '{NAMES[name]} 로그인 — 브라우저가 열리면 계정으로 로그인하세요.'; " \
+              f"{shlex.quote(exe)} {' '.join(LOGIN_RUN[name])}; echo; echo '끝났으면 이 창을 닫고 AI Council 로 돌아가세요.'"
+        script = f'tell application "Terminal" to do script "{cmd.replace(chr(92), chr(92) * 2).replace(chr(34), chr(92) + chr(34))}"'
+        subprocess.Popen(["osascript", "-e", script, "-e", 'tell application "Terminal" to activate'])
+        return {"opened": True, "command": LOGIN_COMMANDS[name]}
     if os.name != "nt":
         return {"opened": False, "command": LOGIN_COMMANDS[name]}
     import tempfile

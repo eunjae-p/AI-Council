@@ -10,11 +10,22 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
+IS_WINDOWS = os.name == "nt"
+IS_MAC = sys.platform == "darwin"
+SETUP_NAME = "Setup.cmd" if IS_WINDOWS else "Setup-mac.command"  # 화면 안내에 쓰는 설치 도우미 이름
+
+if not IS_WINDOWS:
+    # Finder 에서 실행하면 터미널 설정(PATH)이 안 읽혀 brew·npm·claude 를 못 찾을 수 있어 흔한 위치를 더한다
+    _extra = ["/opt/homebrew/bin", "/usr/local/bin", str(Path.home() / ".local" / "bin"),
+              str(Path.home() / ".npm-global" / "bin"), str(Path.home() / ".claude" / "local")]
+    _path = os.environ.get("PATH", "").split(os.pathsep)
+    os.environ["PATH"] = os.pathsep.join(_path + [d for d in _extra if d not in _path and os.path.isdir(d)])
 
 ACCOUNT_DEFAULT = "account default"
 # 이전 버전과의 호환용 이름

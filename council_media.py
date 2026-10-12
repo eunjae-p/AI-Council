@@ -14,6 +14,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from council_core import SETUP_NAME
+
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 VIDEO_EXT = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v", ".mpg", ".mpeg", ".wmv"}
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
@@ -59,7 +61,7 @@ def find_tool(name: str) -> str:
     return next((c for c in candidates if c and os.path.isfile(c)), "")
 
 
-FFMPEG_MISSING = ("이 PC에 ffmpeg가 없어 영상을 분석할 수 없습니다. Council 폴더의 Setup.cmd를 실행해 ffmpeg를 설치한 뒤 "
+FFMPEG_MISSING = (f"이 PC에 ffmpeg가 없어 영상을 분석할 수 없습니다. Council 폴더의 {SETUP_NAME}를 실행해 ffmpeg를 설치한 뒤 "
                   "Council을 다시 시작하세요. (이미지·텍스트 첨부는 ffmpeg 없이도 됩니다)")
 
 
