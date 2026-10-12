@@ -226,7 +226,7 @@ details.indiv .msg{margin-top:10px}
       <div class="acts">
         <button class="ghost small" id="renameBtn">✎ <span class="lbl">제목</span></button>
         <button class="ghost small" id="archiveBtn">⇩ <span class="lbl">보관</span></button>
-        <button class="ghost small" id="exportBtn">⤓ <span class="lbl">Markdown</span></button>
+        <button class="ghost small" id="exportBtn" title="이 대화 전체(모든 질문·답변·토론 과정)를 Markdown 파일로 내려받기">⤓ <span class="lbl">Chat_md</span></button>
         <button class="ghost small danger" id="deleteBtn">🗑 <span class="lbl">삭제</span></button>
       </div>
     </div>
@@ -295,7 +295,7 @@ details.indiv .msg{margin-top:10px}
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.12.2'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.12.3'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const store = { get(k){ try { return localStorage.getItem(k); } catch { return null; } }, set(k,v){ try { localStorage.setItem(k,v); } catch {} } };
@@ -415,7 +415,10 @@ function msgEl(item, index) {
   if (item.cli_model) head.append(el('span', '', item.cli_model));
   if (item.elapsed) head.append(el('span', '', `${item.elapsed}s`));
   head.append(el('span', 'sp'), el('span', '', fmt(item.time)));
-  if (w !== 'user') { const c = el('button', 'ghost small', '복사'); c.onclick = () => copyText(item.content); head.append(c); }
+  if (w !== 'user') {
+    const c = el('button', 'ghost small', '복사'); c.onclick = () => copyText(item.content); head.append(c);
+    if (w !== '오류') { const d = el('button', 'ghost small', '⤓ MD'); d.title = '이 답변만 Markdown 파일로 내려받기'; d.onclick = () => downloadAnswer(item, index); head.append(d); }
+  }
   const body = el('div', 'content'); renderText(body, item.content);
   box.append(head, body);
   if (item.mcp_denials && item.mcp_denials.length && index != null) box.append(mcpDenialCard(item, index));
@@ -686,6 +689,25 @@ $('#deleteBtn').onclick = async () => {
   try { const id = S.current; await api('/api/conversation/delete', { id }); toast('휴지통으로 옮겼습니다'); await openFallback(id); }
   catch (e) { toast(e.message, true); }
 };
+// 답변 하나만 Markdown 으로 내려받기 (질문 + 이 답변) — 토론이 길어도 필요한 결론만 저장
+function downloadAnswer(item, index) {
+  let q = null; if (index != null) for (let i = index - 1; i >= 0; i--) if (S.items[i] && S.items[i].role === 'user') { q = S.items[i]; break; }
+  const label = (LABEL[item.model] || item.model || '답변') + (item.round ? ' · ' + ROUND[item.round] : '');
+  const d = new Date((item.time || Date.now() / 1000) * 1000), pad = n => String(n).padStart(2, '0');
+  const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+  const title = (S.meta && S.meta.title) || '대화';
+  const lines = [`# ${title} — ${label}`, '', `- 시각: ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`];
+  if (item.cli_model) lines.push(`- 모델: ${item.cli_model}`);
+  if (item.web) lines.push('- 웹 검색 사용');
+  if (q) lines.push('', '## 질문', '', q.content.trim());
+  lines.push('', `## ${label}`, '', String(item.content || '').trim(), '');
+  const safe = t => t.replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').replace(/\s+/g, ' ').trim().slice(0, 60) || '대화';
+  const short = { GPT:'GPT', Claude:'Claude', Council:'결론' }[item.model] || '답변';
+  const name = `${safe(title)}_${short}${item.round ? '_' + (item.round === 1 ? '1차의견' : '교차검토') : ''}_${stamp}.md`;
+  const a = el('a'); a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type:'text/markdown;charset=utf-8' })); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast('내려받기: ' + name);
+}
 $('#exportBtn').onclick = async () => {
   if (!S.meta) return;
   try {
