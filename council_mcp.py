@@ -22,7 +22,7 @@ import threading
 import time
 from pathlib import Path
 
-from council_core import CliFailure, chat_dir, resolve_command
+from council_core import CliFailure, chat_dir, resolve_command, win_cmdline
 
 DISCOVER_TIMEOUT = 90
 _lock = threading.Lock()
@@ -120,7 +120,7 @@ def discover_claude() -> tuple[list[dict], list[str]]:
     command = resolve_command("claude") + [
         "-p", "--no-session-persistence", "--output-format", "stream-json", "--verbose", "--tools", "",
     ]  # 시작 정보(init)를 받는 즉시 종료하므로 도구는 실행되지 않는다
-    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    process = subprocess.Popen(win_cmdline(command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                cwd=str(chat_dir()), creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     result: dict = {}
 

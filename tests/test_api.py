@@ -349,4 +349,10 @@ ev = post("/api/chat", {"question":"config err","conversation_id":c14,"target":"
 ok(get("/api/conversation?id="+c14)["items"][-1]["role"]=="assistant", f"config error retries without mcp override {[e['type'] for e in ev]}")
 (tmp/"nocodex"/"config.toml").unlink()
 del os.environ["FAKE_CODEX_MCP"]
+# Windows: 공백 있는 경로의 .cmd 실행 명령줄 (C:\Program Files\nodejs\npm.cmd)
+import council_core as _c3
+cl = _c3.win_cmdline(["C:\\Windows\\system32\\cmd.exe","/d","/s","/c","C:\\Program Files\\nodejs\\npm.cmd","install","-g","@openai/codex@latest"])
+ok(cl == 'C:\\Windows\\system32\\cmd.exe /d /s /c ""C:\\Program Files\\nodejs\\npm.cmd" install -g @openai/codex@latest"', f"cmd /s quoting {cl}")
+ok(_c3.win_cmdline(["/usr/bin/codex","exec"]) == ["/usr/bin/codex","exec"], "non-cmd commands unchanged")
+ok(_c3.decode_output("'C:\\Program'은(는) 내부 또는 외부 명령".encode("cp949")).startswith("'C:\\Program'은(는)"), "cp949 error text decoded")
 srv.shutdown(); shutil.rmtree(tmp); print("ALL PASS; temp data removed")

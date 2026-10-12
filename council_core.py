@@ -71,6 +71,30 @@ def trim_log(text: str, limit: int = 3000) -> str:
     return picked[-limit:]
 
 
+def decode_output(data: bytes) -> str:
+    """CLI 출력은 UTF-8, Windows 명령 프롬프트(cmd) 오류는 한글 코드페이지(cp949)일 수 있어 둘 다 처리."""
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        import locale
+        for enc in (locale.getpreferredencoding(False), "cp949"):
+            try:
+                return data.decode(enc)
+            except (UnicodeDecodeError, LookupError):
+                continue
+        return data.decode("utf-8", errors="replace")
+
+
+def win_cmdline(command: list[str]) -> list[str] | str:
+    """.cmd 프로그램(npm.cmd, codex.cmd 등)을 cmd.exe /s /c 로 실행할 때 쓸 명령줄.
+    cmd 의 /s 는 명령 전체의 첫·마지막 따옴표를 벗기므로, 경로에 공백이 있으면
+    ("C:\\Program Files\\nodejs\\npm.cmd") 'C:\\Program' 을 찾을 수 없다는 오류가 난다 (V0.12.1 까지).
+    → .cmd 이하 전체를 한 번 더 따옴표로 감싼 문자열로 넘긴다. 그 외에는 목록 그대로."""
+    if len(command) >= 5 and [c.lower() for c in command[1:4]] == ["/d", "/s", "/c"]:
+        return subprocess.list2cmdline(command[:4]) + ' "' + subprocess.list2cmdline(command[4:]) + '"'
+    return command
+
+
 def resolve_command(name: str) -> list[str]:
     exe = shutil.which(f"{name}.exe")
     if exe:
@@ -170,7 +194,7 @@ def run_cli(name: str, arguments: list[str], prompt: str, timeout: int = TIMEOUT
     """CLI에 prompt를 stdin으로 전달하고 stdout을 돌려준다. 실패하면 CliFailure."""
     if cancel is not None and cancel.cancelled:
         raise Cancelled(name)
-    command = resolve_command(name) + arguments
+    command = win_cmdline(resolve_command(name) + arguments)
     creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     try:
         process = subprocess.Popen(
@@ -211,8 +235,8 @@ def run_cli(name: str, arguments: list[str], prompt: str, timeout: int = TIMEOUT
     if cancel is not None and cancel.cancelled:
         raise Cancelled(name)
 
-    stdout = stdout_bytes.decode("utf-8", errors="replace").strip()
-    stderr = stderr_bytes.decode("utf-8", errors="replace").strip()
+    stdout = decode_output(stdout_bytes).strip()
+    stderr = decode_output(stderr_bytes).strip()
     if info is not None:
         info["stderr"] = stderr
     if process.returncode != 0:

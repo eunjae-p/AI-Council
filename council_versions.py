@@ -16,7 +16,7 @@ import threading
 import time
 import urllib.request
 
-from council_core import CliFailure, resolve_command
+from council_core import CliFailure, decode_output, resolve_command, win_cmdline
 
 PACKAGES = {"codex": "@openai/codex", "claude": "@anthropic-ai/claude-code"}
 # Windows PowerShell 은 npm 이 만든 codex.ps1 / npm.ps1 을 실행 정책 때문에 막는 경우가 많다.
@@ -54,7 +54,7 @@ def newer(latest: str, installed: str) -> bool:
 def installed_version(name: str) -> str:
     try:
         out = subprocess.run(
-            resolve_command(name) + ["--version"], capture_output=True, timeout=20, stdin=subprocess.DEVNULL,
+            win_cmdline(resolve_command(name) + ["--version"]), capture_output=True, timeout=20, stdin=subprocess.DEVNULL,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         return parse(out.stdout.decode("utf-8", "replace") + out.stderr.decode("utf-8", "replace"))
@@ -70,7 +70,7 @@ def logged_in(name: str) -> bool | None:
     """로그인 여부. 확인할 수 없으면 None (구독 사용량을 쓰지 않는 상태 확인 명령)."""
     try:
         out = subprocess.run(
-            resolve_command(name) + LOGIN_ARGS[name], capture_output=True, timeout=20, stdin=subprocess.DEVNULL,
+            win_cmdline(resolve_command(name) + LOGIN_ARGS[name]), capture_output=True, timeout=20, stdin=subprocess.DEVNULL,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
     except (CliFailure, OSError, subprocess.TimeoutExpired):
@@ -143,6 +143,8 @@ def failure_hint(text: str) -> str:
     low = text.lower()
     if any(k in low for k in ("ebusy", "eperm", "resource busy", "being used by another process")):
         return "CLI 파일이 사용 중이라 바꾸지 못했습니다. 다른 터미널에서 실행 중인 codex/claude를 모두 닫고 다시 시도하세요."
+    if "is not recognized" in low or "내부 또는 외부 명령" in text:
+        return "프로그램 경로를 실행하지 못했습니다. Council을 최신 버전으로 업데이트한 뒤 다시 시도하세요."
     if "eacces" in low or "permission denied" in low or "access is denied" in low:
         return "설치 폴더에 쓸 권한이 없습니다. Setup.cmd를 다시 실행하거나 담당자에게 문의하세요."
     if any(k in low for k in ("enotfound", "etimedout", "econnreset", "econnrefused", "network", "getaddrinfo", "unable to connect")):
@@ -160,9 +162,9 @@ def update_cli(name: str) -> dict:
     except CliFailure as exc:
         return {"ok": False, "before": before, "after": before, "output": "", "hint": str(exc)}
     try:
-        proc = subprocess.run(args, capture_output=True, timeout=UPDATE_TIMEOUT, stdin=subprocess.DEVNULL,
+        proc = subprocess.run(win_cmdline(args), capture_output=True, timeout=UPDATE_TIMEOUT, stdin=subprocess.DEVNULL,
                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        output = (proc.stdout + proc.stderr).decode("utf-8", "replace")
+        output = decode_output(proc.stdout) + decode_output(proc.stderr)
         code = proc.returncode
     except subprocess.TimeoutExpired:
         output, code = f"{UPDATE_TIMEOUT // 60}분 안에 끝나지 않아 중단했습니다.", -1
