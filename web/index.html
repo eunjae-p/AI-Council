@@ -62,7 +62,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--gpt);box-shadow:0 0 0
 .group{color:var(--dim);font-size:11.5px;letter-spacing:.06em;padding:10px 10px 4px}
 .side .foot{padding:10px 12px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center;color:var(--dim);font-size:12px}
 .upbar{padding:8px 12px;border-top:1px solid var(--line);font-size:12px;color:var(--dim);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.upbar .new{color:var(--council);font-weight:700;cursor:pointer;text-decoration:underline dotted}
+.upbar .appline{line-height:1.5} .upbar #appVer b{font-weight:600;color:var(--muted)}
+.upbar #upErr{color:var(--dim)}
 .modal{position:fixed;inset:0;background:#000a;display:flex;align-items:center;justify-content:center;z-index:30;padding:16px}
 .modal .box{background:var(--panel);border:1px solid var(--line2);border-radius:14px;padding:18px 20px;width:min(560px,100%);max-height:80vh;overflow:auto;box-shadow:0 20px 60px #0008}
 .modal h3{margin:0 0 10px;font-size:16px} .modal pre{white-space:pre-wrap;background:var(--code-bg);border:1px solid var(--line);border-radius:8px;padding:10px;font:12.5px/1.55 ui-monospace,Consolas,monospace;margin:8px 0}
@@ -214,7 +215,7 @@ details.indiv .msg{margin-top:10px}
       <button data-scope="trash">휴지통</button>
     </div>
     <div class="list" id="list"></div>
-    <div class="upbar" id="upbar"><span id="appVer">Council</span><span class="upd" id="upCheck">업데이트 확인</span><span class="new" id="upNew" hidden></span></div>
+    <div class="upbar" id="upbar"><div class="appline"><span id="appVer">● Council <b>…</b></span><span class="upd" id="upNew" hidden></span><span class="upd" id="upErr" hidden></span></div></div>
     <div class="foot"><span class="cli" id="cli">CLI 확인 중…</span><button class="small" id="quit">앱 종료</button></div>
   </aside>
   <div class="scrim" id="scrim"></div>
@@ -295,7 +296,7 @@ details.indiv .msg{margin-top:10px}
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.13.1'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.13.2'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const store = { get(k){ try { return localStorage.getItem(k); } catch { return null; } }, set(k,v){ try { localStorage.setItem(k,v); } catch {} } };
@@ -916,7 +917,7 @@ async function loadVersions(force) {
     f.onclick = () => modal('ffmpeg 설치', `Council 폴더의 ${S.setup || 'Setup.cmd'}를 실행하면 ffmpeg가 설치됩니다.\n설치 후 Council을 다시 시작하세요.\n\n직접 설치: ${S.platform === 'mac' ? 'brew install ffmpeg' : 'winget install Gyan.FFmpeg'}`); box.append(f); }
   const both = ['codex', 'claude'].filter(k => v[k].outdated);
   if (both.length === 2) { const a = el('span', 'upd', '⬆ 둘 다 업데이트하기'); a.onclick = () => confirmCliUpdate(both, v); box.append(a); }
-  const r = el('span', 'upd recheck', '버전 다시 확인'); r.style.color = 'var(--dim)'; r.onclick = () => loadVersions(true); box.append(r);
+  const r = el('span', 'upd recheck', '버전 다시 확인'); r.style.color = 'var(--dim)'; r.onclick = () => { loadVersions(true); checkUpdate(true, true); }; box.append(r);
   renderUsage();
   if (outdated.length && !force) toast('GPT/Claude 프로그램 업데이트 또는 로그인이 필요합니다. 왼쪽 아래 노란·빨간 글씨를 누르세요.', true);
 }
@@ -1073,21 +1074,22 @@ function modal(title, body, buttons) {
   box.append(row); m.append(box); m.onclick = e => { if (e.target === m) m.remove(); };
   document.body.append(m); return m;
 }
+// Council 자체 업데이트: GPT·Claude 버전처럼 평소에는 버전만, 새 버전이 있을 때만 노란 "⬆ 업데이트하기"
 async function checkUpdate(force, quiet) {
-  if (!quiet) { $('#upCheck').textContent = '확인 중…'; }
   let r; try { r = await api('/api/update/check' + (force ? '?refresh=1' : '')); }
   catch (e) { if (!quiet) toast('업데이트 확인 실패: ' + e.message, true); return; }
-  finally { $('#upCheck').textContent = '업데이트 확인'; }
-  const n = $('#upNew');
+  const n = $('#upNew'), err = $('#upErr');
+  n.hidden = err.hidden = true;
   if (r.status === 'available') {
-    n.hidden = false; n.textContent = `새 버전${r.remote ? ' V' + r.remote : ''} 있음`;
+    n.hidden = false; n.textContent = `⬆ ${r.remote ? 'V' + r.remote + ' ' : ''}업데이트하기`;
+    n.title = `현재 V${r.running} → 새 V${r.remote || '?'} · 누르면 변경 내역을 보고 업데이트합니다`;
     n.onclick = () => showUpdate(r);
     if (!quiet) showUpdate(r);
-  } else {
-    n.hidden = true;
-    if (!quiet) modal(r.status === 'latest' ? '최신 버전입니다' : '업데이트를 확인할 수 없습니다',
-      r.status === 'latest' ? `현재 V${r.running} · GitHub 최신 상태와 같습니다.` : r.message);
-  }
+  } else if (r.status !== 'latest') {
+    err.hidden = false; err.textContent = '업데이트 확인 불가'; err.title = r.message || '';
+    err.onclick = () => modal('업데이트를 확인할 수 없습니다', r.message || '');
+    if (!quiet) modal('업데이트를 확인할 수 없습니다', r.message || '');
+  } else if (!quiet) toast(`Council V${r.running} · 최신 버전입니다`);
 }
 function showUpdate(r) {
   const body = `현재 V${r.running} → 새 V${r.remote || '?'}  (변경 ${r.behind}개)\n\n` +
@@ -1110,7 +1112,7 @@ async function applyUpdate() {
   };
   setTimeout(poll, 2500);
 }
-$('#upCheck').onclick = () => checkUpdate(true, false);
+setInterval(() => { if (!S.running) checkUpdate(false, true); }, 30 * 60 * 1000);  // 켜 둔 동안 30분마다 조용히 확인
 
 // ---------- 기타 ----------
 $('#newBtn').onclick = () => newConversation().catch(e => toast(e.message, true));
@@ -1137,7 +1139,7 @@ window.addEventListener('hashchange', () => { const id = (location.hash.match(/^
     $('#cli').title = 'CLI 감지 여부 (PATH 기준)'; if (!s.cli.codex || !s.cli.claude) toast('일부 CLI를 찾지 못했습니다. PATH를 확인하세요.', true);
     S.platform = s.platform; S.setup = s.setup; S.ffmpeg = s.ffmpeg; S.defaults = s.default_models; S.usage = s.usage; updateModelInfo();
     loadVersions(false);
-    $('#appVer').textContent = 'Council V' + s.version;
+    $('#appVer').querySelector('b').textContent = 'V' + s.version;
     checkUpdate(false, true);
   }).catch(() => { $('#cli').textContent = '서버 연결 실패'; });
   try {
