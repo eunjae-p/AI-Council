@@ -121,7 +121,8 @@ def discover_claude() -> tuple[list[dict], list[str]]:
         "-p", "--no-session-persistence", "--output-format", "stream-json", "--verbose", "--tools", "",
     ]  # 시작 정보(init)를 받는 즉시 종료하므로 도구는 실행되지 않는다
     process = subprocess.Popen(win_cmdline(command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                               cwd=str(chat_dir()), creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                               cwd=str(chat_dir()), creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                               start_new_session=os.name != "nt")
     result: dict = {}
 
     def reader() -> None:

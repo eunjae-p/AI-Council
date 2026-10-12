@@ -154,6 +154,17 @@ def _kill_tree(process: subprocess.Popen[bytes]) -> None:
             check=False,
             timeout=15,
         )
+    else:
+        # Mac·Linux: CLI(codex 등)는 자식 프로세스를 띄우므로 같은 프로세스 그룹 전체를 종료
+        import signal
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+            try:
+                process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
     if process.poll() is None:
         process.kill()
 
@@ -215,6 +226,7 @@ def run_cli(name: str, arguments: list[str], prompt: str, timeout: int = TIMEOUT
             stderr=subprocess.PIPE,
             cwd=str(cwd or ROOT),
             creationflags=creation_flags,
+            start_new_session=os.name != "nt",  # Mac·Linux: 중지할 때 자식 프로세스까지 함께 끄기 위해 그룹 분리
         )
     except OSError as exc:
         raise CliFailure(name, f"{name} 실행 실패: {exc}") from exc

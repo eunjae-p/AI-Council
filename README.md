@@ -1,6 +1,6 @@
 # AI Council
 
-> **현재 버전: V0.13.0** (2026-10-12) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.13.1** (2026-10-12) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -9,11 +9,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.13.1](CHANGELOG.md#v0131-2026-10-12) | 10-12 | Mac: 중지 버튼이 하위 프로세스까지 종료 |
 | [V0.13.0](CHANGELOG.md#v0130-2026-10-12) | 10-12 | **🍎 Mac 지원** — `Setup-mac.command` 설치·실행·업데이트 |
 | [V0.12.3](CHANGELOG.md#v0123-2026-10-12) | 10-12 | 답변별 Markdown 내려받기(⤓ MD), 전체 대화는 `Chat_md` |
 | [V0.12.2](CHANGELOG.md#v0122-2026-10-12) | 10-12 | 수정: 공백 있는 경로(`C:\Program Files`)에서 GPT 업데이트 버튼 실패 |
 | [V0.12.1](CHANGELOG.md#v0121-2026-10-11) | 10-11 | **화면 테마** — 다크 / 라이트 / 시스템 설정 따르기 |
-| [V0.12.0](CHANGELOG.md#v0120-2026-10-11) | 10-11 | **답변 가독성 개선** — 제목·목록·표·굵은 글씨 표시, 넓은 화면 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
