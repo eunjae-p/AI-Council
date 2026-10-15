@@ -42,6 +42,7 @@
 - `data/`(대화 기록·첨부 원본), `exports/` 는 절대 커밋하지 않습니다 (`.gitignore` 유지).
 - `git reset --hard`, 사용자 파일에 대한 `git checkout --` 등 되돌릴 수 없는 명령은 사용자 확인 없이 쓰지 않습니다.
 - 대화 원문 JSONL을 다시 쓰는 마이그레이션 금지 (추가만 함).
+- 수정 모드에서 모델에게 명령 실행(Bash) 권한이나 `bypassPermissions` 를 주지 않습니다. 저장점(깨끗한 Git 상태) 없이 수정 실행 금지.
 - `.cmd` / `.ps1` 은 CRLF 유지 (`.gitattributes`), `setup.ps1` 은 UTF-8 BOM 유지 (Windows PowerShell 5.1 한글).
 - Mac용 `.command` 는 LF 와 실행 권한(755) 유지. Windows 전용 처리(`os.name == "nt"`)를 추가하면 Mac(`IS_MAC`)·Linux 동작도 확인.
 
@@ -59,6 +60,7 @@
 | `council_debate.py` | 토론 모드 프롬프트(1라운드·2라운드·결론), 토론 기록 폴더 (`data/debates/`) |
 | `council_state.py` | 계정 기본 모델(실제 사용 모델) 기억, 날짜별 사용 횟수 (`data/cli_state.json`) |
 | `council_mcp.py` | MCP 도구 목록·"항상 허용" 목록 (`data/mcp_*.json`). 모든 도구 자동 실행(bypassPermissions)은 쓰지 않음 |
+| `council_edit.py` | ✏️ 수정 모드: Git 저장점·변경 내용(diff)·확정(커밋)/되돌리기. Claude 는 Edit·Write + acceptEdits 만(Bash 없음), Codex 는 workspace-write. bypassPermissions 금지 |
 | `council_versions.py` | Codex/Claude CLI 버전·로그인 상태 |
 | `council_update.py` | Council 자체 업데이트 (GitHub → PC, 안전 검사, 재시작) · `Update.cmd` 가 화면 없이 실행 |
 | `Setup.cmd`, `setup.ps1` | 처음 설치 도우미 (Windows) |

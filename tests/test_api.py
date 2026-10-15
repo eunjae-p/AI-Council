@@ -361,4 +361,44 @@ st = get("/api/status"); ok(st["platform"] in ("windows","mac","linux") and st["
 for f in ("Setup-mac.command", "AI-Council.command", "Update-mac.command"):
     fp = ROOT/f; ok(fp.exists() and fp.stat().st_mode & _st.S_IXUSR and b"\r\n" not in fp.read_bytes(), f"{f} exists, executable, LF")
     ok(_sp2.run(["bash","-n",str(fp)]).returncode == 0, f"{f} bash syntax")
+# ---- 수정 모드 ----
+import subprocess as _sp3
+ed = tmp/"editrepo"; ed.mkdir()
+c15 = post("/api/conversations")["id"]
+r = post("/api/chat", {"question":"EDIT_FILE 고쳐줘","conversation_id":c15,"target":"claude","mode":"edit","workdir":str(ed)})
+ok(r[0]==409 and r[1]["edit_status"]["repo"] is False, "edit mode refuses non-git folder")
+st = post("/api/edit/checkpoint", {"workdir":str(ed)}); ok(st["repo"] and st["clean"], f"checkpoint creates repo {st}")
+(ed/"app.txt").write_text("원본\n", encoding="utf-8")
+r = post("/api/chat", {"question":"EDIT_FILE 고쳐줘","conversation_id":c15,"target":"claude","mode":"edit","workdir":str(ed)})
+ok(r[0]==409 and "app.txt" in r[1]["edit_status"]["changed"], "edit mode refuses dirty folder")
+post("/api/edit/checkpoint", {"workdir":str(ed)})
+open(os.environ["FAKE_LOG"],"w").close()
+ev = post("/api/chat", {"question":"EDIT_FILE 고쳐줘","conversation_id":c15,"target":"claude","mode":"edit","workdir":str(ed)}, raw=True)
+log = open(os.environ["FAKE_LOG"]).read()
+ok("'--permission-mode', 'acceptEdits'" in log and "Edit,Write" in log and "Bash" not in log, "claude edit permissions: Edit/Write only, acceptEdits")
+its = get("/api/conversation?id="+c15)["items"]; rec = its[-1]
+ok(rec["role"]=="edit" and {f["path"]:f["status"] for f in rec["files"]}=={"claude_new.txt":"new","app.txt":"modified"} and "+Claude 수정" in rec["diff"], f"changes recorded {rec.get('files')}")
+ok(post("/api/edit/apply", {"conversation_id":c15,"ref":rec["id"],"action":"revert"})["ok"], "revert ok")
+ok(not (ed/"claude_new.txt").exists() and (ed/"app.txt").read_text(encoding="utf-8")=="원본\n", "revert restored files")
+ok(post("/api/edit/apply", {"conversation_id":c15,"ref":rec["id"],"action":"commit"})[0]==409, "cannot apply twice")
+post("/api/chat", {"question":"EDIT_FILE 다시","conversation_id":c15,"target":"claude","mode":"edit","workdir":str(ed)}, raw=True)
+rec2 = get("/api/conversation?id="+c15)["items"][-1]
+ok(post("/api/edit/apply", {"conversation_id":c15,"ref":rec2["id"],"action":"commit","message":"테스트 커밋"})["ok"], "commit ok")
+logtxt = _sp3.run(["git","-C",str(ed),"log","--oneline"],capture_output=True,text=True).stdout
+ok("테스트 커밋" in logtxt and (ed/"claude_new.txt").exists(), f"commit recorded {logtxt}")
+# GPT 수정: workspace-write 샌드박스
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"EDIT_FILE gpt","conversation_id":c15,"target":"gpt","mode":"edit","workdir":str(ed)}, raw=True)
+ok("'--sandbox', 'workspace-write'" in open(os.environ["FAKE_LOG"]).read() and (ed/"gpt_new.txt").exists(), "codex edit uses workspace-write")
+recg = get("/api/conversation?id="+c15)["items"][-1]; post("/api/edit/apply", {"conversation_id":c15,"ref":recg["id"],"action":"revert"})
+ok(not (ed/"gpt_new.txt").exists(), "gpt changes reverted")
+# 토론 + 수정: 1·2라운드는 읽기 전용, 결론 뒤 Claude 한 모델만 구현
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"EDIT_FILE 토론 후 수정","conversation_id":c15,"target":"both","mode":"edit","workdir":str(ed)}, raw=True)
+log = open(os.environ["FAKE_LOG"]).read()
+items = get("/api/conversation?id="+c15)["items"]
+impl = [i for i in items if i.get("round")==3]
+ok(len(impl)==1 and impl[0]["model"]=="Claude" and items[-1]["role"]=="edit", "discussion+edit: Claude implements after conclusion")
+ok(log.count("acceptEdits")==1 and "workspace-write" not in log and "planning round" in log, "planning rounds are read-only")
+post("/api/edit/apply", {"conversation_id":c15,"ref":items[-1]["id"],"action":"revert"})
 srv.shutdown(); shutil.rmtree(tmp); print("ALL PASS; temp data removed")

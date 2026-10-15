@@ -25,6 +25,10 @@ open(os.environ["FAKE_LOG"],"a").write("=====CLAUDE "+repr(sys.argv[1:])+" CWD="
 if "long-term memory" in p:
     if os.environ.get("FAIL_SUMMARY"): sys.stderr.write("summary boom"); sys.exit(2)
     out("- 사용자 선호: 한국어\n- 결정: 요약 테스트"); sys.exit(0)
+if "EDIT_FILE" in p and "acceptEdits" in sys.argv and "Implement the agreed conclusion" in p or ("EDIT_FILE" in p and "acceptEdits" in sys.argv and "planning round" not in p):
+    open("claude_new.txt","w").write("Claude가 만든 파일\n")
+    if os.path.exists("app.txt"): open("app.txt","a").write("Claude 수정\n")
+    out("파일을 수정했습니다: claude_new.txt, app.txt"); sys.exit(0)
 if "USE_MCP" in p:
     allowed = sys.argv[sys.argv.index("--allowedTools")+1] if "--allowedTools" in sys.argv else ""
     want = "mcp__claude_ai_Higgsfield__generate_video"

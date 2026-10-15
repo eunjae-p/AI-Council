@@ -34,6 +34,8 @@ def mark_skipped(items: list[dict]) -> list[dict]:
 
 
 def message_block(item: dict) -> str:
+    if item.get("role") == "edit":  # 수정 결과 기록은 짧게만 (diff 는 빼고)
+        return "" if item.get("_skip") else f"[파일 변경 기록]\n{item.get('content', '')}"
     if item.get("_skip") or item.get("round") == 2:  # 토론의 교차 검토는 결론에 반영되므로 다음 맥락에서는 생략
         return ""
     who = speaker(item)

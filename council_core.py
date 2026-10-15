@@ -123,14 +123,15 @@ def resolve_command(name: str) -> list[str]:
     raise CliFailure(name, f"{name} CLI를 찾을 수 없습니다. PATH 설정을 확인하세요.")
 
 
-def codex_args(model: str = "", web: bool = False, disable_mcp: list[str] | tuple = ()) -> list[str]:
+def codex_args(model: str = "", web: bool = False, disable_mcp: list[str] | tuple = (), write: bool = False) -> list[str]:
     args = ["--search"] if web else []  # --search, -c 는 exec 앞에 오는 전체 옵션
     for server in disable_mcp:  # Codex 에 등록된 MCP 서버는 이번 실행에서 끈다 (GPT 쪽 MCP 는 아직 미지원)
         args += ["-c", f"mcp_servers.{server}.enabled=false"]
     args.append("exec")
     if model and model != ACCOUNT_DEFAULT:
         args += ["--model", model]
-    args += ["--ephemeral", "--skip-git-repo-check", "--sandbox", "read-only", "--color", "never"]
+    # 수정 모드: 작업 폴더 안에서만 쓰기 가능한 샌드박스 (네트워크는 막힘). 그 외에는 읽기 전용
+    args += ["--ephemeral", "--skip-git-repo-check", "--sandbox", "workspace-write" if write else "read-only", "--color", "never"]
     return args
 
 
@@ -270,7 +271,8 @@ def run_cli(name: str, arguments: list[str], prompt: str, timeout: int = TIMEOUT
 
 
 # ---------- 대화 모드 / 작업 모드 ----------
-MODES = {"chat", "work"}
+MODES = {"chat", "work", "edit"}  # edit: 작업 폴더의 파일을 직접 만들고 고침 (council_edit 가 Git 으로 관리)
+FOLDER_MODES = {"work", "edit"}
 CHAT_SYSTEM_PROMPT = (
     "You are a helpful, knowledgeable assistant in a chat app. Answer the user's question directly "
     "and conversationally. You have no tools and no file access in this mode."
@@ -368,10 +370,10 @@ def call_model(which: str, model: str, prompt: str, mode: str = "chat", workdir:
 def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, web,
                 mcp_allow=None) -> str:
     images = [str(p) for p in images or []]
-    cwd = workdir if mode == "work" and workdir else chat_dir()
+    cwd = workdir if mode in FOLDER_MODES and workdir else chat_dir()
     if which == "gpt":
         disabled = codex_mcp_servers()
-        name, base = "codex", codex_args(model, web, disabled)
+        name, base = "codex", codex_args(model, web, disabled, write=mode == "edit")
         extra: list[str] = []  # read-only 샌드박스는 기본 인수에 포함
         for path in images:  # 이미지는 재시도 때도 빠지지 않도록 기본 인수에 넣는다
             base += ["--image", path]
@@ -384,24 +386,28 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
         mcp = mcp_allow is not None
         if mcp:
             prompt += MCP_RULE
-        builtin = ["Read", "Glob", "Grep"] if mode == "work" else (["Read"] if images else [])
+        builtin = ["Read", "Glob", "Grep"] if mode in FOLDER_MODES else (["Read"] if images else [])
+        if mode == "edit":
+            builtin += ["Edit", "Write"]  # 파일 만들기·고치기만. 명령 실행(Bash)은 주지 않는다
         if web:
             builtin += WEB_TOOLS.split(",")
-        if mode != "work" and images:
+        if mode not in FOLDER_MODES and images:
             cwd = image_dir or Path(images[0]).parent  # 이미지 폴더 안에서만 읽기 도구 사용
         if not builtin and not mcp:
             # 순수 대화: 도구·MCP 모두 없음
             extra = ["--disallowedTools", "*", "--strict-mcp-config", "--system-prompt", CHAT_SYSTEM_PROMPT]
         else:
             extra = ["--tools", ",".join(builtin)]  # 기본 도구는 읽기·웹 검색만 (빈 문자열이면 없음)
-            if mode == "work" and images and image_dir:
+            if mode in FOLDER_MODES and images and image_dir:
                 extra += ["--add-dir", str(image_dir)]
             approved = (WEB_TOOLS.split(",") if web else []) + [t for t in (mcp_allow or []) if t.startswith("mcp__")]
             if approved:
                 extra += ["--allowedTools", ",".join(approved)]
+            if mode == "edit":
+                extra += ["--permission-mode", "acceptEdits"]  # 작업 폴더 안 파일 편집만 자동 승인
             if not mcp:
                 extra += ["--strict-mcp-config", "--disallowedTools", "mcp__*"]
-            if mode != "work":
+            if mode not in FOLDER_MODES:
                 if images:
                     system = CHAT_IMAGE_SYSTEM_PROMPT + (" You may also search the web." if web else "")
                 elif web:
@@ -421,7 +427,7 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
             blob = f"{exc.stderr}\n{exc.stdout}"
             if name == "codex" and disabled and "config.toml" in blob:
                 # MCP 끄기 설정이 Codex 설정과 맞지 않으면 끄기 없이 한 번 더 시도
-                base = codex_args(model, web) + [x for path in images for x in ("--image", path)]
+                base = codex_args(model, web, write=mode == "edit") + [x for path in images for x in ("--image", path)]
                 if info is not None:
                     info["codex_mcp_not_disabled"] = True
                 out = run_cli(name, base + extra, prompt, timeout, cwd, info, cancel)
