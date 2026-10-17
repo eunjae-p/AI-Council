@@ -102,7 +102,7 @@ SUMMARY_PROMPT = """You maintain the long-term memory of a shared conversation b
 Merge the EXISTING SUMMARY and the NEW MESSAGES into one updated summary.
 
 Rules:
-- Write in the same language the user mostly uses (usually Korean).
+- Write in the same language the user mostly uses.
 - Keep these sections, as bullet points:
   1. 사용자 선호 / 작업 방식
   2. 중요한 사실·배경 정보 (names, versions, paths, numbers exactly as written)

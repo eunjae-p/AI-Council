@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.14.1** (2026-10-17) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.15.0** (2026-10-18) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.15.0](CHANGELOG.md#v0150-2026-10-18) | 10-18 | **🌐 한국어 / English** — 화면·서버 안내·설치 스크립트 영어 지원, 왼쪽 위 언어 전환 |
 | [V0.14.1](CHANGELOG.md#v0141-2026-10-17) | 10-17 | **🇺🇸 영어 설명 추가** — README 아래에 English 안내 (화면 문구는 한국어 그대로) |
 | [V0.14.0](CHANGELOG.md#v0140-2026-10-15) | 10-15 | **✏️ 수정 모드** — GPT·Claude가 작업 폴더 파일을 직접 만들고 고침 (저장점·변경 확인·확정/되돌리기) |
 | [V0.13.2](CHANGELOG.md#v0132-2026-10-12) | 10-12 | Council 버전도 새 버전이 있을 때만 노란 업데이트 표시 |
 | [V0.13.1](CHANGELOG.md#v0131-2026-10-12) | 10-12 | Mac: 중지 버튼이 하위 프로세스까지 종료 |
-| [V0.13.0](CHANGELOG.md#v0130-2026-10-12) | 10-12 | **🍎 Mac 지원** — `Setup-mac.command` 설치·실행·업데이트 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -46,6 +46,7 @@
 - **✏️ 수정 모드** — Claude Code·Codex처럼 작업 폴더의 파일을 직접 만들고 고침. 끝나면 바뀐 내용을 보고 확정/되돌리기
 - **🌐 웹 검색** — 최신 정보·공식 문서 확인이 필요할 때 켜기
 - **🔌 MCP** — Claude에 연결된 도구(Higgsfield·Notion 등) 사용, 허용한 도구만 실행
+- **🌐 한국어 / English** — 왼쪽 위 `EN` / `한국어` 버튼으로 화면 언어 전환 (처음에는 브라우저 언어를 따름)
 - **대화 관리** — 자동 제목, 보관·휴지통, 전체 검색, 긴 대화 자동 요약
 - **Markdown 내려받기** — 답변마다 **⤓ MD**(그 답변만), 오른쪽 위 **Chat_md**(대화 전체)
 
@@ -169,6 +170,7 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 워크플로우 색상 등급: 빨강 = MUST, 노랑·주황 = SHOULD (판정 제외: MarkdownNote, Note, Label (rgthree), SetNode, GetNode).
 
 ### 화면 안내
+- **화면 언어**: 왼쪽 위 `EN` / `한국어` 버튼. 처음에는 브라우저 언어를 따릅니다(한국어가 아니면 영어). 대화 기록 원문은 바뀌지 않고, Council 안내·오류 문구만 바뀝니다. 설치·업데이트 창은 Windows/Mac 언어를 따릅니다.
 - **화면 테마**: 왼쪽 위 `AI Council` 옆 🌙/☀️/🖥️ 버튼으로 다크·라이트·시스템 설정 따르기를 바꿉니다.
 - **모델 표시**: 계정 기본값을 써도 실제 모델 이름이 보입니다 (예: `GPT-6.1 Sol (계정 기본)`).
 - **왼쪽 아래**: CLI 버전·업데이트·로그인 상태, 오늘 사용 횟수, **남은 사용량 보기** (공식 사용량 페이지).
@@ -235,14 +237,14 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.14.1** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.15.0** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
 AI Council is a local multi-model chat app. For each question you pick **GPT**, **Claude**, or **Discussion** (both models debate, then a neutral summary).
 It drives the official **Codex CLI (GPT)** and **Claude Code CLI (Claude)** signed in with your own ChatGPT / Claude subscription — **no API keys, no per-token billing**.
 
-> ℹ️ The app's on-screen text is currently **Korean only**. The models answer in whatever language you write in, so you can ask in English.
+> 🌐 The app is available in **English and Korean**. It follows your browser language on first launch; switch any time with the `EN` / `한국어` button at the top left. The installer and update windows follow your Windows/Mac language. The models answer in whatever language you write in.
 
 ## 💡 Features
 
@@ -259,6 +261,7 @@ It drives the official **Codex CLI (GPT)** and **Claude Code CLI (Claude)** sign
 - **🔌 MCP** (Claude) — use tools connected to your Claude account; only tools you allow run automatically, everything else asks for approval first
 - **Attachments** — text/JSON, images, video (12 frames via ffmpeg); drag & drop or Ctrl+V. ComfyUI workflow JSON is pre-summarized (nodes, models, color-coded required inputs)
 - **Conversation management** — auto titles, archive/trash, full-text search, long-conversation summaries, Markdown export per answer or per chat
+- **English / 한국어** — switch with the `EN` / `한국어` button; installer and update windows follow your OS language
 - **One-click updates** — for AI Council itself (from GitHub) and for both CLIs; dark / light / system theme; Windows and Mac
 
 ## 📦 Install
@@ -269,14 +272,14 @@ Clone with `git` (not ZIP) so the built-in updater works.
 **Windows**
 1. `git clone https://github.com/eunjae-p/AI-Council.git`
 2. Double-click **`Setup.cmd`**. It installs Python, Node.js, Git, ffmpeg (if missing), Codex CLI and Claude Code, walks you through sign-in, and creates an **AI Council** desktop shortcut.
-3. Run **AI Council** from the desktop. If there is no red "로그인 필요" (*sign-in required*) at the bottom left, you're ready.
+3. Run **AI Council** from the desktop. If there is no red "Sign-in required" at the bottom left, you're ready.
 
 **Mac**
 1. Open Terminal and run `git clone https://github.com/eunjae-p/AI-Council.git` (accept the Xcode command-line tools prompt if asked).
 2. Double-click **`Setup-mac.command`** (installs Homebrew if needed, then Python 3.10+, Node.js, ffmpeg and both CLIs). If macOS blocks it, right-click → Open once.
 3. Double-click **AI Council** on the desktop.
 
-**Sign-in** (once per computer): click the red **"로그인하기"** (*sign in*) link at the bottom left, or run in a terminal:
+**Sign-in** (once per computer): click the red **"Sign in"** link at the bottom left, or run in a terminal:
 
 | Model | Command | Account |
 |---|---|---|
@@ -286,23 +289,17 @@ Clone with `git` (not ZIP) so the built-in updater works.
 ## ▶ Run · update · stop
 
 - **Run**: desktop shortcut (or `AI-Council_Web.cmd` / `AI-Council.command`). The server starts in the background and opens `http://127.0.0.1:8765` — reachable from this computer only.
-- **Update**: when a new version exists, a yellow **⬆ 업데이트하기** (*update*) appears at the bottom left → **지금 업데이트** (*update now*). Or run `Update.cmd` / `Update-mac.command`. Your conversations are kept.
-- **Stop**: **앱 종료** (*quit app*) at the bottom left. Closing the browser tab leaves the server running.
+- **Update**: when a new version exists, a yellow **⬆ Update** appears at the bottom left → **Update now**. Or run `Update.cmd` / `Update-mac.command`. Your conversations are kept.
+- **Stop**: **Quit app** at the bottom left. Closing the browser tab leaves the server running.
 
-## 🧭 UI cheat sheet (Korean labels)
+## 🧭 Using it
 
-| Label | Meaning |
-|---|---|
-| 💬 대화 / 🛠 작업 / ✏️ 수정 | Chat / Work (read-only folder) / Edit (writes files) |
-| 토론 (Discussion) | Both models debate, then a neutral conclusion |
-| 웹 검색 켬 · 끔 | Web search on / off |
-| MCP 켬 · 끔 | MCP tools on / off |
-| 저장점 만들고 시작 | Create a Git checkpoint and start (edit mode) |
-| ✅ 확정 (커밋) / ↩ 되돌리기 | Commit the changes / Revert to the checkpoint |
-| 토론 과정 보기 · 토론 기록 폴더 열기 | Show debate rounds · Open the debate log folder |
-| ■ 중지 | Stop generating |
-| 새 대화 · 보관함 · 휴지통 | New chat · Archive · Trash |
-| ⤓ MD · Chat_md | Download this answer / the whole chat as Markdown |
+- **Mode**: 💬 Chat (no file access) · 🛠 Work (reads a working folder) · ✏️ Edit (creates and edits files in it)
+- **Target**: GPT · Claude · Discussion (both debate → neutral conclusion; *Show debate rounds* expands each round)
+- **Edit mode**: on first use, **Create checkpoint and start** saves a Git commit. When the models finish, review the changed files and diff, then **✅ Commit** or **↩ Revert**.
+- **Web search on/off**, **MCP on/off** (⚙ manages which tools are always allowed), **Models ▾** to pin model versions
+- **⤓ MD** downloads one answer; **Chat_md** downloads the whole chat; **■ Stop** (or Esc) stops generating
+- **Language**: `EN` / `한국어` at the top left. Saved messages are not translated; only Council's own labels and messages change.
 
 ## 🔒 Privacy
 

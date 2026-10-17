@@ -48,12 +48,15 @@ r = u.check("99.0.0", force=True); ok(r["status"] == "latest", "running newer th
 sh("git", "reset", "-q", "--soft", "HEAD~1", cwd=pc)  # 위에서 만든 로컬 커밋 정리
 w = (dev/"ai_council_web.py").read_text(encoding="utf-8").replace('VERSION = "9.9.9"', 'VERSION = "9.9.10"')
 (dev/"ai_council_web.py").write_text(w, encoding="utf-8"); sh(*G, "commit", "-qam", "cli release", cwd=dev); sh("git", "push", "-q", "origin", "main", cwd=dev)
-env = dict(os.environ, PYTHONUTF8="1")
+env = dict(os.environ, PYTHONUTF8="1", AI_COUNCIL_LANG="ko")  # 콘솔 문구는 OS 언어를 따름 → 테스트는 한국어로 고정
 out = subprocess.run([sys.executable, str(pc/"council_update.py")], cwd=pc, input="y\n", capture_output=True, text=True, env=env, timeout=120)
 ok(out.returncode == 0 and "새 버전 V9.9.10" in out.stdout and "[완료] V9.9.10" in out.stdout, "cli update: " + out.stdout.strip().splitlines()[-1])
 ok('VERSION = "9.9.10"' in (pc/"ai_council_web.py").read_text(encoding="utf-8"), "cli updated files")
 out = subprocess.run([sys.executable, str(pc/"council_update.py")], cwd=pc, input="", capture_output=True, text=True, env=env, timeout=120)
 ok("이미 최신 버전" in out.stdout, "cli says latest")
+out = subprocess.run([sys.executable, str(pc/"council_update.py")], cwd=pc, input="", capture_output=True, text=True,
+                     env=dict(env, AI_COUNCIL_LANG="en"), timeout=120)
+ok("[Done] Already up to date" in out.stdout, "cli English: " + out.stdout.strip().splitlines()[-1])
 # git 저장소가 아닌 폴더
 u.ROOT = T/"dev"/"web"; ok(u.check("1")["status"] == "not_repo", "zip install detected")
 shutil.rmtree(T); print("ALL PASS")

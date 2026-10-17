@@ -41,6 +41,7 @@ from council_core import (
 from council_store import ConversationStore
 import council_debate as debate
 import council_edit
+import council_i18n
 import council_versions
 import council_attach
 import council_media
@@ -48,7 +49,7 @@ import council_update
 from council_state import CliState
 from council_mcp import McpStore, valid_tool
 
-VERSION = "0.14.1"
+VERSION = "0.15.0"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -166,7 +167,13 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("잘못된 요청입니다.")
         return body
 
+    @property
+    def lang(self) -> str:
+        """화면 언어 (브라우저가 X-Lang 헤더로 알려 줌). 안내·오류 문구를 내보내기 직전에 번역한다."""
+        return council_i18n.request_lang(self.headers)
+
     def send_json(self, value: object, status: int = 200) -> None:
+        value = council_i18n.localize(value, self.lang)
         data = json.dumps(value, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -192,7 +199,7 @@ class Handler(BaseHTTPRequestHandler):
             self.last_stage = str(payload.get("text", ""))
         if not getattr(self, "stream_alive", False):
             return
-        line = json.dumps({"type": kind, **payload}, ensure_ascii=False) + "\n"
+        line = json.dumps(council_i18n.localize({"type": kind, **payload}, self.lang), ensure_ascii=False) + "\n"
         with _emit_lock:
             try:
                 self.wfile.write(line.encode("utf-8"))
@@ -386,7 +393,7 @@ class Handler(BaseHTTPRequestHandler):
                 result = maybe_summarize(store, conversation_id, prefer, force=True)
                 self.send_json({"result": result, "meta": store.detail(conversation_id)["meta"]})
             elif path == "/api/export":
-                file_path, markdown = store.export_markdown(cid())
+                file_path, markdown = store.export_markdown(cid(), lang=self.lang)
                 self.send_json({"path": str(file_path), "filename": file_path.name, "markdown": markdown})
             elif path == "/api/shutdown":
                 self.send_json({"ok": True})

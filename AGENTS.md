@@ -7,7 +7,10 @@
 - Codex CLI(GPT)와 Claude Code CLI(Claude)를 구독 계정으로 호출하는 **로컬 멀티모델 채팅 앱**입니다.
 - OpenAI/Anthropic **API 키를 쓰지 않습니다.** CLI가 실패해도 API로 우회하지 않습니다.
 - Python **표준 라이브러리만** 사용합니다. 프런트엔드는 `web/index.html` 한 파일(HTML/CSS/JS), npm·프레임워크 추가 금지.
-- 사용자 화면 문구는 한국어로 씁니다.
+- 화면은 **한국어 / English** 두 언어를 지원합니다. 문구를 추가·수정할 때 반드시 둘 다 씁니다.
+  - `web/index.html`: JS 는 `T('한국어', 'English')`, 정적 HTML 은 `data-en` / `data-en-title` / `data-en-placeholder` / `data-en-tip` 속성.
+  - 서버가 보내는 안내·오류: 한국어로 쓰고 `council_i18n.py` 의 `PAIRS` 에 영어를 추가 (`{x}` 빈칸 이름을 양쪽 같게).
+  - 설치·업데이트 스크립트: 각 파일의 `T` / `t` / `_t` 도우미로 두 언어 모두.
 
 ## 버전 관리 = GitHub이 기준 (클라우드 개념)
 - 기준 저장소: `https://github.com/eunjae-p/AI-Council` 의 `main` 브랜치.
@@ -62,6 +65,7 @@
 | `council_state.py` | 계정 기본 모델(실제 사용 모델) 기억, 날짜별 사용 횟수 (`data/cli_state.json`) |
 | `council_mcp.py` | MCP 도구 목록·"항상 허용" 목록 (`data/mcp_*.json`). 모든 도구 자동 실행(bypassPermissions)은 쓰지 않음 |
 | `council_edit.py` | ✏️ 수정 모드: Git 저장점·변경 내용(diff)·확정(커밋)/되돌리기. Claude 는 Edit·Write + acceptEdits 만(Bash 없음), Codex 는 workspace-write. bypassPermissions 금지 |
+| `council_i18n.py` | 서버 안내·오류 문구 영어 번역표(`PAIRS`), `X-Lang: en` 요청이면 응답 직전에 번역 (기록 원문은 그대로) |
 | `council_versions.py` | Codex/Claude CLI 버전·로그인 상태 |
 | `council_update.py` | Council 자체 업데이트 (GitHub → PC, 안전 검사, 재시작) · `Update.cmd` 가 화면 없이 실행 |
 | `Setup.cmd`, `setup.ps1` | 처음 설치 도우미 (Windows) |

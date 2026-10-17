@@ -194,8 +194,8 @@ def open_login(name: str) -> dict:
     if IS_MAC:
         # Mac: 터미널 앱을 열어 로그인 명령을 실행 (브라우저 로그인이 이어서 열림)
         exe = resolve_command(name)[-1]
-        cmd = f"clear; echo '{NAMES[name]} 로그인 — 브라우저가 열리면 계정으로 로그인하세요.'; " \
-              f"{shlex.quote(exe)} {' '.join(LOGIN_RUN[name])}; echo; echo '끝났으면 이 창을 닫고 AI Council 로 돌아가세요.'"
+        cmd = f"clear; echo '{NAMES[name]} 로그인 / Sign in — 브라우저가 열리면 로그인하세요 / Sign in when the browser opens.'; " \
+              f"{shlex.quote(exe)} {' '.join(LOGIN_RUN[name])}; echo; echo '끝났으면 이 창을 닫고 AI Council 로 돌아가세요 / When done, close this window and return to AI Council.'"
         script = f'tell application "Terminal" to do script "{cmd.replace(chr(92), chr(92) * 2).replace(chr(34), chr(92) + chr(34))}"'
         subprocess.Popen(["osascript", "-e", script, "-e", 'tell application "Terminal" to activate'])
         return {"opened": True, "command": LOGIN_COMMANDS[name]}
@@ -204,10 +204,10 @@ def open_login(name: str) -> dict:
     import tempfile
     exe = resolve_command(name)[-1]
     lines = [
-        "@echo off", "chcp 65001 >nul", f"title {NAMES[name]} 로그인",
-        f"echo {NAMES[name]} 로그인을 시작합니다. 브라우저가 열리면 계정으로 로그인하세요.", "echo.",
+        "@echo off", "chcp 65001 >nul", f"title {NAMES[name]} 로그인 / Sign in",
+        f"echo {NAMES[name]} 로그인 / Sign in — 브라우저가 열리면 로그인하세요 / Sign in when the browser opens.", "echo.",
         f'call "{exe}" {" ".join(LOGIN_RUN[name])}', "echo.",
-        "echo 로그인이 끝났으면 이 창을 닫고 AI Council 화면으로 돌아가세요.", "pause",
+        "echo 로그인이 끝났으면 이 창을 닫고 AI Council 화면으로 돌아가세요 / When done, close this window and return to AI Council.", "pause",
     ]
     bat = os.path.join(tempfile.gettempdir(), f"ai-council-login-{name}.cmd")
     with open(bat, "w", encoding="utf-8", newline="\r\n") as fh:

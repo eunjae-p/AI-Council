@@ -401,4 +401,15 @@ impl = [i for i in items if i.get("round")==3]
 ok(len(impl)==1 and impl[0]["model"]=="Claude" and items[-1]["role"]=="edit", "discussion+edit: Claude implements after conclusion")
 ok(log.count("acceptEdits")==1 and "workspace-write" not in log and "planning round" in log, "planning rounds are read-only")
 post("/api/edit/apply", {"conversation_id":c15,"ref":items[-1]["id"],"action":"revert"})
+# 한국어/English: 브라우저가 X-Lang: en 을 보내면 서버 안내·오류 문구를 영어로, 기록 원문은 그대로
+import re as _re, council_i18n as i18n
+def get_en(p): return json.loads(urllib.request.urlopen(urllib.request.Request(B+p, headers={"X-Lang":"en"})).read())
+items_en = get_en("/api/conversation?id="+c15)["items"]
+ok(any(i["role"]=="edit" and i["content"].startswith("Changes reverted") for i in items_en), "X-Lang en translates records")
+ok(any(i["role"]=="edit" and i["content"].startswith("변경을 되돌렸습니다") for i in get("/api/conversation?id="+c15)["items"]), "stored records stay Korean")
+try: urllib.request.urlopen(urllib.request.Request(B+"/api/conversation?id=bad!", headers={"X-Lang":"en"})); ok(False, "bad id")
+except urllib.error.HTTPError as e: ok(json.loads(e.read())["error"] == "Invalid conversation ID.", "X-Lang en translates errors")
+ok(all(sorted(_re.findall(r"\{[a-z]\}", ko)) == sorted(_re.findall(r"\{[a-z]\}", en)) for ko, en in i18n.PAIRS), "i18n placeholders match")
+html = (pathlib.Path(w.__file__).parent/"web"/"index.html").read_text(encoding="utf-8")
+ok("X-Lang" in html and "applyStaticLang" in html and 'id="langBtn"' in html, "UI language switch present")
 srv.shutdown(); shutil.rmtree(tmp); print("ALL PASS; temp data removed")

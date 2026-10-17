@@ -212,6 +212,46 @@ def _stop_server() -> None:
         time.sleep(0.5)
 
 
+_console_ko: bool | None = None
+
+
+def _detect_korean() -> bool:
+    """콘솔 문구 언어: AI_COUNCIL_LANG(ko|en) → Windows UI 언어 → 로캘. 실패하면 영어."""
+    forced = os.environ.get("AI_COUNCIL_LANG", "").strip().lower()
+    if forced.startswith("ko"):
+        return True
+    if forced.startswith("en"):
+        return False
+    if os.name == "nt":
+        try:
+            import ctypes
+            if ctypes.windll.kernel32.GetUserDefaultUILanguage() & 0x3FF == 0x12:  # 0x412 = ko-KR
+                return True
+        except Exception:
+            pass
+    try:
+        import locale
+        names = [locale.getlocale()[0]]
+        try:
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                names.append(locale.getdefaultlocale()[0])
+        except Exception:
+            pass
+        names += [os.environ.get(k) for k in ("LC_ALL", "LC_MESSAGES", "LANG")]
+        return any((n or "").lower().startswith("ko") for n in names)
+    except Exception:
+        return False
+
+
+def _t(ko: str, en: str) -> str:
+    global _console_ko
+    if _console_ko is None:
+        _console_ko = _detect_korean()
+    return ko if _console_ko else en
+
+
 def _ask(question: str, default: bool = True) -> bool:
     try:
         answer = input(f"{question} ({'Y/n' if default else 'y/N'}) ").strip().lower()
@@ -222,50 +262,60 @@ def _ask(question: str, default: bool = True) -> bool:
 
 def cli() -> int:
     print("=" * 44)
-    print("  AI Council 업데이트 (GitHub → 이 PC)")
+    print(_t("  AI Council 업데이트 (GitHub → 이 PC)", "  AI Council update (GitHub → this PC)"))
     print("=" * 44)
     if not is_repo():
-        print("\n[!] Git으로 받은 폴더가 아니라 업데이트할 수 없습니다.")
-        print("    원하는 위치에서 git clone https://github.com/eunjae-p/AI-Council.git 으로 다시 받으세요.")
+        print(_t("\n[!] Git으로 받은 폴더가 아니라 업데이트할 수 없습니다.",
+                 "\n[!] This folder was not downloaded with Git, so it cannot be updated."))
+        print(_t("    원하는 위치에서 git clone https://github.com/eunjae-p/AI-Council.git 으로 다시 받으세요.",
+                 "    Download it again with: git clone https://github.com/eunjae-p/AI-Council.git"))
         return 1
     local = file_version((ROOT / "ai_council_web.py").read_text(encoding="utf-8"))
     running = _running_server_version()
-    print(f"\n이 폴더의 버전: V{local}" + (f"  (실행 중인 Council: V{running})" if running else "  (Council 꺼짐)"))
-    print("GitHub 확인 중...")
+    print(_t(f"\n이 폴더의 버전: V{local}", f"\nVersion in this folder: V{local}")
+          + (_t(f"  (실행 중인 Council: V{running})", f"  (running Council: V{running})") if running
+             else _t("  (Council 꺼짐)", "  (Council not running)")))
+    print(_t("GitHub 확인 중...", "Checking GitHub..."))
     info = check(local, force=True)
     if info["status"] in ("error", "not_repo"):
         print(f"\n[!] {info['message']}")
         return 1
     updated = False
     if info["status"] == "available":
-        print(f"\n새 버전 V{info.get('remote') or '?'} 이 있습니다 (변경 {info['behind']}개).")
+        print(_t(f"\n새 버전 V{info.get('remote') or '?'} 이 있습니다 (변경 {info['behind']}개).",
+                 f"\nNew version V{info.get('remote') or '?'} is available ({info['behind']} change(s))."))
         for c in info.get("commits") or []:
             print(f"  • {c}")
-        print("\n대화 기록(data/)은 그대로 유지됩니다.")
-        if not _ask("지금 업데이트할까요?"):
-            print("업데이트를 취소했습니다.")
+        print(_t("\n대화 기록(data/)은 그대로 유지됩니다.", "\nYour conversation history (data/) will be kept."))
+        if not _ask(_t("지금 업데이트할까요?", "Update now?")):
+            print(_t("업데이트를 취소했습니다.", "Update cancelled."))
             return 0
         try:
             result = apply(local)
         except UpdateError as exc:
-            print(f"\n[!] 업데이트를 멈췄습니다:\n{exc}")
+            print(_t(f"\n[!] 업데이트를 멈췄습니다:\n{exc}", f"\n[!] Update stopped:\n{exc}"))
             return 1
         if result["status"] == "updated":
-            print(f"\n[완료] V{result['version']} 으로 업데이트했습니다 ({result['from']} → {result['to']}).")
+            print(_t(f"\n[완료] V{result['version']} 으로 업데이트했습니다 ({result['from']} → {result['to']}).",
+                     f"\n[Done] Updated to V{result['version']} ({result['from']} → {result['to']})."))
         else:
-            print(f"\n[완료] 파일은 이미 최신이라 Git 기록만 정리했습니다 (V{result['version']}).")
+            print(_t(f"\n[완료] 파일은 이미 최신이라 Git 기록만 정리했습니다 (V{result['version']}).",
+                     f"\n[Done] Files were already up to date; only the Git history was synced (V{result['version']})."))
         local = result["version"]
         updated = True
     else:
-        print(f"\n[완료] 이미 최신 버전입니다 (V{local}).")
+        print(_t(f"\n[완료] 이미 최신 버전입니다 (V{local}).", f"\n[Done] Already up to date (V{local})."))
     if running and (updated or running != local):
-        print(f"\n실행 중인 Council은 아직 V{running} 입니다. 답변을 생성 중이었다면 중단됩니다.")
-        if _ask("Council을 새 버전으로 다시 시작할까요?"):
+        print(_t(f"\n실행 중인 Council은 아직 V{running} 입니다. 답변을 생성 중이었다면 중단됩니다.",
+                 f"\nThe running Council is still V{running}. Any answer being generated will be interrupted."))
+        if _ask(_t("Council을 새 버전으로 다시 시작할까요?", "Restart Council with the new version?")):
             _stop_server()
             restart_detached()
-            print("Council을 백그라운드에서 다시 시작했습니다. 브라우저를 새로고침하세요.")
+            print(_t("Council을 백그라운드에서 다시 시작했습니다. 브라우저를 새로고침하세요.",
+                     "Council restarted in the background. Please refresh your browser."))
         else:
-            print("나중에 Council을 다시 시작하면 새 버전이 적용됩니다.")
+            print(_t("나중에 Council을 다시 시작하면 새 버전이 적용됩니다.",
+                     "The new version will apply the next time you restart Council."))
     return 0
 
 

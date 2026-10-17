@@ -52,6 +52,9 @@ _WIN_RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)),
 
 ROUND_NAMES = {1: "1차 의견", 2: "교차 검토"}
 SPEAKER_LABELS = {"user": "사용자", "GPT": "GPT", "Claude": "Claude", "Council": "Council 최종 결론", "오류": "오류 기록"}
+ROUND_NAMES_EN = {1: "Round 1 opinion", 2: "Cross review", 3: "Implementation"}
+SPEAKER_LABELS_EN = {"user": "User", "GPT": "GPT", "Claude": "Claude", "Council": "Council conclusion", "오류": "Error log",
+                     "변경": "File changes"}
 
 
 def now() -> float:
@@ -409,7 +412,8 @@ class ConversationStore:
         return results[:limit]
 
     # ---------- 내보내기 ----------
-    def to_markdown(self, conversation_id: str) -> str:
+    def to_markdown(self, conversation_id: str, lang: str = "ko") -> str:
+        L = (lambda ko, en: en) if lang == "en" else (lambda ko, en: ko)  # noqa: E731
         detail = self.detail(conversation_id)
         meta, items = detail["meta"], detail["items"]
         models = sorted({
@@ -419,36 +423,41 @@ class ConversationStore:
         lines = [
             f"# {meta['title']}",
             "",
-            f"- 생성: {fmt_time(meta.get('created_at'))}",
-            f"- 수정: {fmt_time(meta.get('updated_at'))}",
-            f"- 메시지: {len(items)}개",
-            f"- 응답 모델: {', '.join(models) if models else '-'}",
-            f"- 상태: {'보관됨' if meta.get('archived') else '활성'}",
+            f"- {L('생성', 'Created')}: {fmt_time(meta.get('created_at'))}",
+            f"- {L('수정', 'Updated')}: {fmt_time(meta.get('updated_at'))}",
+            L(f"- 메시지: {len(items)}개", f"- Messages: {len(items)}"),
+            f"- {L('응답 모델', 'Models')}: {', '.join(models) if models else '-'}",
+            f"- {L('상태', 'Status')}: {L('보관됨', 'archived') if meta.get('archived') else L('활성', 'active')}",
             "",
         ]
         if meta.get("summary"):
             lines += [
-                "## 장기 요약",
+                L("## 장기 요약", "## Long-term summary"),
                 "",
-                f"_{meta.get('summarized_through', 0)}개 메시지 요약 · {meta.get('summary_model') or '-'} · {fmt_time(meta.get('summary_updated_at'))}_",
+                f"_{L(f'{meta.get('summarized_through', 0)}개 메시지 요약', f'{meta.get('summarized_through', 0)} messages summarized')} · {meta.get('summary_model') or '-'} · {fmt_time(meta.get('summary_updated_at'))}_",
                 "",
                 meta["summary"],
                 "",
             ]
-        lines += ["## 대화", ""]
+        lines += [L("## 대화", "## Conversation"), ""]
         for item in items:
             who = speaker(item)
-            label = SPEAKER_LABELS.get(who, who) + (f" · {ROUND_NAMES.get(item.get('round'), '')}" if item.get("round") else "")
+            labels, rounds = (SPEAKER_LABELS_EN, ROUND_NAMES_EN) if lang == "en" else (SPEAKER_LABELS, ROUND_NAMES)
+            label = labels.get(who, who) + (f" · {rounds.get(item.get('round'), '')}" if item.get("round") else "")
             extra = f" · {item['cli_model']}" if item.get("cli_model") else ""
-            lines += [f"### {label}{extra}", f"_{fmt_time(item.get('time'))}_", "", str(item.get("content", "")).rstrip(), ""]
+            body = str(item.get("content", "")).rstrip()
+            if lang == "en" and item.get("role") in ("edit", "error"):
+                from council_i18n import tr
+                body = tr(body, "en")
+            lines += [f"### {label}{extra}", f"_{fmt_time(item.get('time'))}_", "", body, ""]
             for att in item.get("attachments") or []:
-                lines.append(f"> 📎 첨부: `{att.get('name')}` ({att.get('size', 0):,}자)")
+                lines.append(L(f"> 📎 첨부: `{att.get('name')}` ({att.get('size', 0):,}자)", f"> 📎 Attachment: `{att.get('name')}` ({att.get('size', 0):,} chars)"))
             if item.get("attachments"):
                 lines.append("")
         return "\n".join(lines).rstrip() + "\n"
 
-    def export_markdown(self, conversation_id: str) -> tuple[Path, str]:
-        markdown = self.to_markdown(conversation_id)
+    def export_markdown(self, conversation_id: str, lang: str = "ko") -> tuple[Path, str]:
+        markdown = self.to_markdown(conversation_id, lang)
         title = self.get_meta(conversation_id).get("title") or "대화"
         base = safe_filename(f"{title}_{time.strftime('%Y%m%d')}")
         with self.lock:

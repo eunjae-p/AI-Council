@@ -7,7 +7,11 @@
 <script>/* 화면 테마: 깜빡임 없이 처음부터 적용 (dark | light | system) */
 try { const t = localStorage.getItem('councilTheme') || 'dark';
   document.documentElement.dataset.theme = t === 'system' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : t;
-} catch (e) { document.documentElement.dataset.theme = 'dark'; }</script>
+} catch (e) { document.documentElement.dataset.theme = 'dark'; }
+/* 화면 언어: 저장된 선택 → 없으면 브라우저 언어 (한국어면 ko, 그 외 en) */
+var LANG = (function () { var v = ''; try { v = localStorage.getItem('councilLang') || ''; } catch (e) {}
+  if (v === 'ko' || v === 'en') return v; return /^ko/i.test(navigator.language || '') ? 'ko' : 'en'; })();
+document.documentElement.lang = LANG;</script>
 <style>
 :root{
   --bg:#0a0e1a; --side:#0e1424; --panel:#121a2e; --panel2:#0d1528; --line:#223052; --line2:#2d3d63;
@@ -40,6 +44,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--gpt);box-shadow:0 0 0
 .side{background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 .brand{display:flex;align-items:center;justify-content:space-between;padding:16px 16px 10px}
 .brand .bright{display:inline-flex;align-items:center;gap:6px} .themebtn{font-size:14px;padding:3px 7px;line-height:1}
+.langbtn{font-size:11.5px;font-weight:700;color:var(--muted);letter-spacing:.02em}
 .brand h1{margin:0;font-size:18px;letter-spacing:-.02em} .brand span{color:var(--dim);font-size:12px}
 .side .top{padding:0 12px 10px;display:grid;gap:8px}
 .side .top input{padding:8px 11px;width:100%}
@@ -214,31 +219,31 @@ details.indiv .msg{margin-top:10px}
 <body>
 <div class="app" id="app">
   <aside class="side">
-    <div class="brand"><h1>AI Council</h1><span class="bright"><button class="ghost small themebtn" id="themeBtn" title="화면 테마 바꾸기">🌙</button><span id="ver">V0.6</span></span></div>
+    <div class="brand"><h1>AI Council</h1><span class="bright"><button class="ghost small themebtn langbtn" id="langBtn"></button><button class="ghost small themebtn" id="themeBtn" title="화면 테마 바꾸기">🌙</button><span id="ver">V0.6</span></span></div>
     <div class="top">
-      <button class="primary" id="newBtn">＋ 새 대화</button>
-      <input id="search" type="search" placeholder="모든 대화 검색…" autocomplete="off">
+      <button class="primary" id="newBtn" data-en="＋ New chat">＋ 새 대화</button>
+      <input id="search" type="search" placeholder="모든 대화 검색…" data-en-placeholder="Search all chats…" autocomplete="off">
     </div>
     <div class="tabs" id="tabs">
-      <button data-scope="all" class="on">대화</button>
-      <button data-scope="archived">보관함</button>
-      <button data-scope="trash">휴지통</button>
+      <button data-scope="all" class="on" data-en="Chats">대화</button>
+      <button data-scope="archived" data-en="Archive">보관함</button>
+      <button data-scope="trash" data-en="Trash">휴지통</button>
     </div>
     <div class="list" id="list"></div>
     <div class="upbar" id="upbar"><div class="appline"><span id="appVer">● Council <b>…</b></span><span class="upd" id="upNew" hidden></span><span class="upd" id="upErr" hidden></span></div></div>
-    <div class="foot"><span class="cli" id="cli">CLI 확인 중…</span><button class="small" id="quit">앱 종료</button></div>
+    <div class="foot"><span class="cli" id="cli" data-en="Checking CLI…">CLI 확인 중…</span><button class="small" id="quit" data-en="Quit app">앱 종료</button></div>
   </aside>
   <div class="scrim" id="scrim"></div>
 
   <main class="main">
     <div class="bar">
-      <button class="ghost menu" id="menu" aria-label="대화 목록">☰</button>
-      <div class="title" id="titleBox"><h2 id="title" title="클릭해서 제목 변경">새 대화</h2><span class="chip" id="count"></span><span class="chip arch" id="archChip" hidden>보관됨</span></div>
+      <button class="ghost menu" id="menu" aria-label="대화 목록" data-en-aria="Chat list">☰</button>
+      <div class="title" id="titleBox"><h2 id="title" title="클릭해서 제목 변경" data-en-title="Click to rename">새 대화</h2><span class="chip" id="count"></span><span class="chip arch" id="archChip" hidden data-en="Archived">보관됨</span></div>
       <div class="acts">
-        <button class="ghost small" id="renameBtn">✎ <span class="lbl">제목</span></button>
-        <button class="ghost small" id="archiveBtn">⇩ <span class="lbl">보관</span></button>
-        <button class="ghost small" id="exportBtn" title="이 대화 전체(모든 질문·답변·토론 과정)를 Markdown 파일로 내려받기">⤓ <span class="lbl">Chat_md</span></button>
-        <button class="ghost small danger" id="deleteBtn">🗑 <span class="lbl">삭제</span></button>
+        <button class="ghost small" id="renameBtn">✎ <span class="lbl" data-en="Rename">제목</span></button>
+        <button class="ghost small" id="archiveBtn">⇩ <span class="lbl" data-en="Archive">보관</span></button>
+        <button class="ghost small" id="exportBtn" title="이 대화 전체(모든 질문·답변·토론 과정)를 Markdown 파일로 내려받기" data-en-title="Download this whole chat (all questions, answers and debate rounds) as Markdown">⤓ <span class="lbl">Chat_md</span></button>
+        <button class="ghost small danger" id="deleteBtn">🗑 <span class="lbl" data-en="Delete">삭제</span></button>
       </div>
     </div>
     <div id="notices"></div>
@@ -247,58 +252,58 @@ details.indiv .msg{margin-top:10px}
     <div class="composer">
       <div class="inner">
         <div class="ctl">
-          <div class="seg" id="mode" title="대화: 도구·파일 접근 없이 빠르게 답변 / 작업: 지정한 폴더의 파일을 읽으며 답변">
-            <button data-m="chat" class="on">💬 대화</button><button data-m="work" title="작업 폴더의 파일을 읽기만 하며 답변 (수정하지 않음)">🛠 작업</button><button data-m="edit" class="tip" data-tip="✏️ 수정 모드 — GPT·Claude가 작업 폴더의 파일을 직접 만들고 고칩니다.&#10;· 작업 폴더는 Git 저장소여야 하고, 시작 전에 저장점(커밋)을 만듭니다.&#10;· 끝나면 바뀐 파일과 내용을 보여 주고, 확정(커밋) 또는 되돌리기를 고릅니다.&#10;· 파일 수정만 하고 서버 재시작·설치 같은 명령은 실행하지 않습니다.&#10;· 운영 중인 사이트라면 개발용 복사본 폴더에서 쓰는 것을 권장합니다.">✏️ 수정</button>
+          <div class="seg" id="mode" title="대화: 도구·파일 접근 없이 빠르게 답변 / 작업: 지정한 폴더의 파일을 읽으며 답변" data-en-title="Chat: quick answers without files or tools / Work: reads files in the chosen folder / Edit: creates and edits files">
+            <button data-m="chat" class="on" data-en="💬 Chat">💬 대화</button><button data-m="work" title="작업 폴더의 파일을 읽기만 하며 답변 (수정하지 않음)" data-en-title="Reads files in the working folder (read-only, no changes)" data-en="🛠 Work">🛠 작업</button><button data-m="edit" class="tip" data-tip="✏️ 수정 모드 — GPT·Claude가 작업 폴더의 파일을 직접 만들고 고칩니다.&#10;· 작업 폴더는 Git 저장소여야 하고, 시작 전에 저장점(커밋)을 만듭니다.&#10;· 끝나면 바뀐 파일과 내용을 보여 주고, 확정(커밋) 또는 되돌리기를 고릅니다.&#10;· 파일 수정만 하고 서버 재시작·설치 같은 명령은 실행하지 않습니다.&#10;· 운영 중인 사이트라면 개발용 복사본 폴더에서 쓰는 것을 권장합니다." data-en-tip="✏️ Edit mode — GPT/Claude create and edit files in the working folder.&#10;· The folder must be a Git repository; a checkpoint (commit) is made before starting.&#10;· Afterwards you see the changed files and diff, then commit or revert.&#10;· Files are edited only — no commands such as server restarts or installs are run.&#10;· For a live site, use a development copy of the folder." data-en="✏️ Edit">✏️ 수정</button>
           </div>
           <div class="seg" id="target">
-            <button data-v="gpt">GPT</button><button data-v="claude">Claude</button><button data-v="both" class="on tip" data-tip="⚠ 사용량 주의 — 토론은 GPT·Claude를 총 5번 호출합니다 (1차 의견 2 + 교차 검토 2 + 결론 1).&#10;단독 질문보다 구독 사용량이 약 5배, 시간도 더 걸립니다. 웹 검색까지 켜면 더 늘어납니다.&#10;간단한 질문·워크플로우 분석·프롬프트 작성은 GPT나 Claude 단독을, 판단이 필요한 주제에만 토론을 쓰세요.">토론 (Discussion) <span class="warn-ico">!</span></button>
+            <button data-v="gpt">GPT</button><button data-v="claude">Claude</button><button data-v="both" class="on tip" data-tip="⚠ 사용량 주의 — 토론은 GPT·Claude를 총 5번 호출합니다 (1차 의견 2 + 교차 검토 2 + 결론 1).&#10;단독 질문보다 구독 사용량이 약 5배, 시간도 더 걸립니다. 웹 검색까지 켜면 더 늘어납니다.&#10;간단한 질문·워크플로우 분석·프롬프트 작성은 GPT나 Claude 단독을, 판단이 필요한 주제에만 토론을 쓰세요." data-en-tip="⚠ Heavy usage — Discussion calls GPT/Claude 5 times in total (2 opinions + 2 cross reviews + 1 conclusion).&#10;About 5× the subscription usage of a single question, and slower. Web search adds more.&#10;Use GPT or Claude alone for simple questions, workflow analysis or prompt writing; use Discussion for judgment calls."><span data-en="Discussion">토론 (Discussion)</span> <span class="warn-ico">!</span></button>
           </div>
-          <button class="webtog" id="webToggle" title="켜면 GPT·Claude가 웹을 검색해 근거를 확인합니다 (시간·사용량 증가)">🌐 웹 검색 끔</button>
-          <span class="mcpgrp"><button class="webtog tip" id="mcpToggle" data-tip="🔌 MCP — Claude 계정·Claude Code에 연결된 도구(예: Higgsfield, Notion)를 씁니다.&#10;'항상 허용'한 도구만 바로 실행되고, 나머지는 실행 전에 답변 아래에서 허용 여부를 묻습니다.&#10;GPT(Codex)의 MCP는 아직 지원하지 않습니다. ⚙에서 도구를 관리하세요.">🔌 MCP 끔</button><button class="webtog gear" id="mcpManage" title="MCP 도구 관리">⚙</button></span>
-          <button class="ghost small" id="modelToggle">모델 설정 ▾</button>
+          <button class="webtog" id="webToggle" title="켜면 GPT·Claude가 웹을 검색해 근거를 확인합니다 (시간·사용량 증가)" data-en-title="When on, GPT/Claude search the web to check facts (slower, more usage)">🌐 웹 검색 끔</button>
+          <span class="mcpgrp"><button class="webtog tip" id="mcpToggle" data-tip="🔌 MCP — Claude 계정·Claude Code에 연결된 도구(예: Higgsfield, Notion)를 씁니다.&#10;'항상 허용'한 도구만 바로 실행되고, 나머지는 실행 전에 답변 아래에서 허용 여부를 묻습니다.&#10;GPT(Codex)의 MCP는 아직 지원하지 않습니다. ⚙에서 도구를 관리하세요." data-en-tip="🔌 MCP — use tools connected to your Claude account / Claude Code (e.g. Higgsfield, Notion).&#10;Only tools you marked 'Always allow' run right away; others ask for approval below the answer.&#10;GPT (Codex) MCP is not supported yet. Manage tools with ⚙.">🔌 MCP 끔</button><button class="webtog gear" id="mcpManage" title="MCP 도구 관리" data-en-title="Manage MCP tools">⚙</button></span>
+          <button class="ghost small" id="modelToggle" data-en="Models ▾">모델 설정 ▾</button>
           <span class="status" id="modelInfo"></span>
           <input class="workdir" id="workdir" placeholder="작업 폴더 (예: D:\ComfyUI\user\default\workflows) — 읽기 전용">
         </div>
         <div class="models" id="models">
-          <label>GPT 모델 (Codex CLI)
+          <label><span data-en="GPT model (Codex CLI)">GPT 모델 (Codex CLI)</span>
             <select id="gptModel">
-              <option value="account default">계정 기본값</option>
-              <optgroup label="계정에서 지원될 때만 동작">
+              <option value="account default" data-en="Account default">계정 기본값</option>
+              <optgroup label="계정에서 지원될 때만 동작" data-en-label="Works only if your account supports it">
               <option value="gpt-6.1-sol">GPT-6.1 Sol</option>
               <option value="gpt-6-sol">GPT-6 Sol</option>
               <option value="gpt-6-luna">GPT-6 Luna</option>
               <option value="gpt-6-astra">GPT-6 Astra</option>
               </optgroup>
-              <option value="custom">직접 입력…</option>
+              <option value="custom" data-en="Custom…">직접 입력…</option>
             </select>
-            <input class="custom" id="gptCustom" placeholder="예: gpt-6.1-sol">
+            <input class="custom" id="gptCustom" placeholder="예: gpt-6.1-sol" data-en-placeholder="e.g. gpt-6.1-sol">
           </label>
-          <label>Claude 모델 (Claude Code CLI)
+          <label><span data-en="Claude model (Claude Code CLI)">Claude 모델 (Claude Code CLI)</span>
             <select id="claudeModel">
-              <option value="account default">계정 기본값</option>
-              <optgroup label="최신 버전 자동 추적">
-                <option value="opus">Opus 최신</option><option value="sonnet">Sonnet 최신</option><option value="fable">Fable 최신</option>
+              <option value="account default" data-en="Account default">계정 기본값</option>
+              <optgroup label="최신 버전 자동 추적" data-en-label="Always latest">
+                <option value="opus" data-en="Opus latest">Opus 최신</option><option value="sonnet" data-en="Sonnet latest">Sonnet 최신</option><option value="fable" data-en="Fable latest">Fable 최신</option>
               </optgroup>
-              <optgroup label="버전 고정">
+              <optgroup label="버전 고정" data-en-label="Pinned version">
                 <option value="claude-opus-5-5">Claude Opus 5.5</option>
                 <option value="claude-sonnet-5-5">Claude Sonnet 5.5</option>
                 <option value="claude-fable-5-1">Claude Fable 5.1</option>
                 <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
               </optgroup>
-              <option value="custom">직접 입력…</option>
+              <option value="custom" data-en="Custom…">직접 입력…</option>
             </select>
-            <input class="custom" id="claudeCustom" placeholder="예: claude-opus-5-5">
+            <input class="custom" id="claudeCustom" placeholder="예: claude-opus-5-5" data-en-placeholder="e.g. claude-opus-5-5">
           </label>
         </div>
         <div class="chips" id="chips"></div>
         <div class="attnote" id="attachNote" hidden></div>
         <div class="write">
-          <button class="ghost" id="attachBtn" title="파일 첨부 (JSON·이미지·영상 · 끌어다 놓기·Ctrl+V 가능)">📎</button>
+          <button class="ghost" id="attachBtn" title="파일 첨부 (JSON·이미지·영상 · 끌어다 놓기·Ctrl+V 가능)" data-en-title="Attach files (JSON, images, video · drag & drop or Ctrl+V)">📎</button>
           <input type="file" id="fileInput" multiple hidden accept=".json,.txt,.md,.py,.yaml,.yml,.csv,.tsv,.toml,.ini,.cfg,.log,.js,.ts,.html,.css,.xml,.ps1,.bat,.cmd,.sh,image/*,video/*,.mov,.mkv">
           <textarea id="q" rows="2" placeholder="질문을 입력하세요 · 📎·끌어다 놓기·Ctrl+V로 JSON·이미지·영상 첨부 (Enter 보내기 · Shift+Enter 줄바꿈)"></textarea>
-          <button class="primary" id="send">보내기</button>
+          <button class="primary" id="send" data-en="Send">보내기</button>
         </div>
-        <div class="status"><span id="spin" class="spin" hidden></span><span id="status">준비됨</span><span class="r" id="ctxInfo"></span></div>
+        <div class="status"><span id="spin" class="spin" hidden></span><span id="status" data-en="Ready">준비됨</span><span class="r" id="ctxInfo"></span></div>
       </div>
     </div>
   </main>
@@ -306,19 +311,28 @@ details.indiv .msg{margin-top:10px}
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.14.1'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.15.0'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+// 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
+const T = (ko, en) => LANG === 'en' ? en : ko;
+function applyStaticLang() {
+  if (LANG !== 'en') return;
+  document.querySelectorAll('[data-en]').forEach(e => { e.textContent = e.dataset.en; });
+  const attr = { enTitle:'title', enPlaceholder:'placeholder', enTip:'data-tip', enLabel:'label', enAria:'aria-label' };
+  document.querySelectorAll('[data-en-title],[data-en-placeholder],[data-en-tip],[data-en-label],[data-en-aria]').forEach(e => {
+    for (const [k, a] of Object.entries(attr)) if (e.dataset[k] != null) e.setAttribute(a, e.dataset[k]); });
+}
 const store = { get(k){ try { return localStorage.getItem(k); } catch { return null; } }, set(k,v){ try { localStorage.setItem(k,v); } catch {} } };
 const S = { files:[], mode:'chat', scope:'all', list:[], current:null, meta:null, items:[], running:null, target:'both', searchTimer:null };
 
 // ---------- API ----------
 async function api(path, body) {
-  const opt = body === undefined ? {} : { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) };
+  const opt = body === undefined ? { headers:{ 'X-Lang':LANG } } : { method:'POST', headers:{'Content-Type':'application/json', 'X-Lang':LANG}, body:JSON.stringify(body) };
   const res = await fetch(path, opt);
   let data = {};
-  try { data = await res.json(); } catch { throw new Error(`서버 응답을 읽을 수 없습니다 (${res.status})`); }
-  if (!res.ok) throw new Error(data.error || `요청 실패 (${res.status})`);
+  try { data = await res.json(); } catch { throw new Error(T(`서버 응답을 읽을 수 없습니다 (${res.status})`, `Could not read the server response (${res.status})`)); }
+  if (!res.ok) throw new Error(data.error || T(`요청 실패 (${res.status})`, `Request failed (${res.status})`));
   return data;
 }
 function toast(text, err) { const t = el('div', err ? 'err' : '', text); $('#toast').append(t); setTimeout(() => t.remove(), err ? 7000 : 3200); }
@@ -412,23 +426,23 @@ function renderText(container, text) {
 
 // ---------- 메시지 ----------
 const KIND = { user:'user', GPT:'gpt', Claude:'claude', Council:'council', '오류':'error' };
-const LABEL = { user:'나', GPT:'GPT', Claude:'Claude', Council:'Council 최종 결론', '오류':'오류 기록 · 모델에는 전달되지 않음' };
-const ROUND = { 1:'1차 의견', 2:'교차 검토', 3:'구현' };
+const LABEL = { user:T('나', 'You'), GPT:'GPT', Claude:'Claude', Council:T('Council 최종 결론', 'Council conclusion'), '오류':T('오류 기록 · 모델에는 전달되지 않음', 'Error log · not sent to the models') };
+const ROUND = { 1:T('1차 의견', 'Round 1'), 2:T('교차 검토', 'Cross review'), 3:T('구현', 'Implementation') };
 function who(item) { return item.role === 'user' ? 'user' : (item.model || 'assistant'); }
 function msgEl(item, index) {
   const w = who(item), box = el('article', 'msg ' + (KIND[w] || ''));
   if (index != null) box.dataset.index = index;
   const head = el('div', 'head');
   head.append(el('span', 'who', (LABEL[w] || w) + (item.round ? ' · ' + ROUND[item.round] : '')));
-  if (item.web) head.append(el('span', 'badge web', '🌐 웹 검색'));
+  if (item.web) head.append(el('span', 'badge web', T('🌐 웹 검색', '🌐 Web search')));
   if (item.mcp) head.append(el('span', 'badge web', '🔌 MCP'));
-  if (item.mode === 'work' || item.mode === 'edit') head.append(el('span', 'badge', (item.mode === 'edit' ? '✏️ 수정' : '작업') + (item.workdir ? ' · ' + item.workdir : '')));
+  if (item.mode === 'work' || item.mode === 'edit') head.append(el('span', 'badge', (item.mode === 'edit' ? T('✏️ 수정', '✏️ Edit') : T('작업', 'Work')) + (item.workdir ? ' · ' + item.workdir : '')));
   if (item.cli_model) head.append(el('span', '', item.cli_model));
   if (item.elapsed) head.append(el('span', '', `${item.elapsed}s`));
   head.append(el('span', 'sp'), el('span', '', fmt(item.time)));
   if (w !== 'user') {
-    const c = el('button', 'ghost small', '복사'); c.onclick = () => copyText(item.content); head.append(c);
-    if (w !== '오류') { const d = el('button', 'ghost small', '⤓ MD'); d.title = '이 답변만 Markdown 파일로 내려받기'; d.onclick = () => downloadAnswer(item, index); head.append(d); }
+    const c = el('button', 'ghost small', T('복사', 'Copy')); c.onclick = () => copyText(item.content); head.append(c);
+    if (w !== '오류') { const d = el('button', 'ghost small', '⤓ MD'); d.title = T('이 답변만 Markdown 파일로 내려받기', 'Download only this answer as Markdown'); d.onclick = () => downloadAnswer(item, index); head.append(d); }
   }
   const body = el('div', 'content'); renderText(body, item.content);
   box.append(head, body);
@@ -437,17 +451,17 @@ function msgEl(item, index) {
     const a = el('div', 'atts');
     item.attachments.forEach(att => {
       if (att.kind === 'image' || att.kind === 'video') {
-        a.append(el('div', '', `${att.kind === 'video' ? '🎬' : '🖼'} ${att.name} · ${fmtSize(att.size || 0)}` + (att.error ? ' · 분석 준비 실패' : '')));
+        a.append(el('div', '', `${att.kind === 'video' ? '🎬' : '🖼'} ${att.name} · ${fmtSize(att.size || 0)}` + (att.error ? T(' · 분석 준비 실패', ' · could not prepare') : '')));
         const strip = el('div', 'media' + (att.kind === 'video' ? ' frames' : ''));
         (att.images || []).forEach((p, k) => { const u = attUrl(att, p); if (!u) return;
-          const wrap = el('div'); const im = el('img'); im.src = u; im.loading = 'lazy'; im.title = '크게 보기'; im.onclick = () => window.open(u, '_blank'); wrap.append(im);
+          const wrap = el('div'); const im = el('img'); im.src = u; im.loading = 'lazy'; im.title = T('크게 보기', 'View larger'); im.onclick = () => window.open(u, '_blank'); wrap.append(im);
           if (att.frames && att.frames[k]) wrap.append(el('div', 't', att.frames[k].time.toFixed(1) + 's'));
           strip.append(wrap); });
         a.append(strip);
-        if (att.kind === 'video' && att.summary) { const d = el('details'); d.append(el('summary', '', '영상 정보'), el('pre', '', att.summary)); a.append(d); }
+        if (att.kind === 'video' && att.summary) { const d = el('details'); d.append(el('summary', '', T('영상 정보', 'Video info')), el('pre', '', att.summary)); a.append(d); }
         return;
       }
-      const label = `📎 ${att.name} · ${(att.size || 0).toLocaleString()}자` + (att.kind === 'workflow' ? ' · 워크플로우 요약됨' : '');
+      const label = `📎 ${att.name} · ${(att.size || 0).toLocaleString()}${T('자', ' chars')}` + (att.kind === 'workflow' ? T(' · 워크플로우 요약됨', ' · workflow summarized') : '');
       if (att.summary) { const d = el('details'); d.append(el('summary', '', label), el('pre', '', att.summary)); a.append(d); }
       else a.append(el('div', '', label));
     });
@@ -456,7 +470,7 @@ function msgEl(item, index) {
   return box;
 }
 // ---------- MCP: 승인이 필요한 도구 ----------
-const KIND_LABEL = { read:'조회', action:'실행·비용 가능', unknown:'확인 필요' };
+const KIND_LABEL = { read:T('조회', 'read'), action:T('실행·비용 가능', 'action · may cost'), unknown:T('확인 필요', 'unclear') };
 function toolKind(name) {
   const t = (name.split('__')[2] || name).toLowerCase().split(/[_\-.]/);
   const act = ['generate','create','add','update','delete','remove','send','post','publish','upload','write','edit','move','deploy','execute','run','buy','purchase','cancel','invoke','import','build','participate','connect','reframe','upscale','outpaint','dubbing'];
@@ -466,53 +480,53 @@ function toolKind(name) {
 function toolLabel(name) { const [, srv, tool] = name.split('__'); return `${(srv || '').replace(/^claude_ai_/, '')} · ${tool || name}`; }
 function mcpDenialCard(item, index) {
   const c = el('div', 'mcpdeny'), tools = [...new Set(item.mcp_denials.map(d => d.tool))];
-  c.append(el('b', '', '🔌 Claude가 허용되지 않은 도구를 쓰려 해서 실행하지 않았습니다'));
+  c.append(el('b', '', T('🔌 Claude가 허용되지 않은 도구를 쓰려 해서 실행하지 않았습니다', '🔌 Claude tried to use a tool that is not allowed, so it was not run')));
   item.mcp_denials.forEach(d => { const k = toolKind(d.tool), t = el('div', 't', toolLabel(d.tool)); t.append(el('span', 'kind ' + k, KIND_LABEL[k])); c.append(t);
     if (d.input && d.input !== '{}') c.append(el('pre', '', d.input)); });
-  if (tools.some(t => toolKind(t) === 'action')) c.append(el('div', '', '⚠ 생성·수정·결제처럼 실제로 무언가를 하거나 크레딧을 쓸 수 있는 도구입니다. 입력 내용을 확인한 뒤 허용하세요.'));
+  if (tools.some(t => toolKind(t) === 'action')) c.append(el('div', '', T('⚠ 생성·수정·결제처럼 실제로 무언가를 하거나 크레딧을 쓸 수 있는 도구입니다. 입력 내용을 확인한 뒤 허용하세요.', '⚠ This tool can take real actions or spend credits (create, edit, pay…). Check the input before allowing it.')));
   let q = null; for (let i = index - 1; i >= 0; i--) if (S.items[i].role === 'user') { q = S.items[i]; break; }
   const row = el('div', 'row');
-  const once = el('button', 'small', '이번만 허용하고 다시 답하기'), always = el('button', 'small', '항상 허용하고 다시 답하기'), no = el('button', 'ghost small', '허용 안 함');
+  const once = el('button', 'small', T('이번만 허용하고 다시 답하기', 'Allow once and answer again')), always = el('button', 'small', T('항상 허용하고 다시 답하기', 'Always allow and answer again')), no = el('button', 'ghost small', T('허용 안 함', "Don't allow"));
   const rerun = async (save) => {
-    if (!q) return toast('원래 질문을 찾지 못했습니다', true);
-    if (S.running) return toast('답변 생성 중에는 다시 실행할 수 없습니다', true);
+    if (!q) return toast(T('원래 질문을 찾지 못했습니다', 'Could not find the original question'), true);
+    if (S.running) return toast(T('답변 생성 중에는 다시 실행할 수 없습니다', 'Cannot rerun while an answer is being generated'), true);
     if (save) { try { for (const t of tools) await api('/api/mcp/allow', { tool:t, allowed:true }); } catch (e) { return toast(e.message, true); } }
     setMcp(true); if (q.target) setTarget(q.target);
     S.allowOnce = save ? [] : tools; $('#q').value = q.content; send();
   };
-  once.onclick = () => rerun(false); always.onclick = () => { if (tools.some(t => toolKind(t) === 'action') && !confirm('실행·비용이 들 수 있는 도구를 항상 허용할까요?\n앞으로 Claude가 묻지 않고 이 도구를 실행할 수 있습니다.')) return; rerun(true); };
-  no.onclick = () => { c.remove(); toast('실행하지 않았습니다'); };
+  once.onclick = () => rerun(false); always.onclick = () => { if (tools.some(t => toolKind(t) === 'action') && !confirm(T('실행·비용이 들 수 있는 도구를 항상 허용할까요?\n앞으로 Claude가 묻지 않고 이 도구를 실행할 수 있습니다.', 'Always allow tools that may take actions or cost credits?\nClaude will run them without asking from now on.'))) return; rerun(true); };
+  no.onclick = () => { c.remove(); toast(T('실행하지 않았습니다', 'Not run')); };
   row.append(once, always, no); c.append(row);
   return c;
 }
 async function openMcpManager() {
-  const body = el('div'), info = el('div', '', '불러오는 중…'), list = el('div', 'mcplist');
-  body.append(el('div', '', 'Claude 계정(claude.ai 커넥터)과 Claude Code에 연결된 MCP 도구입니다. "항상 허용"한 도구만 묻지 않고 실행됩니다. 나머지는 쓰려고 할 때 답변 아래에서 허용 여부를 묻습니다.'), info, list);
+  const body = el('div'), info = el('div', '', T('불러오는 중…', 'Loading…')), list = el('div', 'mcplist');
+  body.append(el('div', '', T('Claude 계정(claude.ai 커넥터)과 Claude Code에 연결된 MCP 도구입니다. "항상 허용"한 도구만 묻지 않고 실행됩니다. 나머지는 쓰려고 할 때 답변 아래에서 허용 여부를 묻습니다.', 'MCP tools connected to your Claude account (claude.ai connectors) and Claude Code. Only tools checked "Always allow" run without asking; others ask for approval below the answer.')), info, list);
   const render = st => {
     list.innerHTML = '';
-    info.textContent = st.error ? '확인 실패: ' + st.error : st.checked_at ? `마지막 확인: ${fmt(st.checked_at)} · 서버 ${st.servers.length}개 · 도구 ${st.tools.length}개` : '아직 도구 목록을 가져오지 않았습니다. 아래 "도구 목록 가져오기"를 누르세요.';
+    info.textContent = st.error ? T('확인 실패: ', 'Check failed: ') + st.error : st.checked_at ? T(`마지막 확인: ${fmt(st.checked_at)} · 서버 ${st.servers.length}개 · 도구 ${st.tools.length}개`, `Last checked: ${fmt(st.checked_at)} · ${st.servers.length} servers · ${st.tools.length} tools`) : T('아직 도구 목록을 가져오지 않았습니다. 아래 "도구 목록 가져오기"를 누르세요.', 'No tool list yet. Click "Load tool list" below.');
     const by = {}; st.tools.forEach(t => (by[t.server] = by[t.server] || []).push(t));
     Object.keys(by).sort().forEach(srv => { const sv = st.servers.find(x => x.name.replace(/[^A-Za-z0-9_-]/g, '_') === srv);
       list.append(el('div', 'srv', `${srv.replace(/^claude_ai_/, '')}${sv && sv.status ? ' · ' + sv.status : ''}`));
       by[srv].forEach(t => { const l = el('label'), cb = el('input'); cb.type = 'checkbox'; cb.checked = t.allowed;
         cb.onchange = async () => {
-          if (cb.checked && t.kind === 'action' && !confirm(`'${t.tool}'은(는) 생성·수정·결제처럼 실제 동작을 하거나 크레딧을 쓸 수 있는 도구로 보입니다.\n항상 허용할까요?`)) { cb.checked = false; return; }
+          if (cb.checked && t.kind === 'action' && !confirm(T(`'${t.tool}'은(는) 생성·수정·결제처럼 실제 동작을 하거나 크레딧을 쓸 수 있는 도구로 보입니다.\n항상 허용할까요?`, `'${t.tool}' looks like a tool that takes real actions or spends credits (create, edit, pay…).\nAlways allow it?`))) { cb.checked = false; return; }
           try { render(await api('/api/mcp/allow', { tool:t.name, allowed:cb.checked })); } catch (e) { toast(e.message, true); cb.checked = !cb.checked; } };
         l.append(cb, el('span', '', t.tool)); const k = el('span', 'kind ' + t.kind, KIND_LABEL[t.kind]); l.append(k); list.append(l); }); });
   };
-  const m = modal('MCP 도구 관리', body, [{ label:'닫기' }, { label:'도구 목록 가져오기', keep:true, onClick: async () => {
-    info.textContent = 'Claude Code에서 연결된 도구를 확인하는 중… (최대 1분)';
-    try { render(await api('/api/mcp/refresh', {})); } catch (e) { info.textContent = '확인 실패: ' + e.message; } } }]);
+  const m = modal(T('MCP 도구 관리', 'Manage MCP tools'), body, [{ label:T('닫기', 'Close') }, { label:T('도구 목록 가져오기', 'Load tool list'), keep:true, onClick: async () => {
+    info.textContent = T('Claude Code에서 연결된 도구를 확인하는 중… (최대 1분)', 'Checking tools connected to Claude Code… (up to 1 min)');
+    try { render(await api('/api/mcp/refresh', {})); } catch (e) { info.textContent = T('확인 실패: ', 'Check failed: ') + e.message; } } }]);
   try { render(await api('/api/mcp')); } catch (e) { info.textContent = e.message; }
   return m;
 }
-async function copyText(t) { try { await navigator.clipboard.writeText(t); toast('복사했습니다'); } catch { toast('복사 실패: 브라우저 권한을 확인하세요', true); } }
+async function copyText(t) { try { await navigator.clipboard.writeText(t); toast(T('복사했습니다', 'Copied')); } catch { toast(T('복사 실패: 브라우저 권한을 확인하세요', 'Copy failed: check browser permissions'), true); } }
 
 function renderThread() {
   const box = $('#msgs'); box.innerHTML = '';
   if (!S.items.length) {
-    const w = el('div', 'welcome'); w.append(el('h3', '', '무엇을 물어볼까요?'),
-      el('div', '', '질문마다 GPT, Claude, 또는 토론을 고를 수 있습니다. 토론은 두 모델이 각자 답한 뒤 서로의 답을 검토하고 최종 결론을 냅니다. 최신 정보가 필요하면 🌐 웹 검색을 켜세요.'));
+    const w = el('div', 'welcome'); w.append(el('h3', '', T('무엇을 물어볼까요?', 'What would you like to ask?')),
+      el('div', '', T('질문마다 GPT, Claude, 또는 토론을 고를 수 있습니다. 토론은 두 모델이 각자 답한 뒤 서로의 답을 검토하고 최종 결론을 냅니다. 최신 정보가 필요하면 🌐 웹 검색을 켜세요.', 'Pick GPT, Claude, or Discussion for each question. In Discussion, both models answer, review each other, and a neutral conclusion is written. Turn on 🌐 Web search for up-to-date facts.')));
     box.append(w); return;
   }
   // 수정 결과 확정/되돌리기 기록 (ref → 기록)
@@ -539,17 +553,17 @@ function renderThread() {
           const order = ([x]) => (x.round || 9) * 10 + (x.model === 'GPT' ? 0 : x.model === 'Claude' ? 1 : 2);
           const sorted = [...rest].sort((a, b) => order(a) - order(b));
           const names = r => sorted.filter(([x]) => x.round === r).map(([x]) => x.model).join('·');
-          d.append(el('summary', '', `토론 과정 보기 · 1차 의견 ${names(1) || '-'} → 교차 검토 ${names(2) || '-'}`));
+          d.append(el('summary', '', T(`토론 과정 보기 · 1차 의견 ${names(1) || '-'} → 교차 검토 ${names(2) || '-'}`, `Show debate rounds · Round 1 ${names(1) || '-'} → Cross review ${names(2) || '-'}`)));
           let last = 0;
-          sorted.forEach(([x, idx]) => { if (x.round && x.round !== last) { last = x.round; d.append(el('div', 'round', x.round === 1 ? '1라운드 · 서로 보지 않고 낸 독립 의견' : '2라운드 · 상대 답변을 읽고 쓴 교차 검토')); } d.append(msgEl(x, idx)); });
+          sorted.forEach(([x, idx]) => { if (x.round && x.round !== last) { last = x.round; d.append(el('div', 'round', x.round === 1 ? T('1라운드 · 서로 보지 않고 낸 독립 의견', 'Round 1 · independent answers') : T('2라운드 · 상대 답변을 읽고 쓴 교차 검토', "Round 2 · cross reviews of each other's answers"))); } d.append(msgEl(x, idx)); });
           if (council[0].debate_dir) {
-            const b = el('button', 'ghost small dlog', '📁 토론 기록 폴더 열기');
+            const b = el('button', 'ghost small dlog', T('📁 토론 기록 폴더 열기', '📁 Open discussion log folder'));
             b.onclick = async () => { try { const r = await api('/api/debate/open', { dir: council[0].debate_dir });
-              if (!r.opened) { copyText(r.path); toast('폴더 경로를 복사했습니다: ' + r.path); } } catch (e) { toast(e.message, true); } };
+              if (!r.opened) { copyText(r.path); toast(T('폴더 경로를 복사했습니다: ', 'Folder path copied: ') + r.path); } } catch (e) { toast(e.message, true); } };
             d.append(b);
           }
         } else {
-          d.append(el('summary', '', `개별 답변 보기 (${rest.map(([x]) => x.model).join(' · ')})`));
+          d.append(el('summary', '', T(`개별 답변 보기 (${rest.map(([x]) => x.model).join(' · ')})`, `Show individual answers (${rest.map(([x]) => x.model).join(' · ')})`)));
           rest.forEach(([x, idx]) => d.append(msgEl(x, idx)));
         }
         box.append(d);
@@ -559,7 +573,7 @@ function renderThread() {
   }
 }
 // ---------- 수정 모드: 바뀐 파일 확인 → 확정(커밋) / 되돌리기 ----------
-const FILE_STATUS = { new:'새 파일', modified:'수정', deleted:'삭제' };
+const FILE_STATUS = { new:T('새 파일', 'new'), modified:T('수정', 'modified'), deleted:T('삭제', 'deleted') };
 function editCard(rec) {
   const c = el('div', 'editcard'), done = (S.editDone || {})[rec.id];
   const head = el('div', 'eh'); head.append(el('b', '', `📝 ${rec.content}`));
@@ -570,34 +584,34 @@ function editCard(rec) {
   if (rec.diff) {
     const d = el('details'), pre = el('pre', 'diff');
     rec.diff.split('\n').forEach(l => { const s = el('span', l.startsWith('+') && !l.startsWith('+++') ? 'add' : l.startsWith('-') && !l.startsWith('---') ? 'del' : l.startsWith('@@') ? 'hunk' : '', l + '\n'); pre.append(s); });
-    d.append(el('summary', '', '변경 내용 보기'), pre); c.append(d);
+    d.append(el('summary', '', T('변경 내용 보기', 'Show diff')), pre); c.append(d);
   }
   if (done) { c.append(el('div', 'estate ' + done.action, done.content)); return c; }
-  const row = el('div', 'row'), ok = el('button', 'small primary', '✅ 확정 (커밋)'), back = el('button', 'small', '↩ 되돌리기');
+  const row = el('div', 'row'), ok = el('button', 'small primary', T('✅ 확정 (커밋)', '✅ Commit')), back = el('button', 'small', T('↩ 되돌리기', '↩ Revert'));
   const apply = async (action) => {
-    if (action === 'revert' && !confirm('수정 전 상태로 되돌릴까요?\n새로 만든 파일은 삭제되고, 고친 파일은 원래 내용으로 돌아갑니다.\n(이후 이 폴더에서 직접 고친 내용도 함께 되돌려집니다)')) return;
+    if (action === 'revert' && !confirm(T('수정 전 상태로 되돌릴까요?\n새로 만든 파일은 삭제되고, 고친 파일은 원래 내용으로 돌아갑니다.\n(이후 이 폴더에서 직접 고친 내용도 함께 되돌려집니다)', 'Revert to the checkpoint?\nNew files will be deleted and edited files restored.\n(Any edits you made in this folder since then are reverted too.)'))) return;
     let message = '';
-    if (action === 'commit') { message = prompt('커밋 메시지 (비워 두면 자동)', '') ; if (message === null) return; }
-    try { await api('/api/edit/apply', { conversation_id:S.current, ref:rec.id, action, message }); toast(action === 'commit' ? '확정했습니다' : '되돌렸습니다'); await openConversation(S.current); }
+    if (action === 'commit') { message = prompt(T('커밋 메시지 (비워 두면 자동)', 'Commit message (leave empty for automatic)'), '') ; if (message === null) return; }
+    try { await api('/api/edit/apply', { conversation_id:S.current, ref:rec.id, action, message }); toast(action === 'commit' ? T('확정했습니다', 'Committed') : T('되돌렸습니다', 'Reverted')); await openConversation(S.current); }
     catch (e) { toast(e.message, true); }
   };
   ok.onclick = () => apply('commit'); back.onclick = () => apply('revert');
-  row.append(ok, back, el('span', 'ehint', '확정하면 Git 커밋으로 저장되고, 되돌리면 수정 전 상태로 돌아갑니다.')); c.append(row);
+  row.append(ok, back, el('span', 'ehint', T('확정하면 Git 커밋으로 저장되고, 되돌리면 수정 전 상태로 돌아갑니다.', 'Commit saves the changes as a Git commit; Revert restores the checkpoint.'))); c.append(row);
   return c;
 }
 function scrollBottom() { const t = $('#thread'); t.scrollTop = t.scrollHeight; }
 
 function renderHeader() {
   const m = S.meta;
-  $('#title').textContent = m ? m.title : '대화 없음';
-  $('#count').textContent = m ? `메시지 ${m.message_count}` : '';
+  $('#title').textContent = m ? (m.title === '새 대화' ? T('새 대화', 'New chat') : m.title) : T('대화 없음', 'No chat');
+  $('#count').textContent = m ? T(`메시지 ${m.message_count}`, `${m.message_count} messages`) : '';
   $('#archChip').hidden = !(m && m.archived);
-  $('#archiveBtn').querySelector('.lbl').textContent = m && m.archived ? '보관 해제' : '보관';
+  $('#archiveBtn').querySelector('.lbl').textContent = m && m.archived ? T('보관 해제', 'Unarchive') : T('보관', 'Archive');
   const n = $('#notices'); n.innerHTML = '';
   if (!m) return;
   if (m.summary) {
     const d = el('details', 'notice');
-    d.append(el('summary', '', `장기 요약 · 앞의 메시지 ${m.summarized_through}개 압축 · ${m.summary_model || '-'} · ${fmt(m.summary_updated_at)}`));
+    d.append(el('summary', '', T(`장기 요약 · 앞의 메시지 ${m.summarized_through}개 압축 · ${m.summary_model || '-'} · ${fmt(m.summary_updated_at)}`, `Long-term summary · first ${m.summarized_through} messages condensed · ${m.summary_model || '-'} · ${fmt(m.summary_updated_at)}`)));
     const b = el('div', 'body', m.summary); d.append(b); n.append(d);
   }
   if (m.summary_error) n.append(el('div', 'notice err', m.summary_error));
@@ -610,9 +624,9 @@ async function loadList() {
   S.list = data.items; renderList();
 }
 const MODE_ICON = {
-  chat: { label: '대화 모드', svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>' },
-  edit: { label: '수정 모드', svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>' },
-  work: { label: '작업 모드', svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>' },
+  chat: { label: T('대화 모드', 'Chat mode'), svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>' },
+  edit: { label: T('수정 모드', 'Edit mode'), svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>' },
+  work: { label: T('작업 모드', 'Work mode'), svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>' },
 };
 function convIcons(x) {
   const modes = (x.modes && x.modes.length ? x.modes : ['chat']).filter(m => MODE_ICON[m]);
@@ -622,7 +636,7 @@ function convIcons(x) {
   const mb = el('span', 'mb'), models = x.models || [];
   if (models.includes('gpt')) mb.append(el('span', 'g', 'GPT'));
   if (models.includes('claude')) mb.append(el('span', 'c', 'Claude'));
-  mb.title = models.length === 2 ? 'GPT와 Claude 모두 사용' : models.length ? `${models[0] === 'gpt' ? 'GPT' : 'Claude'} 사용` : '';
+  mb.title = models.length === 2 ? T('GPT와 Claude 모두 사용', 'Used GPT and Claude') : models.length ? T(`${models[0] === 'gpt' ? 'GPT' : 'Claude'} 사용`, `Used ${models[0] === 'gpt' ? 'GPT' : 'Claude'}`) : '';
   return { md, mb };
 }
 function renderList() {
@@ -631,18 +645,18 @@ function renderList() {
   let items = S.list;
   if (S.scope === 'all') items = items.filter(x => !x.archived);
   if (S.scope === 'archived') items = items.filter(x => x.archived);
-  if (!items.length) { box.append(el('div', 'empty-list', S.scope === 'trash' ? '휴지통이 비어 있습니다.' : S.scope === 'archived' ? '보관된 대화가 없습니다.' : '대화가 없습니다.')); return; }
+  if (!items.length) { box.append(el('div', 'empty-list', S.scope === 'trash' ? T('휴지통이 비어 있습니다.', 'The trash is empty.') : S.scope === 'archived' ? T('보관된 대화가 없습니다.', 'No archived chats.') : T('대화가 없습니다.', 'No chats yet.'))); return; }
   items.forEach(x => {
     const b = el('div', 'item' + (x.id === S.current && S.scope !== 'trash' ? ' on' : ''));
     const { md, mb } = convIcons(x), hd = el('div', 'hd'), ft = el('div', 'ft');
-    hd.append(md, el('span', 't', x.title));
-    ft.append(el('span', 's', `${fmt(S.scope === 'trash' ? x.deleted_at : x.updated_at)} · 메시지 ${x.message_count}`), mb);
+    hd.append(md, el('span', 't', x.title === '새 대화' ? T('새 대화', 'New chat') : x.title));
+    ft.append(el('span', 's', `${fmt(S.scope === 'trash' ? x.deleted_at : x.updated_at)} · ${T(`메시지 ${x.message_count}`, `${x.message_count} msgs`)}`), mb);
     b.append(hd, ft);
     if (S.scope === 'trash') {
-      const row = el('div', 'row'), r = el('button', 'small', '복구'), p = el('button', 'small danger', '영구 삭제');
-      r.onclick = async () => { try { await api('/api/conversation/restore', { id:x.id }); toast('복구했습니다'); await loadList(); } catch (e) { toast(e.message, true); } };
-      p.onclick = async () => { if (!confirm(`'${x.title}' 대화를 영구 삭제할까요?\n되돌릴 수 없습니다.`)) return;
-        try { await api('/api/conversation/purge', { id:x.id }); toast('영구 삭제했습니다'); await loadList(); } catch (e) { toast(e.message, true); } };
+      const row = el('div', 'row'), r = el('button', 'small', T('복구', 'Restore')), p = el('button', 'small danger', T('영구 삭제', 'Delete forever'));
+      r.onclick = async () => { try { await api('/api/conversation/restore', { id:x.id }); toast(T('복구했습니다', 'Restored')); await loadList(); } catch (e) { toast(e.message, true); } };
+      p.onclick = async () => { if (!confirm(T(`'${x.title}' 대화를 영구 삭제할까요?\n되돌릴 수 없습니다.`, `Delete '${x.title}' forever?\nThis cannot be undone.`))) return;
+        try { await api('/api/conversation/purge', { id:x.id }); toast(T('영구 삭제했습니다', 'Deleted forever')); await loadList(); } catch (e) { toast(e.message, true); } };
       row.append(r, p); b.append(row);
     } else { b.tabIndex = 0; b.onclick = () => openConversation(x.id); b.onkeydown = e => { if (e.key === 'Enter') openConversation(x.id); }; }
     box.append(b);
@@ -661,11 +675,11 @@ async function doSearch() {
   const data = await api('/api/search?q=' + encodeURIComponent(q));
   if ($('#search').value.trim() !== q) return;
   const box = $('#list'); box.innerHTML = '';
-  box.append(el('div', 'group', `검색 결과 ${data.items.length}건`));
-  if (!data.items.length) box.append(el('div', 'empty-list', '일치하는 내용이 없습니다.'));
+  box.append(el('div', 'group', T(`검색 결과 ${data.items.length}건`, `${data.items.length} results`)));
+  if (!data.items.length) box.append(el('div', 'empty-list', T('일치하는 내용이 없습니다.', 'No matches.')));
   data.items.forEach(r => {
     const b = el('div', 'item'); b.tabIndex = 0;
-    b.append(el('span', 't', r.title + (r.archived ? ' (보관)' : '')));
+    b.append(el('span', 't', r.title + (r.archived ? T(' (보관)', ' (archived)') : '')));
     const s = el('span', 's'); highlight(s, r.snippet, q); b.append(s);
     b.append(el('span', 's', `${r.speaker ? (LABEL[r.speaker] || r.speaker) + ' · ' : ''}${fmt(r.time)}`));
     b.onclick = () => openConversation(r.conversation_id, r.message_index);
@@ -723,36 +737,36 @@ $('#archiveBtn').onclick = async () => {
   if (!S.meta) return; const archive = !S.meta.archived;
   try {
     await api('/api/conversation/archive', { id:S.current, archived:archive });
-    toast(archive ? '보관함으로 옮겼습니다' : '보관을 해제했습니다');
+    toast(archive ? T('보관함으로 옮겼습니다', 'Moved to archive') : T('보관을 해제했습니다', 'Unarchived'));
     if (archive && S.scope === 'all') await openFallback(S.current); else await openConversation(S.current);
     await loadList();
   } catch (e) { toast(e.message, true); }
 };
 $('#deleteBtn').onclick = async () => {
   if (!S.meta) return;
-  if (S.running === S.current) { toast('답변 생성 중에는 삭제할 수 없습니다', true); return; }
-  if (!confirm(`'${S.meta.title}' 대화를 휴지통으로 옮길까요?\n휴지통에서 복구할 수 있습니다.`)) return;
-  try { const id = S.current; await api('/api/conversation/delete', { id }); toast('휴지통으로 옮겼습니다'); await openFallback(id); }
+  if (S.running === S.current) { toast(T('답변 생성 중에는 삭제할 수 없습니다', 'Cannot delete while an answer is being generated'), true); return; }
+  if (!confirm(T(`'${S.meta.title}' 대화를 휴지통으로 옮길까요?\n휴지통에서 복구할 수 있습니다.`, `Move '${S.meta.title}' to the trash?\nYou can restore it from the trash.`))) return;
+  try { const id = S.current; await api('/api/conversation/delete', { id }); toast(T('휴지통으로 옮겼습니다', 'Moved to trash')); await openFallback(id); }
   catch (e) { toast(e.message, true); }
 };
 // 답변 하나만 Markdown 으로 내려받기 (질문 + 이 답변) — 토론이 길어도 필요한 결론만 저장
 function downloadAnswer(item, index) {
   let q = null; if (index != null) for (let i = index - 1; i >= 0; i--) if (S.items[i] && S.items[i].role === 'user') { q = S.items[i]; break; }
-  const label = (LABEL[item.model] || item.model || '답변') + (item.round ? ' · ' + ROUND[item.round] : '');
+  const label = (LABEL[item.model] || item.model || T('답변', 'Answer')) + (item.round ? ' · ' + ROUND[item.round] : '');
   const d = new Date((item.time || Date.now() / 1000) * 1000), pad = n => String(n).padStart(2, '0');
   const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
-  const title = (S.meta && S.meta.title) || '대화';
-  const lines = [`# ${title} — ${label}`, '', `- 시각: ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`];
-  if (item.cli_model) lines.push(`- 모델: ${item.cli_model}`);
-  if (item.web) lines.push('- 웹 검색 사용');
-  if (q) lines.push('', '## 질문', '', q.content.trim());
+  const title = (S.meta && S.meta.title) || T('대화', 'Chat');
+  const lines = [`# ${title} — ${label}`, '', `- ${T('시각', 'Time')}: ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`];
+  if (item.cli_model) lines.push(`- ${T('모델', 'Model')}: ${item.cli_model}`);
+  if (item.web) lines.push(T('- 웹 검색 사용', '- Web search used'));
+  if (q) lines.push('', T('## 질문', '## Question'), '', q.content.trim());
   lines.push('', `## ${label}`, '', String(item.content || '').trim(), '');
-  const safe = t => t.replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').replace(/\s+/g, ' ').trim().slice(0, 60) || '대화';
-  const short = { GPT:'GPT', Claude:'Claude', Council:'결론' }[item.model] || '답변';
-  const name = `${safe(title)}_${short}${item.round ? '_' + (item.round === 1 ? '1차의견' : '교차검토') : ''}_${stamp}.md`;
+  const safe = t => t.replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').replace(/\s+/g, ' ').trim().slice(0, 60) || T('대화', 'chat');
+  const short = { GPT:'GPT', Claude:'Claude', Council:T('결론', 'conclusion') }[item.model] || T('답변', 'answer');
+  const name = `${safe(title)}_${short}${item.round ? '_' + (item.round === 1 ? T('1차의견', 'round1') : T('교차검토', 'review')) : ''}_${stamp}.md`;
   const a = el('a'); a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type:'text/markdown;charset=utf-8' })); a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  toast('내려받기: ' + name);
+  toast(T('내려받기: ', 'Downloaded: ') + name);
 }
 $('#exportBtn').onclick = async () => {
   if (!S.meta) return;
@@ -760,7 +774,7 @@ $('#exportBtn').onclick = async () => {
     const d = await api('/api/export', { id:S.current });
     const a = el('a'); a.href = URL.createObjectURL(new Blob([d.markdown], { type:'text/markdown;charset=utf-8' })); a.download = d.filename; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    toast('저장됨: ' + d.path);
+    toast(T('저장됨: ', 'Saved: ') + d.path);
   } catch (e) { toast(e.message, true); }
 };
 
@@ -789,13 +803,13 @@ function defaultLabel(which) {
 }
 function updateModelInfo() {
   const g = modelValue($('#gptModel'), $('#gptCustom')) || '?', c = modelValue($('#claudeModel'), $('#claudeCustom')) || '?';
-  const show = (v, which) => v === 'account default' ? (defaultLabel(which) ? `${defaultLabel(which)} (계정 기본)` : '계정 기본 (첫 답변 후 표시)') : prettyModel(v);
+  const show = (v, which) => v === 'account default' ? (defaultLabel(which) ? `${defaultLabel(which)} ${T('(계정 기본)', '(account default)')}` : T('계정 기본 (첫 답변 후 표시)', 'account default (shown after the first answer)')) : prettyModel(v);
   $('#modelInfo').textContent = S.target === 'gpt' ? `GPT: ${show(g, 'gpt')}` : S.target === 'claude' ? `Claude: ${show(c, 'claude')}` : `GPT: ${show(g, 'gpt')} · Claude: ${show(c, 'claude')}`;
-  const src = which => { const d = (S.defaults || {})[which] || {}; return d.source === 'config' ? 'CLI 설정 파일의 기본 모델' : d.source === 'seen' ? '최근 답변에서 실제로 쓰인 모델' : '아직 확인 전'; };
-  $('#modelInfo').title = `계정 기본값 → GPT: ${src('gpt')} / Claude: ${src('claude')}`;
+  const src = which => { const d = (S.defaults || {})[which] || {}; return d.source === 'config' ? T('CLI 설정 파일의 기본 모델', 'default model in the CLI config file') : d.source === 'seen' ? T('최근 답변에서 실제로 쓰인 모델', 'model actually used in a recent answer') : T('아직 확인 전', 'not checked yet'); };
+  $('#modelInfo').title = `${T('계정 기본값', 'Account default')} → GPT: ${src('gpt')} / Claude: ${src('claude')}`;
   // 모델 설정 목록의 '계정 기본값'에도 실제 모델 표시
   [['gpt', $('#gptModel')], ['claude', $('#claudeModel')]].forEach(([w, sel]) => {
-    const o = sel.querySelector('option[value="account default"]'); if (o) o.textContent = defaultLabel(w) ? `계정 기본값 (${defaultLabel(w)})` : '계정 기본값';
+    const o = sel.querySelector('option[value="account default"]'); if (o) o.textContent = defaultLabel(w) ? `${T('계정 기본값', 'Account default')} (${defaultLabel(w)})` : T('계정 기본값', 'Account default');
   });
 }
 async function refreshStatusInfo() {
@@ -806,48 +820,57 @@ function renderUsage() {
   const box = $('#cli'); if (!box || !S.usage) return;
   let line = $('#usageLine'); if (!line) { line = el('div'); line.id = 'usageLine'; line.className = 'usage'; }
   const u = S.usage; line.innerHTML = '';
-  line.append(el('span', '', `오늘 사용 GPT ${u.today.gpt}회 · Claude ${u.today.claude}회`));
-  line.title = `Council에서 모델을 부른 횟수 (최근 7일: GPT ${u.week.gpt}회 · Claude ${u.week.claude}회)`;
-  const link = el('span', 'upd', '남은 사용량 보기'); link.style.color = 'var(--muted)';
+  line.append(el('span', '', T(`오늘 사용 GPT ${u.today.gpt}회 · Claude ${u.today.claude}회`, `Today: GPT ${u.today.gpt} · Claude ${u.today.claude} calls`)));
+  line.title = T(`Council에서 모델을 부른 횟수 (최근 7일: GPT ${u.week.gpt}회 · Claude ${u.week.claude}회)`, `Model calls from Council (last 7 days: GPT ${u.week.gpt} · Claude ${u.week.claude})`);
+  const link = el('span', 'upd', T('남은 사용량 보기', 'Check remaining usage')); link.style.color = 'var(--muted)';
   link.onclick = () => {
     const body = el('div');
-    body.append(el('pre', '', 'ChatGPT·Claude 구독은 "크레딧"이 아니라 일정 시간마다 초기화되는 사용 한도가 있습니다.\nCLI가 남은 한도를 알려 주지 않아 Council에서는 직접 표시할 수 없어서, 공식 사용량 페이지를 열어 드립니다.\n(브라우저에 해당 계정으로 로그인되어 있어야 합니다)'));
-    modal('남은 사용량 확인', body, [{ label:'닫기' },
-      { label:'GPT (Codex) 사용량', onClick: () => window.open(USAGE_PAGES.gpt, '_blank') },
-      { label:'Claude 사용량', primary:true, onClick: () => window.open(USAGE_PAGES.claude, '_blank') }]);
+    body.append(el('pre', '', T('ChatGPT·Claude 구독은 "크레딧"이 아니라 일정 시간마다 초기화되는 사용 한도가 있습니다.\nCLI가 남은 한도를 알려 주지 않아 Council에서는 직접 표시할 수 없어서, 공식 사용량 페이지를 열어 드립니다.\n(브라우저에 해당 계정으로 로그인되어 있어야 합니다)', 'ChatGPT and Claude subscriptions have usage limits that reset periodically, not "credits".\nThe CLIs do not report the remaining limit, so Council opens the official usage pages instead.\n(You need to be signed in to that account in your browser.)')));
+    modal(T('남은 사용량 확인', 'Remaining usage'), body, [{ label:T('닫기', 'Close') },
+      { label:T('GPT (Codex) 사용량', 'GPT (Codex) usage'), onClick: () => window.open(USAGE_PAGES.gpt, '_blank') },
+      { label:T('Claude 사용량', 'Claude usage'), primary:true, onClick: () => window.open(USAGE_PAGES.claude, '_blank') }]);
   };
   line.append(link);
   const again = box.querySelector('.recheck'); if (again) box.insertBefore(line, again); else box.append(line);
 }
 document.querySelectorAll('#target button').forEach(b => b.onclick = () => setTarget(b.dataset.v));
-function setWeb(on) { S.web = !!on; store.set('councilWeb', S.web ? '1' : ''); const b = $('#webToggle'); b.classList.toggle('on', S.web); b.textContent = S.web ? '🌐 웹 검색 켬' : '🌐 웹 검색 끔'; }
+function setWeb(on) { S.web = !!on; store.set('councilWeb', S.web ? '1' : ''); const b = $('#webToggle'); b.classList.toggle('on', S.web); b.textContent = S.web ? T('🌐 웹 검색 켬', '🌐 Web search on') : T('🌐 웹 검색 끔', '🌐 Web search off'); }
 $('#webToggle').onclick = () => setWeb(!S.web);
 // ---------- 화면 테마 (다크 / 라이트 / 시스템 설정 따르기) ----------
-const THEMES = { dark:{ icon:'🌙', label:'다크 모드' }, light:{ icon:'☀️', label:'라이트 모드' }, system:{ icon:'🖥️', label:'시스템 설정 따르기' } };
+const THEMES = { dark:{ icon:'🌙', label:T('다크 모드', 'Dark mode') }, light:{ icon:'☀️', label:T('라이트 모드', 'Light mode') }, system:{ icon:'🖥️', label:T('시스템 설정 따르기', 'Follow system') } };
 const sysLight = matchMedia('(prefers-color-scheme: light)');
 function applyTheme(pref) {
   if (!THEMES[pref]) pref = 'system';
   S.theme = pref; store.set('councilTheme', pref);
   document.documentElement.dataset.theme = pref === 'system' ? (sysLight.matches ? 'light' : 'dark') : pref;
-  const b = $('#themeBtn'); b.textContent = THEMES[pref].icon; b.title = `화면 테마: ${THEMES[pref].label} (누르면 바뀜)`;
+  const b = $('#themeBtn'); b.textContent = THEMES[pref].icon; b.title = T(`화면 테마: ${THEMES[pref].label} (누르면 바뀜)`, `Theme: ${THEMES[pref].label} (click to change)`);
 }
 $('#themeBtn').onclick = () => { const order = ['dark', 'light', 'system'], next = order[(order.indexOf(S.theme) + 1) % 3]; applyTheme(next); toast(THEMES[next].label); };
 sysLight.addEventListener('change', () => { if (S.theme === 'system') applyTheme('system'); });
-function setMcp(on) { S.mcp = !!on; store.set('councilMcp', S.mcp ? '1' : ''); const b = $('#mcpToggle'); b.classList.toggle('on', S.mcp); b.textContent = S.mcp ? '🔌 MCP 켬' : '🔌 MCP 끔'; }
+// ---------- 화면 언어 (한국어 / English) ----------
+function setupLangButton() {
+  const b = $('#langBtn'); b.textContent = LANG === 'en' ? '한국어' : 'EN';
+  b.title = LANG === 'en' ? '한국어로 보기' : 'Switch to English';
+  b.onclick = () => {
+    if (S.running) { toast(T('답변 생성 중에는 언어를 바꿀 수 없습니다', 'Cannot switch language while an answer is being generated'), true); return; }
+    store.set('councilLang', LANG === 'en' ? 'ko' : 'en'); location.reload();
+  };
+}
+function setMcp(on) { S.mcp = !!on; store.set('councilMcp', S.mcp ? '1' : ''); const b = $('#mcpToggle'); b.classList.toggle('on', S.mcp); b.textContent = S.mcp ? T('🔌 MCP 켬', '🔌 MCP on') : T('🔌 MCP 끔', '🔌 MCP off'); }
 $('#mcpToggle').onclick = () => setMcp(!S.mcp);
 $('#mcpManage').onclick = () => openMcpManager();
 function setTarget(v) { S.target = v; store.set('councilTarget', v); document.querySelectorAll('#target button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); updateModelInfo(); }
 document.querySelectorAll('#mode button').forEach(b => b.onclick = () => setMode(b.dataset.m));
-function setMode(m) { S.mode = m; store.set('councilMode', m); document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.m === m)); $('#workdir').classList.toggle('show', m === 'work' || m === 'edit'); $('#workdir').placeholder = m === 'edit' ? '작업 폴더 (예: D:\\flow-dev) — 이 폴더의 파일을 직접 수정합니다' : '작업 폴더 (예: D:\\ComfyUI\\user\\default\\workflows) — 읽기 전용'; $('#q').placeholder = m === 'edit' ? '무엇을 만들거나 고칠지 적어 주세요 — 끝나면 바뀐 파일을 확인하고 확정·되돌리기 (Enter 보내기)' : m === 'work' ? '작업 폴더의 파일을 참고해 답할 질문 (Enter 보내기 · Shift+Enter 줄바꿈)' : '질문을 입력하세요 · 📎·끌어다 놓기·Ctrl+V로 JSON·이미지·영상 첨부 (Enter 보내기 · Shift+Enter 줄바꿈)'; }
+function setMode(m) { S.mode = m; store.set('councilMode', m); document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.m === m)); $('#workdir').classList.toggle('show', m === 'work' || m === 'edit'); $('#workdir').placeholder = m === 'edit' ? T('작업 폴더 (예: D:\\flow-dev) — 이 폴더의 파일을 직접 수정합니다', 'Working folder (e.g. D:\\my-project-dev) — files here will be edited') : T('작업 폴더 (예: D:\\ComfyUI\\user\\default\\workflows) — 읽기 전용', 'Working folder (e.g. D:\\ComfyUI\\user\\default\\workflows) — read-only'); $('#q').placeholder = m === 'edit' ? T('무엇을 만들거나 고칠지 적어 주세요 — 끝나면 바뀐 파일을 확인하고 확정·되돌리기 (Enter 보내기)', 'Describe what to create or change — review the changed files afterwards, then commit or revert (Enter to send)') : m === 'work' ? T('작업 폴더의 파일을 참고해 답할 질문 (Enter 보내기 · Shift+Enter 줄바꿈)', 'Ask about the files in the working folder (Enter to send · Shift+Enter for a new line)') : T('질문을 입력하세요 · 📎·끌어다 놓기·Ctrl+V로 JSON·이미지·영상 첨부 (Enter 보내기 · Shift+Enter 줄바꿈)', 'Ask anything · attach JSON, images or video with 📎, drag & drop or Ctrl+V (Enter to send · Shift+Enter for a new line)'); }
 $('#workdir').addEventListener('input', () => store.set('councilWorkdir', $('#workdir').value.trim()));
-$('#modelToggle').onclick = () => { const m = $('#models'); m.classList.toggle('open'); $('#modelToggle').textContent = m.classList.contains('open') ? '모델 설정 ▴' : '모델 설정 ▾'; };
+$('#modelToggle').onclick = () => { const m = $('#models'); m.classList.toggle('open'); $('#modelToggle').textContent = m.classList.contains('open') ? T('모델 설정 ▴', 'Models ▴') : T('모델 설정 ▾', 'Models ▾'); };
 
 // ---------- 보내기 ----------
 function setBusy(on, text) {
   S.running = on ? S.current : null;
   const b = $('#send'); b.disabled = false; b.classList.toggle('stop', on);
-  b.textContent = on ? '■ 중지' : '보내기'; b.title = on ? '답변 생성 중지 (Esc)' : '';
-  $('#spin').hidden = !on; $('#status').textContent = text || (on ? '진행 중' : '준비됨');
+  b.textContent = on ? T('■ 중지', '■ Stop') : T('보내기', 'Send'); b.title = on ? T('답변 생성 중지 (Esc)', 'Stop generating (Esc)') : '';
+  $('#spin').hidden = !on; $('#status').textContent = text || (on ? T('진행 중', 'Working') : T('준비됨', 'Ready'));
 }
 function pendingEl(text) {
   // 진행 중 표시 + 경과 시간 (웹 검색·MCP·토론은 몇 분 걸릴 수 있어 멈춘 것처럼 보이지 않게)
@@ -861,38 +884,38 @@ function pendingEl(text) {
 async function send() {
   const q = $('#q'), question = q.value.trim();
   if ((!question && !S.files.length) || S.running) return;
-  if (S.cliUpdating) { toast('GPT/Claude 프로그램을 업데이트하는 중입니다. 끝난 뒤 보내 주세요', true); return; }
-  if (S.files.some(f => f.uploading)) { toast('파일 업로드가 끝난 뒤 보내 주세요', true); return; }
-  if (S.files.some(f => f.failed)) { toast('업로드에 실패한 첨부를 지운 뒤 보내 주세요', true); return; }
-  if (S.files.some(f => f.conv && f.conv !== S.current)) { toast('다른 대화에서 올린 이미지·영상은 그 대화에서만 보낼 수 있습니다. 다시 첨부해 주세요', true); return; }
+  if (S.cliUpdating) { toast(T('GPT/Claude 프로그램을 업데이트하는 중입니다. 끝난 뒤 보내 주세요', 'The GPT/Claude programs are updating. Send when it finishes'), true); return; }
+  if (S.files.some(f => f.uploading)) { toast(T('파일 업로드가 끝난 뒤 보내 주세요', 'Wait for the upload to finish'), true); return; }
+  if (S.files.some(f => f.failed)) { toast(T('업로드에 실패한 첨부를 지운 뒤 보내 주세요', 'Remove the failed attachment first'), true); return; }
+  if (S.files.some(f => f.conv && f.conv !== S.current)) { toast(T('다른 대화에서 올린 이미지·영상은 그 대화에서만 보낼 수 있습니다. 다시 첨부해 주세요', 'Images/videos uploaded in another chat can only be sent there. Attach them again'), true); return; }
   const gpt = modelValue($('#gptModel'), $('#gptCustom')), claude = modelValue($('#claudeModel'), $('#claudeCustom'));
   if (S.target !== 'claude' && !gpt) { $('#models').classList.add('open'); $('#gptCustom').focus(); return; }
   if (S.target !== 'gpt' && !claude) { $('#models').classList.add('open'); $('#claudeCustom').focus(); return; }
-  if ((S.mode === 'work' || S.mode === 'edit') && !$('#workdir').value.trim()) { $('#workdir').focus(); toast('작업 폴더를 입력하세요', true); return; }
+  if ((S.mode === 'work' || S.mode === 'edit') && !$('#workdir').value.trim()) { $('#workdir').focus(); toast(T('작업 폴더를 입력하세요', 'Enter a working folder'), true); return; }
   if (S.mode === 'edit') {  // 수정 모드: 깨끗한 Git 저장소인지 먼저 확인, 아니면 저장점 만들기 안내
     let st; try { st = await api('/api/edit/status', { workdir:$('#workdir').value.trim() }); } catch (e) { toast(e.message, true); return; }
     if (!st.clean) {
-      const why = !st.repo ? '이 폴더는 아직 Git 저장소가 아닙니다.' : st.changed.length ? `저장되지 않은 변경이 ${st.changed.length}개 있습니다:\n` + st.changed.slice(0, 12).map(x => ' · ' + x).join('\n') : '아직 커밋이 없습니다.';
-      modal('수정 전에 저장점을 만들어야 합니다', `${why}\n\n지금 상태를 저장점(Git 커밋)으로 만든 뒤 시작하면, 끝나고 바뀐 내용을 정확히 보여 주고 언제든 되돌릴 수 있습니다.`,
-        [{ label:'취소' }, { label:'저장점 만들고 시작', primary:true, onClick: async () => { try { await api('/api/edit/checkpoint', { workdir:$('#workdir').value.trim() }); toast('저장점을 만들었습니다'); send(); } catch (e) { toast(e.message, true); } } }]);
+      const why = !st.repo ? T('이 폴더는 아직 Git 저장소가 아닙니다.', 'This folder is not a Git repository yet.') : st.changed.length ? T(`저장되지 않은 변경이 ${st.changed.length}개 있습니다:\n`, `There are ${st.changed.length} uncommitted change(s):\n`) + st.changed.slice(0, 12).map(x => ' · ' + x).join('\n') : T('아직 커밋이 없습니다.', 'There are no commits yet.');
+      modal(T('수정 전에 저장점을 만들어야 합니다', 'Create a checkpoint before editing'), `${why}\n\n` + T('지금 상태를 저장점(Git 커밋)으로 만든 뒤 시작하면, 끝나고 바뀐 내용을 정확히 보여 주고 언제든 되돌릴 수 있습니다.', 'Saving the current state as a checkpoint (Git commit) lets Council show exactly what changed afterwards and revert at any time.'),
+        [{ label:T('취소', 'Cancel') }, { label:T('저장점 만들고 시작', 'Create checkpoint and start'), primary:true, onClick: async () => { try { await api('/api/edit/checkpoint', { workdir:$('#workdir').value.trim() }); toast(T('저장점을 만들었습니다', 'Checkpoint created')); send(); } catch (e) { toast(e.message, true); } } }]);
       return;
     }
   }
   if (!S.current) await newConversation();
   const convId = S.current, box = $('#msgs');
-  setBusy(true, '보내는 중');
+  setBusy(true, T('보내는 중', 'Sending'));
   if (!S.items.length) box.innerHTML = '';
-  const pend = pendingEl('대화 맥락을 준비하는 중'); box.append(pend); scrollBottom();
+  const pend = pendingEl(T('대화 맥락을 준비하는 중', 'Preparing conversation context')); box.append(pend); scrollBottom();
   const draft = question; q.value = ''; autoGrow();
   const allowOnceSent = S.allowOnce || []; S.allowOnce = [];
   const sentFiles = S.files.slice(); S.files = []; renderChips();
-  if (sentFiles.length) { const t = pend.querySelector('.ptext'); if (t) t.textContent = '첨부 파일을 보내는 중'; }
+  if (sentFiles.length) { const t = pend.querySelector('.ptext'); if (t) t.textContent = T('첨부 파일을 보내는 중', 'Sending attachments'); }
   const here = () => S.current === convId;
   let gotUser = false, wasStopped = false;
   try {
-    const res = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'},
+    const res = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json', 'X-Lang':LANG},
       body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, web:!!S.web, mcp:!!S.mcp, allow_once: allowOnceSent || [], workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => f.upload ? ({ name:f.name, upload:f.upload }) : ({ name:f.name, content:f.content })) }) });
-    if (!res.ok) { let m = '요청 실패'; try { m = (await res.json()).error || m; } catch {} throw new Error(m); }
+    if (!res.ok) { let m = T('요청 실패', 'Request failed'); try { m = (await res.json()).error || m; } catch {} throw new Error(m); }
     const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
     for (;;) {
       const { value, done } = await reader.read(); if (done) break;
@@ -901,27 +924,27 @@ async function send() {
         if (!line) continue; const e = JSON.parse(line);
         if (e.type === 'stage') { $('#status').textContent = e.text; const t = pend.querySelector('.ptext'); if (t) t.textContent = e.text; }
         else if (e.type === 'saved') { gotUser = true; if (here()) { pend.before(msgEl(e.item)); }
-          const c = e.context; $('#ctxInfo').textContent = c ? `모델에 전달: ${c.summarized_through ? `요약(1-${c.summarized_through}) + ` : ''}최근 ${c.total - c.recent_from}개 메시지` : ''; }
+          const c = e.context; $('#ctxInfo').textContent = c ? T(`모델에 전달: ${c.summarized_through ? `요약(1-${c.summarized_through}) + ` : ''}최근 ${c.total - c.recent_from}개 메시지`, `Sent to models: ${c.summarized_through ? `summary(1-${c.summarized_through}) + ` : ''}last ${c.total - c.recent_from} messages`) : ''; }
         else if (e.type === 'answer') { if (here()) { pend.before(e.item.role === 'edit' ? editCard(e.item) : msgEl(e.item)); scrollBottom(); } }
         else if (e.type === 'summary') { if (here()) pend.before(el('div', 'inline-warn', e.text)); }
         else if (e.type === 'warning') { if (here()) pend.before(el('div', 'inline-warn', e.text)); }
         else if (e.type === 'stopped') { wasStopped = true; if (here()) pend.before(el('div', 'inline-warn', e.text)); }
-        else if (e.type === 'model_error') { if (here()) pend.before(el('div', 'inline-err', `${e.model} 오류\n${e.text}`)); }
+        else if (e.type === 'model_error') { if (here()) pend.before(el('div', 'inline-err', `${e.model} ${T('오류', 'error')}\n${e.text}`)); }
         else if (e.type === 'error') { throw new Error(e.text); }
-        else if (e.type === 'done') { if (e.errors && Object.keys(e.errors).length) toast('일부 모델 호출이 실패했습니다', true); refreshStatusInfo(); }
+        else if (e.type === 'done') { if (e.errors && Object.keys(e.errors).length) toast(T('일부 모델 호출이 실패했습니다', 'Some model calls failed'), true); refreshStatusInfo(); }
       }
     }
     pend.remove();
     if (here()) await openConversation(convId);
-    $('#status').textContent = wasStopped ? '중지됨' : '답변 완료';
+    $('#status').textContent = wasStopped ? T('중지됨', 'Stopped') : T('답변 완료', 'Done');
   } catch (err) {
     pend.remove();
     if (!gotUser && !q.value) { q.value = draft; autoGrow(); }
     if (!gotUser && !S.files.length) { S.files = sentFiles; renderChips(); } // 저장 전 실패면 첨부도 되돌림 // 질문이 저장되지 않았으면 입력창에 되돌림
     if (here()) { try { await openConversation(convId); } catch {} const last = S.items[S.items.length - 1];
-      if (!last || last.role !== 'error') { $('#msgs').append(el('div', 'inline-err', '오류: ' + err.message)); } scrollBottom(); }
-    else toast('오류: ' + err.message, true);
-    $('#status').textContent = '오류로 중단됨';
+      if (!last || last.role !== 'error') { $('#msgs').append(el('div', 'inline-err', T('오류: ', 'Error: ') + err.message)); } scrollBottom(); }
+    else toast(T('오류: ', 'Error: ') + err.message, true);
+    $('#status').textContent = T('오류로 중단됨', 'Stopped by an error');
   } finally {
     setBusy(false, $('#status').textContent); $('#send').disabled = false;
     loadList().catch(() => {});
@@ -930,15 +953,15 @@ async function send() {
 $('#send').onclick = () => S.running ? stopRun('button') : send();
 async function stopRun(reason) {
   if (!S.running) return;
-  const b = $('#send'); b.disabled = true; b.textContent = '중지하는 중…'; $('#status').textContent = '중지하는 중…';
-  try { const r = await api('/api/chat/stop', { conversation_id: S.running, reason: reason || 'button' }); if (!r.ok) toast(r.message || '진행 중인 답변이 없습니다'); }
-  catch (e) { toast('중지 실패: ' + e.message, true); b.disabled = false; b.textContent = '■ 중지'; }
+  const b = $('#send'); b.disabled = true; b.textContent = T('중지하는 중…', 'Stopping…'); $('#status').textContent = T('중지하는 중…', 'Stopping…');
+  try { const r = await api('/api/chat/stop', { conversation_id: S.running, reason: reason || 'button' }); if (!r.ok) toast(r.message || T('진행 중인 답변이 없습니다', 'No answer in progress')); }
+  catch (e) { toast(T('중지 실패: ', 'Stop failed: ') + e.message, true); b.disabled = false; b.textContent = T('■ 중지', '■ Stop'); }
 }
 window.addEventListener('keydown', e => {
   if (e.key !== 'Escape' || e.isComposing) return;
   const open = document.querySelectorAll('.modal');
   if (open.length) { e.preventDefault(); open[open.length - 1].remove(); return; }  // 창이 열려 있으면 Esc 는 창만 닫는다
-  if (S.running) { e.preventDefault(); if (confirm('답변 생성을 중지할까요? (Esc)')) stopRun('esc'); }
+  if (S.running) { e.preventDefault(); if (confirm(T('답변 생성을 중지할까요? (Esc)', 'Stop generating? (Esc)'))) stopRun('esc'); }
 });
 const autoGrow = () => { const q = $('#q'); q.style.height = 'auto'; q.style.height = Math.min(q.scrollHeight, innerHeight * .4) + 'px'; };
 $('#q').addEventListener('input', autoGrow);
@@ -946,45 +969,45 @@ $('#q').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey 
 
 // ---------- CLI 버전 확인 · 버튼으로 업데이트/로그인 ----------
 async function loadVersions(force) {
-  let v; try { v = await api('/api/versions' + (force ? '?refresh=1' : '')); } catch { $('#cli').append(el('span', 'upd', '버전 확인 불가 · 서버 재시작 필요')); return; }
+  let v; try { v = await api('/api/versions' + (force ? '?refresh=1' : '')); } catch { $('#cli').append(el('span', 'upd', T('버전 확인 불가 · 서버 재시작 필요', 'Cannot check versions · restart the server'))); return; }
   const box = $('#cli'); box.innerHTML = '';
   const names = { codex:'Codex', claude:'Claude' }, outdated = [];
   for (const k of ['codex', 'claude']) {
     const x = v[k], line = el('div');
-    line.append(el('span', '', (x.installed ? '● ' : '○ ') + names[k] + ' '), el('b', '', x.installed || '미설치'));
-    line.title = `설치: ${x.installed || '-'} / 최신: ${x.latest || '확인 불가'}`;
+    line.append(el('span', '', (x.installed ? '● ' : '○ ') + names[k] + ' '), el('b', '', x.installed || T('미설치', 'not installed')));
+    line.title = T(`설치: ${x.installed || '-'} / 최신: ${x.latest || '확인 불가'}`, `Installed: ${x.installed || '-'} / Latest: ${x.latest || 'unknown'}`);
     box.append(line);
     if (x.installed && x.logged_in === false) {
-      const g = el('span', 'upd', `로그인 필요 · 로그인하기`); g.style.color = 'var(--danger)'; g.title = '누르면 로그인 창이 열립니다';
+      const g = el('span', 'upd', T('로그인 필요 · 로그인하기', 'Sign-in required · Sign in')); g.style.color = 'var(--danger)'; g.title = T('누르면 로그인 창이 열립니다', 'Opens a sign-in window');
       g.onclick = () => startLogin(k, x);
       box.append(g); outdated.push(k + '-login');
     }
-    if (!x.installed) { const m = el('span', 'upd', `CLI 없음 · ${S.setup || 'Setup.cmd'} 실행`); m.style.color = 'var(--danger)'; box.append(m); }
+    if (!x.installed) { const m = el('span', 'upd', T(`CLI 없음 · ${S.setup || 'Setup.cmd'} 실행`, `CLI missing · run ${S.setup || 'Setup.cmd'}`)); m.style.color = 'var(--danger)'; box.append(m); }
     if (x.outdated) {
       outdated.push(k);
-      const u = el('span', 'upd', `⬆ ${x.latest} 업데이트하기`); u.title = `${x.installed} → ${x.latest} · 누르면 자동으로 업데이트합니다`;
+      const u = el('span', 'upd', T(`⬆ ${x.latest} 업데이트하기`, `⬆ Update to ${x.latest}`)); u.title = T(`${x.installed} → ${x.latest} · 누르면 자동으로 업데이트합니다`, `${x.installed} → ${x.latest} · click to update automatically`);
       u.onclick = () => confirmCliUpdate([k], v);
       box.append(u);
     }
   }
-  if (S.ffmpeg === false) { const f = el('span', 'upd', 'ffmpeg 없음 · 영상 분석 불가'); f.style.color = 'var(--warn)'; f.title = `${S.setup || 'Setup.cmd'}를 실행해 설치한 뒤 Council을 다시 시작하세요`;
-    f.onclick = () => modal('ffmpeg 설치', `Council 폴더의 ${S.setup || 'Setup.cmd'}를 실행하면 ffmpeg가 설치됩니다.\n설치 후 Council을 다시 시작하세요.\n\n직접 설치: ${S.platform === 'mac' ? 'brew install ffmpeg' : 'winget install Gyan.FFmpeg'}`); box.append(f); }
+  if (S.ffmpeg === false) { const f = el('span', 'upd', T('ffmpeg 없음 · 영상 분석 불가', 'No ffmpeg · video analysis off')); f.style.color = 'var(--warn)'; f.title = T(`${S.setup || 'Setup.cmd'}를 실행해 설치한 뒤 Council을 다시 시작하세요`, `Run ${S.setup || 'Setup.cmd'} to install it, then restart Council`);
+    f.onclick = () => modal(T('ffmpeg 설치', 'Install ffmpeg'), T(`Council 폴더의 ${S.setup || 'Setup.cmd'}를 실행하면 ffmpeg가 설치됩니다.\n설치 후 Council을 다시 시작하세요.\n\n직접 설치: `, `Run ${S.setup || 'Setup.cmd'} in the Council folder to install ffmpeg.\nRestart Council afterwards.\n\nManual install: `) + (S.platform === 'mac' ? 'brew install ffmpeg' : 'winget install Gyan.FFmpeg')); box.append(f); }
   const both = ['codex', 'claude'].filter(k => v[k].outdated);
-  if (both.length === 2) { const a = el('span', 'upd', '⬆ 둘 다 업데이트하기'); a.onclick = () => confirmCliUpdate(both, v); box.append(a); }
-  const r = el('span', 'upd recheck', '버전 다시 확인'); r.style.color = 'var(--dim)'; r.onclick = () => { loadVersions(true); checkUpdate(true, true); }; box.append(r);
+  if (both.length === 2) { const a = el('span', 'upd', T('⬆ 둘 다 업데이트하기', '⬆ Update both')); a.onclick = () => confirmCliUpdate(both, v); box.append(a); }
+  const r = el('span', 'upd recheck', T('버전 다시 확인', 'Check versions again')); r.style.color = 'var(--dim)'; r.onclick = () => { loadVersions(true); checkUpdate(true, true); }; box.append(r);
   renderUsage();
-  if (outdated.length && !force) toast('GPT/Claude 프로그램 업데이트 또는 로그인이 필요합니다. 왼쪽 아래 노란·빨간 글씨를 누르세요.', true);
+  if (outdated.length && !force) toast(T('GPT/Claude 프로그램 업데이트 또는 로그인이 필요합니다. 왼쪽 아래 노란·빨간 글씨를 누르세요.', 'The GPT/Claude programs need an update or sign-in. Click the yellow/red text at the bottom left.'), true);
 }
 const CLI_NAMES = { codex:'GPT (Codex CLI)', claude:'Claude (Claude Code)' };
 function confirmCliUpdate(keys, v) {
   const lines = keys.map(k => `• ${CLI_NAMES[k]}: ${v[k].installed} → ${v[k].latest}`).join('\n');
-  modal('GPT/Claude 프로그램 업데이트', `${lines}\n\n'지금 업데이트'를 누르면 이 PC에서 자동으로 설치합니다. 명령어를 입력할 필요가 없습니다.\n· 보통 1~2분 걸립니다. 그동안 질문은 잠시 보낼 수 없습니다.\n· 대화 기록과 로그인은 그대로 유지됩니다.\n· 끝나면 바로 새 버전이 쓰입니다 (Council 재시작 필요 없음).`,
-    [{ label:'나중에' }, { label:'지금 업데이트', primary:true, onClick: () => runCliUpdate(keys, v) }]);
+  modal(T('GPT/Claude 프로그램 업데이트', 'Update GPT/Claude programs'), `${lines}\n\n` + T(`'지금 업데이트'를 누르면 이 PC에서 자동으로 설치합니다. 명령어를 입력할 필요가 없습니다.\n· 보통 1~2분 걸립니다. 그동안 질문은 잠시 보낼 수 없습니다.\n· 대화 기록과 로그인은 그대로 유지됩니다.\n· 끝나면 바로 새 버전이 쓰입니다 (Council 재시작 필요 없음).`, `'Update now' installs it on this computer automatically — no commands needed.\n· Usually takes 1–2 minutes; you can't send questions meanwhile.\n· Your chats and sign-ins are kept.\n· The new version is used right away (no Council restart needed).`),
+    [{ label:T('나중에', 'Later') }, { label:T('지금 업데이트', 'Update now'), primary:true, onClick: () => runCliUpdate(keys, v) }]);
 }
 async function runCliUpdate(keys, v) {
-  if (S.running) { toast('답변 생성 중에는 업데이트할 수 없습니다. 끝나거나 중지한 뒤 다시 시도하세요', true); return; }
+  if (S.running) { toast(T('답변 생성 중에는 업데이트할 수 없습니다. 끝나거나 중지한 뒤 다시 시도하세요', 'Cannot update while an answer is being generated. Wait or stop it first'), true); return; }
   S.cliUpdating = true;
-  const m = modal('업데이트 중…', '', [{ label:'기다리는 중…', keep:true }]);
+  const m = modal(T('업데이트 중…', 'Updating…'), '', [{ label:T('기다리는 중…', 'Waiting…'), keep:true }]);
   const pre = m.querySelector('pre') || (() => { const p = el('pre'); m.querySelector('h3').after(p); return p; })();
   m.onclick = null; m.querySelector('.row button').disabled = true;
   const results = [], t0 = Date.now();
@@ -992,8 +1015,8 @@ async function runCliUpdate(keys, v) {
   let current = '', itemStart = t0;
   function progressText() {
     const sec = Math.round((Date.now() - itemStart) / 1000);
-    return results.map(r => `${r.ok ? '✓' : '✗'} ${r.name}`).concat(current ? [`… ${CLI_NAMES[current]} 업데이트 중 (${sec}초)`] : []).join('\n') +
-      '\n\n창을 닫거나 새로고침하지 마세요.';
+    return results.map(r => `${r.ok ? '✓' : '✗'} ${r.name}`).concat(current ? [T(`… ${CLI_NAMES[current]} 업데이트 중 (${sec}초)`, `… updating ${CLI_NAMES[current]} (${sec}s)`)] : []).join('\n') +
+      T('\n\n창을 닫거나 새로고침하지 마세요.', '\n\nDo not close or refresh this window.');
   }
   try {
     for (const k of keys) {
@@ -1005,29 +1028,29 @@ async function runCliUpdate(keys, v) {
   const fail = results.filter(r => !r.ok);
   const body = results.map(r => r.ok
     ? (r.after === r.before && r.latest && r.after !== r.latest
-        ? `△ ${r.name}: 설치는 끝났지만 버전이 아직 ${r.after} 입니다.\n  잠시 후 왼쪽 아래 '버전 다시 확인'을 눌러 보세요.`
-        : `✓ ${r.name}: ${r.before || '?'} → ${r.after} 완료`)
-    : `✗ ${r.name}: 업데이트하지 못했습니다\n  ${r.hint}`).join('\n\n');
+        ? T(`△ ${r.name}: 설치는 끝났지만 버전이 아직 ${r.after} 입니다.\n  잠시 후 왼쪽 아래 '버전 다시 확인'을 눌러 보세요.`, `△ ${r.name}: installed, but the version is still ${r.after}.\n  Click 'Check versions again' at the bottom left in a moment.`)
+        : T(`✓ ${r.name}: ${r.before || '?'} → ${r.after} 완료`, `✓ ${r.name}: ${r.before || '?'} → ${r.after} done`))
+    : T(`✗ ${r.name}: 업데이트하지 못했습니다\n  ${r.hint}`, `✗ ${r.name}: update failed\n  ${r.hint}`)).join('\n\n');
   const log = fail.filter(r => r.output).map(r => `[${r.name}]\n${r.output}`).join('\n\n');
   const box = el('div'); box.append(el('pre', '', body));
-  if (log) { const d = el('details'), sm = el('summary', '', '자세한 기록 보기'); sm.style.cursor = 'pointer'; d.append(sm, el('pre', '', log)); box.append(d); }
-  const buttons = [{ label:'닫기', primary:!fail.length }];
-  if (fail.length) buttons.unshift({ label:'다시 시도', onClick: () => runCliUpdate(fail.map(r => r.key), v) });
-  modal(fail.length ? '일부 업데이트 실패' : '업데이트 완료', box, buttons);
+  if (log) { const d = el('details'), sm = el('summary', '', T('자세한 기록 보기', 'Show details')); sm.style.cursor = 'pointer'; d.append(sm, el('pre', '', log)); box.append(d); }
+  const buttons = [{ label:T('닫기', 'Close'), primary:!fail.length }];
+  if (fail.length) buttons.unshift({ label:T('다시 시도', 'Retry'), onClick: () => runCliUpdate(fail.map(r => r.key), v) });
+  modal(fail.length ? T('일부 업데이트 실패', 'Some updates failed') : T('업데이트 완료', 'Update complete'), box, buttons);
   loadVersions(true);
 }
 async function startLogin(k, x) {
-  let r; try { r = await api('/api/cli/login', { name:k }); } catch (e) { toast('로그인 창을 열지 못했습니다: ' + e.message, true); return; }
+  let r; try { r = await api('/api/cli/login', { name:k }); } catch (e) { toast(T('로그인 창을 열지 못했습니다: ', 'Could not open the sign-in window: ') + e.message, true); return; }
   if (!r.opened) {
     try { await navigator.clipboard.writeText(r.command); } catch {}
-    modal(`${CLI_NAMES[k]} 로그인`, `이 PC에서는 로그인 창을 자동으로 열 수 없습니다.\n터미널에서 아래 명령을 실행하세요 (복사됨):\n\n${r.command}`); return;
+    modal(`${CLI_NAMES[k]} ${T('로그인', 'sign-in')}`, T(`이 PC에서는 로그인 창을 자동으로 열 수 없습니다.\n터미널에서 아래 명령을 실행하세요 (복사됨):\n\n`, `Council cannot open a sign-in window on this computer.\nRun this command in a terminal (copied):\n\n`) + r.command); return;
   }
-  const m = modal(`${CLI_NAMES[k]} 로그인`, `검은 로그인 창을 열었습니다.\n\n1. 잠시 후 브라우저가 열리면 ${k === 'codex' ? 'ChatGPT' : 'Claude'} 계정으로 로그인하세요.\n2. 로그인이 끝나면 검은 창은 닫아도 됩니다.\n\n로그인이 확인되면 이 안내는 자동으로 닫힙니다…`,
-    [{ label:'닫기' }]);
+  const m = modal(`${CLI_NAMES[k]} ${T('로그인', 'sign-in')}`, T(`검은 로그인 창을 열었습니다.\n\n1. 잠시 후 브라우저가 열리면 ${k === 'codex' ? 'ChatGPT' : 'Claude'} 계정으로 로그인하세요.\n2. 로그인이 끝나면 검은 창은 닫아도 됩니다.\n\n로그인이 확인되면 이 안내는 자동으로 닫힙니다…`, `A sign-in terminal window was opened.\n\n1. When the browser opens, sign in with your ${k === 'codex' ? 'ChatGPT' : 'Claude'} account.\n2. After signing in you can close the terminal window.\n\nThis message closes automatically once sign-in is confirmed…`),
+    [{ label:T('닫기', 'Close') }]);
   const t0 = Date.now();
   const poll = async () => {
     if (!m.isConnected) return;
-    try { const v = await api('/api/versions?refresh=1'); if (v[k] && v[k].logged_in) { m.remove(); toast(`${CLI_NAMES[k]} 로그인 완료`); loadVersions(true); return; } } catch {}
+    try { const v = await api('/api/versions?refresh=1'); if (v[k] && v[k].logged_in) { m.remove(); toast(T(`${CLI_NAMES[k]} 로그인 완료`, `${CLI_NAMES[k]} signed in`)); loadVersions(true); return; } } catch {}
     if (Date.now() - t0 < 300000) setTimeout(poll, 4000);
   };
   setTimeout(poll, 5000);
@@ -1044,24 +1067,25 @@ function renderChips() {
     const c = el('span', 'chip2');
     if (f.thumb) { const im = el('img', 'thumb'); im.src = f.thumb; c.append(im); }
     c.append(el('span', '', (f.kind === 'video' ? '🎬 ' : f.kind === 'image' ? '🖼 ' : '📎 ') + f.name),
-      el('span', 'k', f.uploading ? `업로드 ${f.progress || 0}%` : f.failed ? '실패' : fmtSize(f.size)));
-    const x = el('button', 'x', '×'); x.title = '첨부 취소';
+      el('span', 'k', f.uploading ? T(`업로드 ${f.progress || 0}%`, `uploading ${f.progress || 0}%`) : f.failed ? T('실패', 'failed') : fmtSize(f.size)));
+    const x = el('button', 'x', '×'); x.title = T('첨부 취소', 'Remove attachment');
     x.onclick = () => { if (f.xhr) f.xhr.abort(); S.files.splice(i, 1); renderChips(); };
     c.append(x); box.append(c);
   });
   const media = S.files.some(f => f.kind === 'image' || f.kind === 'video');
   $('#attachNote').hidden = !S.files.length;
-  $('#attachNote').textContent = '첨부 내용은 질문과 함께 OpenAI·Anthropic 서버로 전송됩니다.' + (media ? ' 영상은 프레임 이미지로 나눠 분석하며 소리는 분석하지 않습니다.' : '');
+  $('#attachNote').textContent = T('첨부 내용은 질문과 함께 OpenAI·Anthropic 서버로 전송됩니다.', 'Attachments are sent to OpenAI/Anthropic servers with your question.') + (media ? T(' 영상은 프레임 이미지로 나눠 분석하며 소리는 분석하지 않습니다.', ' Videos are analyzed as frame images; sound is not analyzed.') : '');
 }
 function uploadMedia(f, file) {
   return new Promise(resolve => {
     const xhr = new XMLHttpRequest(); f.xhr = xhr; f.uploading = true; f.progress = 0;
     xhr.open('POST', `/api/upload?conversation_id=${encodeURIComponent(f.conv)}&name=${encodeURIComponent(file.name)}`);
+    xhr.setRequestHeader('X-Lang', LANG);
     xhr.upload.onprogress = e => { if (e.lengthComputable) { f.progress = Math.round(e.loaded / e.total * 100); renderChips(); } };
     xhr.onload = () => {
       f.uploading = false; f.xhr = null;
       let r = {}; try { r = JSON.parse(xhr.responseText); } catch {}
-      if (xhr.status === 200 && r.id) { f.upload = r.id; } else { f.failed = true; toast(`${file.name}: ${r.error || '업로드 실패'}`, true); }
+      if (xhr.status === 200 && r.id) { f.upload = r.id; } else { f.failed = true; toast(`${file.name}: ${r.error || T('업로드 실패', 'upload failed')}`, true); }
       renderChips(); resolve();
     };
     xhr.onerror = xhr.onabort = () => { f.uploading = false; f.failed = true; f.xhr = null; renderChips(); resolve(); };
@@ -1072,12 +1096,12 @@ async function addFiles(list) {
   const files = [...list];
   if (!files.length) return;
   for (const file of files) {
-    if (S.files.length >= MAX_FILES) { toast(`첨부는 ${MAX_FILES}개까지 가능합니다`, true); break; }
-    const name = file.name || `붙여넣은_이미지_${Date.now()}.png`;
+    if (S.files.length >= MAX_FILES) { toast(T(`첨부는 ${MAX_FILES}개까지 가능합니다`, `Up to ${MAX_FILES} attachments`), true); break; }
+    const name = file.name || `${T('붙여넣은_이미지', 'pasted_image')}_${Date.now()}.png`;
     if (IMG_EXT.test(name) || VID_EXT.test(name) || (!file.name && /^image\//.test(file.type))) {
       const kind = VID_EXT.test(name) ? 'video' : 'image';
-      if (kind === 'video' && S.ffmpeg === false) { modal('영상을 분석할 수 없습니다', `이 PC에 ffmpeg가 없습니다.\n\nCouncil 폴더의 ${S.setup || 'Setup.cmd'}를 실행해 ffmpeg를 설치한 뒤 Council을 다시 시작하세요.\n(이미지·텍스트 첨부는 지금도 가능합니다. 영상 대신 캡처 이미지를 붙여넣어도 됩니다.)`); continue; }
-      if (file.size > (kind === 'image' ? MAX_IMAGE_BYTES : MAX_VIDEO_BYTES)) { toast(`${name}: ${kind === 'image' ? '이미지는 20MB' : '영상은 2GB'} 이하만 첨부할 수 있습니다`, true); continue; }
+      if (kind === 'video' && S.ffmpeg === false) { modal(T('영상을 분석할 수 없습니다', 'Cannot analyze video'), T(`이 PC에 ffmpeg가 없습니다.\n\nCouncil 폴더의 ${S.setup || 'Setup.cmd'}를 실행해 ffmpeg를 설치한 뒤 Council을 다시 시작하세요.\n(이미지·텍스트 첨부는 지금도 가능합니다. 영상 대신 캡처 이미지를 붙여넣어도 됩니다.)`, `ffmpeg is not installed on this computer.\n\nRun ${S.setup || 'Setup.cmd'} in the Council folder to install it, then restart Council.\n(Images and text work now. You can paste screenshots instead of a video.)`)); continue; }
+      if (file.size > (kind === 'image' ? MAX_IMAGE_BYTES : MAX_VIDEO_BYTES)) { toast(`${name}: ` + (kind === 'image' ? T('이미지는 20MB 이하만 첨부할 수 있습니다', 'images must be 20MB or smaller') : T('영상은 2GB 이하만 첨부할 수 있습니다', 'videos must be 2GB or smaller')), true); continue; }
       if (!S.current) await newConversation();
       const f = { name, size:file.size, kind, conv:S.current, thumb: kind === 'image' ? URL.createObjectURL(file) : '' };
       S.files.push(f); renderChips();
@@ -1085,10 +1109,10 @@ async function addFiles(list) {
       uploadMedia(f, named);
       continue;
     }
-    if (!OK_EXT.test(name)) { toast(`${name}: JSON·텍스트·이미지·영상 파일만 첨부할 수 있습니다`, true); continue; }
-    if (file.size > MAX_FILE_BYTES) { toast(`${name}: 2MB 이하만 첨부할 수 있습니다`, true); continue; }
+    if (!OK_EXT.test(name)) { toast(`${name}: ` + T('JSON·텍스트·이미지·영상 파일만 첨부할 수 있습니다', 'only JSON, text, image and video files can be attached'), true); continue; }
+    if (file.size > MAX_FILE_BYTES) { toast(`${name}: ` + T('2MB 이하만 첨부할 수 있습니다', 'must be 2MB or smaller'), true); continue; }
     try { S.files.push({ name, size:file.size, kind:'text', content: await file.text() }); }
-    catch { toast(`${name}: 파일을 읽지 못했습니다`, true); }
+    catch { toast(`${name}: ` + T('파일을 읽지 못했습니다', 'could not read the file'), true); }
   }
   renderChips(); $('#q').focus();
 }
@@ -1123,7 +1147,7 @@ function modal(title, body, buttons) {
   const m = el('div', 'modal'), box = el('div', 'box'); box.append(el('h3', '', title));
   if (body) box.append(typeof body === 'string' ? el('pre', '', body) : body);
   const row = el('div', 'row');
-  (buttons || [{ label:'닫기' }]).forEach(b => { const btn = el('button', b.primary ? 'primary' : '', b.label);
+  (buttons || [{ label:T('닫기', 'Close') }]).forEach(b => { const btn = el('button', b.primary ? 'primary' : '', b.label);
     btn.onclick = () => { if (!b.keep) m.remove(); b.onClick && b.onClick(); }; row.append(btn); });
   box.append(row); m.append(box); m.onclick = e => { if (e.target === m) m.remove(); };
   document.body.append(m); return m;
@@ -1131,37 +1155,37 @@ function modal(title, body, buttons) {
 // Council 자체 업데이트: GPT·Claude 버전처럼 평소에는 버전만, 새 버전이 있을 때만 노란 "⬆ 업데이트하기"
 async function checkUpdate(force, quiet) {
   let r; try { r = await api('/api/update/check' + (force ? '?refresh=1' : '')); }
-  catch (e) { if (!quiet) toast('업데이트 확인 실패: ' + e.message, true); return; }
+  catch (e) { if (!quiet) toast(T('업데이트 확인 실패: ', 'Update check failed: ') + e.message, true); return; }
   const n = $('#upNew'), err = $('#upErr');
   n.hidden = err.hidden = true;
   if (r.status === 'available') {
-    n.hidden = false; n.textContent = `⬆ ${r.remote ? 'V' + r.remote + ' ' : ''}업데이트하기`;
-    n.title = `현재 V${r.running} → 새 V${r.remote || '?'} · 누르면 변경 내역을 보고 업데이트합니다`;
+    n.hidden = false; n.textContent = T(`⬆ ${r.remote ? 'V' + r.remote + ' ' : ''}업데이트하기`, `⬆ Update${r.remote ? ' to V' + r.remote : ''}`);
+    n.title = T(`현재 V${r.running} → 새 V${r.remote || '?'} · 누르면 변경 내역을 보고 업데이트합니다`, `Current V${r.running} → new V${r.remote || '?'} · click to see changes and update`);
     n.onclick = () => showUpdate(r);
     if (!quiet) showUpdate(r);
   } else if (r.status !== 'latest') {
-    err.hidden = false; err.textContent = '업데이트 확인 불가'; err.title = r.message || '';
-    err.onclick = () => modal('업데이트를 확인할 수 없습니다', r.message || '');
-    if (!quiet) modal('업데이트를 확인할 수 없습니다', r.message || '');
-  } else if (!quiet) toast(`Council V${r.running} · 최신 버전입니다`);
+    err.hidden = false; err.textContent = T('업데이트 확인 불가', 'Cannot check for updates'); err.title = r.message || '';
+    err.onclick = () => modal(T('업데이트를 확인할 수 없습니다', 'Cannot check for updates'), r.message || '');
+    if (!quiet) modal(T('업데이트를 확인할 수 없습니다', 'Cannot check for updates'), r.message || '');
+  } else if (!quiet) toast(T(`Council V${r.running} · 최신 버전입니다`, `Council V${r.running} · up to date`));
 }
 function showUpdate(r) {
-  const body = `현재 V${r.running} → 새 V${r.remote || '?'}  (변경 ${r.behind}개)\n\n` +
-    (r.commits && r.commits.length ? r.commits.map(c => '• ' + c).join('\n') : '변경 내역 없음 (기록 정리만 필요)') +
-    '\n\n대화 기록(data/)은 그대로 유지됩니다. 업데이트 후 Council이 자동으로 다시 시작됩니다.';
-  modal('Council 업데이트', body, [{ label:'나중에' }, { label:'지금 업데이트', primary:true, onClick: applyUpdate }]);
+  const body = T(`현재 V${r.running} → 새 V${r.remote || '?'}  (변경 ${r.behind}개)\n\n`, `Current V${r.running} → new V${r.remote || '?'}  (${r.behind} change(s))\n\n`) +
+    (r.commits && r.commits.length ? r.commits.map(c => '• ' + c).join('\n') : T('변경 내역 없음 (기록 정리만 필요)', 'No content changes (history cleanup only)')) +
+    T('\n\n대화 기록(data/)은 그대로 유지됩니다. 업데이트 후 Council이 자동으로 다시 시작됩니다.', '\n\nYour chats (data/) are kept. Council restarts automatically after the update.');
+  modal(T('Council 업데이트', 'Update Council'), body, [{ label:T('나중에', 'Later') }, { label:T('지금 업데이트', 'Update now'), primary:true, onClick: applyUpdate }]);
 }
 async function applyUpdate() {
-  if (S.running) { toast('답변 생성 중에는 업데이트할 수 없습니다', true); return; }
-  const m = modal('업데이트 중…', 'GitHub에서 새 버전을 받는 중입니다.', [{ label:'닫기', keep:true }]);
+  if (S.running) { toast(T('답변 생성 중에는 업데이트할 수 없습니다', 'Cannot update while an answer is being generated'), true); return; }
+  const m = modal(T('업데이트 중…', 'Updating…'), T('GitHub에서 새 버전을 받는 중입니다.', 'Downloading the new version from GitHub.'), [{ label:T('닫기', 'Close'), keep:true }]);
   let r; try { r = await api('/api/update/apply', {}); }
-  catch (e) { m.remove(); modal('업데이트를 멈췄습니다', e.message); return; }
-  if (!r.restarting) { m.remove(); modal('최신 버전입니다', `현재 V${r.version}`); $('#upNew').hidden = true; return; }
-  m.querySelector('pre').textContent = `V${r.version} 받기 완료 (${r.from} → ${r.to}).\nCouncil을 다시 시작하는 중… 잠시 후 화면이 새로고침됩니다.`;
+  catch (e) { m.remove(); modal(T('업데이트를 멈췄습니다', 'Update stopped'), e.message); return; }
+  if (!r.restarting) { m.remove(); modal(T('최신 버전입니다', 'Up to date'), T(`현재 V${r.version}`, `Current V${r.version}`)); $('#upNew').hidden = true; return; }
+  m.querySelector('pre').textContent = T(`V${r.version} 받기 완료 (${r.from} → ${r.to}).\nCouncil을 다시 시작하는 중… 잠시 후 화면이 새로고침됩니다.`, `Downloaded V${r.version} (${r.from} → ${r.to}).\nRestarting Council… the page will refresh shortly.`);
   const started = Date.now();
   const poll = async () => {
     try { const s = await api('/api/status'); if (s.version === r.version) { location.reload(); return; } } catch {}
-    if (Date.now() - started > 90000) { m.querySelector('pre').textContent = '재시작 확인이 늦어지고 있습니다.\n1. 바탕화면의 AI Council을 다시 실행한 뒤 새로고침하세요.\n2. 그래도 그대로면 ' + (S.platform === 'mac' ? '활성 상태 보기(Activity Monitor)에서 Python 을 종료한 뒤 다시 실행하세요.' : '작업 관리자 → 세부 정보에서 pythonw.exe 를 모두 끝낸 뒤 다시 실행하세요.'); return; }
+    if (Date.now() - started > 90000) { m.querySelector('pre').textContent = T('재시작 확인이 늦어지고 있습니다.\n1. 바탕화면의 AI Council을 다시 실행한 뒤 새로고침하세요.\n2. 그래도 그대로면 ', 'The restart is taking longer than expected.\n1. Run AI Council from the desktop again, then refresh.\n2. If nothing changes, ') + (S.platform === 'mac' ? T('활성 상태 보기(Activity Monitor)에서 Python 을 종료한 뒤 다시 실행하세요.', 'quit Python in Activity Monitor and run it again.') : T('작업 관리자 → 세부 정보에서 pythonw.exe 를 모두 끝낸 뒤 다시 실행하세요.', 'end every pythonw.exe in Task Manager → Details and run it again.')); return; }
     setTimeout(poll, 1500);
   };
   setTimeout(poll, 2500);
@@ -1173,12 +1197,13 @@ $('#newBtn').onclick = () => newConversation().catch(e => toast(e.message, true)
 document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => setScope(b.dataset.scope));
 $('#search').addEventListener('input', () => { clearTimeout(S.searchTimer); S.searchTimer = setTimeout(() => doSearch().catch(e => toast(e.message, true)), 250); });
 $('#menu').onclick = () => $('#app').classList.toggle('nav'); $('#scrim').onclick = () => $('#app').classList.remove('nav');
-$('#quit').onclick = async () => { if (S.running && !confirm('답변 생성 중입니다. 그래도 종료할까요?')) return;
-  try { await fetch('/api/shutdown', { method:'POST' }); } finally { document.body.innerHTML = '<div style="padding:40px;font:16px system-ui;color:var(--text);background:var(--bg);height:100vh">AI Council을 종료했습니다. 이 창을 닫아도 됩니다.</div>'; } };
+$('#quit').onclick = async () => { if (S.running && !confirm(T('답변 생성 중입니다. 그래도 종료할까요?', 'An answer is being generated. Quit anyway?'))) return;
+  try { await fetch('/api/shutdown', { method:'POST', headers:{ 'X-Lang':LANG } }); } finally { document.body.innerHTML = '<div style="padding:40px;font:16px system-ui;color:var(--text);background:var(--bg);height:100vh">' + T('AI Council을 종료했습니다. 이 창을 닫아도 됩니다.', 'AI Council has quit. You can close this window.') + '</div>'; } };
 window.addEventListener('beforeunload', e => { if (S.running) { e.preventDefault(); e.returnValue = ''; } });
 window.addEventListener('hashchange', () => { const id = (location.hash.match(/^#c=([\w-]+)/) || [])[1]; if (id && id !== S.current) openConversation(id).catch(() => {}); });
 
 (async function init() {
+  applyStaticLang(); setupLangButton();
   bindModel($('#gptModel'), $('#gptCustom'), 'councilGptModel');
   bindModel($('#claudeModel'), $('#claudeCustom'), 'councilClaudeModel');
   $('#workdir').value = store.get('councilWorkdir') || '';
@@ -1188,21 +1213,21 @@ window.addEventListener('hashchange', () => { const id = (location.hash.match(/^
   setMcp(store.get('councilMcp') === '1');
   setTarget(['gpt','claude','both'].includes(store.get('councilTarget')) ? store.get('councilTarget') : 'both');
   api('/api/status').then(s => { $('#ver').textContent = 'V' + s.version;
-    if (s.version !== UI_VERSION) { const n = el('div', 'notice err', `서버(V${s.version})가 화면(V${UI_VERSION})보다 오래된 버전입니다. 바탕화면의 AI Council을 다시 실행하면 새 버전으로 바뀝니다.`); $('#notices').before(n); }
+    if (s.version !== UI_VERSION) { const n = el('div', 'notice err', T(`서버(V${s.version})가 화면(V${UI_VERSION})보다 오래된 버전입니다. 바탕화면의 AI Council을 다시 실행하면 새 버전으로 바뀝니다.`, `The server (V${s.version}) is older than the page (V${UI_VERSION}). Run AI Council from the desktop again to switch to the new version.`)); $('#notices').before(n); }
     const mark = ok => ok ? '●' : '○'; $('#cli').textContent = `${mark(s.cli.codex)} Codex  ${mark(s.cli.claude)} Claude`;
-    $('#cli').title = 'CLI 감지 여부 (PATH 기준)'; if (!s.cli.codex || !s.cli.claude) toast('일부 CLI를 찾지 못했습니다. PATH를 확인하세요.', true);
+    $('#cli').title = T('CLI 감지 여부 (PATH 기준)', 'CLI detected on PATH'); if (!s.cli.codex || !s.cli.claude) toast(T('일부 CLI를 찾지 못했습니다. PATH를 확인하세요.', 'Some CLIs were not found. Check your PATH.'), true);
     S.platform = s.platform; S.setup = s.setup; S.ffmpeg = s.ffmpeg; S.defaults = s.default_models; S.usage = s.usage; updateModelInfo();
     loadVersions(false);
     $('#appVer').querySelector('b').textContent = 'V' + s.version;
     checkUpdate(false, true);
-  }).catch(() => { $('#cli').textContent = '서버 연결 실패'; });
+  }).catch(() => { $('#cli').textContent = T('서버 연결 실패', 'Cannot reach the server'); });
   try {
     await loadList();
     const want = (location.hash.match(/^#c=([\w-]+)/) || [])[1] || store.get('councilConversation');
     const found = S.list.find(x => x.id === want);
     if (found) await openConversation(found.id);
     else { const first = S.list.find(x => !x.archived); if (first) await openConversation(first.id); else await newConversation(); }
-  } catch (e) { toast('초기화 실패: ' + e.message, true); }
+  } catch (e) { toast(T('초기화 실패: ', 'Startup failed: ') + e.message, true); }
 })();
 </script>
 </body>
