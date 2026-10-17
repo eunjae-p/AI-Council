@@ -23,6 +23,7 @@
 3. 문서 갱신
    - `CHANGELOG.md`: 맨 위 **버전 한눈에 보기** 표에 한 줄 + 아래에 상세 항목 추가
    - `README.md`: 맨 위 **현재 버전** 줄과 **최근 업데이트** 표(최근 5개) 갱신, 기능이 바뀌면 해당 설명도 수정
+     README 아래쪽 **English** 섹션의 `Current version` 줄도 함께 올리고, 기능이 바뀌면 영어 설명도 같이 고칩니다.
 4. 테스트 (실제 GPT/Claude를 호출하지 않음)
    ```
    python tests/test_api.py

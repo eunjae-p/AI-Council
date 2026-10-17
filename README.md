@@ -1,6 +1,8 @@
 # AI Council
 
-> **현재 버전: V0.14.0** (2026-10-15) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+**🇰🇷 한국어** · [🇺🇸 English](#english)
+
+> **현재 버전: V0.14.1** (2026-10-17) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -9,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.14.1](CHANGELOG.md#v0141-2026-10-17) | 10-17 | **🇺🇸 영어 설명 추가** — README 아래에 English 안내 (화면 문구는 한국어 그대로) |
 | [V0.14.0](CHANGELOG.md#v0140-2026-10-15) | 10-15 | **✏️ 수정 모드** — GPT·Claude가 작업 폴더 파일을 직접 만들고 고침 (저장점·변경 확인·확정/되돌리기) |
 | [V0.13.2](CHANGELOG.md#v0132-2026-10-12) | 10-12 | Council 버전도 새 버전이 있을 때만 노란 업데이트 표시 |
 | [V0.13.1](CHANGELOG.md#v0131-2026-10-12) | 10-12 | Mac: 중지 버튼이 하위 프로세스까지 종료 |
 | [V0.13.0](CHANGELOG.md#v0130-2026-10-12) | 10-12 | **🍎 Mac 지원** — `Setup-mac.command` 설치·실행·업데이트 |
-| [V0.12.3](CHANGELOG.md#v0123-2026-10-12) | 10-12 | 답변별 Markdown 내려받기(⤓ MD), 전체 대화는 `Chat_md` |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -226,3 +228,90 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 | `AI-Council_Web.cmd` · `AI-Council_Debug.cmd` · `Update.cmd` | 실행 · 문제 확인용 실행 · 업데이트 |
 | `AI-Council_CLI.ps1` | CLI 연결 확인용 PowerShell 스크립트 |
 | `tests/` | 가짜 CLI(`fake_bin`)를 쓰는 테스트 |
+
+---
+
+<a id="english"></a>
+
+# 🇺🇸 AI Council (English)
+
+> **Current version: V0.14.1** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+
+**Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
+
+AI Council is a local multi-model chat app. For each question you pick **GPT**, **Claude**, or **Discussion** (both models debate, then a neutral summary).
+It drives the official **Codex CLI (GPT)** and **Claude Code CLI (Claude)** signed in with your own ChatGPT / Claude subscription — **no API keys, no per-token billing**.
+
+> ℹ️ The app's on-screen text is currently **Korean only**. The models answer in whatever language you write in, so you can ask in English.
+
+## 💡 Features
+
+| Target | Best for | Model calls |
+|---|---|---|
+| **GPT** | Quick questions, prompt writing | 1 |
+| **Claude** | Quick questions, file/workflow analysis | 1 |
+| **Discussion** ⚠ | Design reviews and decisions with no single right answer | 5 (≈5× usage) |
+
+- **Discussion mode** — round 1: both models answer independently · round 2: each critiques the other · final: a **blind, neutral synthesis** (the summarizer sees the answers only as "Model A / Model B", randomly assigned) split into *Conclusion / Agreed / Disagreed / Needs verification*. Every round is saved as Markdown in a local folder.
+- **Three modes** — 💬 Chat (no file access) · 🛠 Work (reads a folder you choose, read-only) · ✏️ **Edit** (creates and edits files in that folder, like Claude Code / Codex)
+- **Safe edit mode** — a Git checkpoint is required first; afterwards you see the changed files and diff, then **commit** or **revert** with one click. Claude gets file-edit tools only (no shell commands); Codex runs in its `workspace-write` sandbox.
+- **🌐 Web search** toggle — both models search the web and cite sources
+- **🔌 MCP** (Claude) — use tools connected to your Claude account; only tools you allow run automatically, everything else asks for approval first
+- **Attachments** — text/JSON, images, video (12 frames via ffmpeg); drag & drop or Ctrl+V. ComfyUI workflow JSON is pre-summarized (nodes, models, color-coded required inputs)
+- **Conversation management** — auto titles, archive/trash, full-text search, long-conversation summaries, Markdown export per answer or per chat
+- **One-click updates** — for AI Council itself (from GitHub) and for both CLIs; dark / light / system theme; Windows and Mac
+
+## 📦 Install
+
+Requirements: a **ChatGPT** subscription (for GPT) and/or a **Claude Pro / Max** subscription (for Claude), and an internet connection.
+Clone with `git` (not ZIP) so the built-in updater works.
+
+**Windows**
+1. `git clone https://github.com/eunjae-p/AI-Council.git`
+2. Double-click **`Setup.cmd`**. It installs Python, Node.js, Git, ffmpeg (if missing), Codex CLI and Claude Code, walks you through sign-in, and creates an **AI Council** desktop shortcut.
+3. Run **AI Council** from the desktop. If there is no red "로그인 필요" (*sign-in required*) at the bottom left, you're ready.
+
+**Mac**
+1. Open Terminal and run `git clone https://github.com/eunjae-p/AI-Council.git` (accept the Xcode command-line tools prompt if asked).
+2. Double-click **`Setup-mac.command`** (installs Homebrew if needed, then Python 3.10+, Node.js, ffmpeg and both CLIs). If macOS blocks it, right-click → Open once.
+3. Double-click **AI Council** on the desktop.
+
+**Sign-in** (once per computer): click the red **"로그인하기"** (*sign in*) link at the bottom left, or run in a terminal:
+
+| Model | Command | Account |
+|---|---|---|
+| GPT | `codex login` (Windows PowerShell: `codex.cmd login`) | ChatGPT (Plus / Pro …) |
+| Claude | `claude auth login` | Claude (Pro / Max; free plan not supported) |
+
+## ▶ Run · update · stop
+
+- **Run**: desktop shortcut (or `AI-Council_Web.cmd` / `AI-Council.command`). The server starts in the background and opens `http://127.0.0.1:8765` — reachable from this computer only.
+- **Update**: when a new version exists, a yellow **⬆ 업데이트하기** (*update*) appears at the bottom left → **지금 업데이트** (*update now*). Or run `Update.cmd` / `Update-mac.command`. Your conversations are kept.
+- **Stop**: **앱 종료** (*quit app*) at the bottom left. Closing the browser tab leaves the server running.
+
+## 🧭 UI cheat sheet (Korean labels)
+
+| Label | Meaning |
+|---|---|
+| 💬 대화 / 🛠 작업 / ✏️ 수정 | Chat / Work (read-only folder) / Edit (writes files) |
+| 토론 (Discussion) | Both models debate, then a neutral conclusion |
+| 웹 검색 켬 · 끔 | Web search on / off |
+| MCP 켬 · 끔 | MCP tools on / off |
+| 저장점 만들고 시작 | Create a Git checkpoint and start (edit mode) |
+| ✅ 확정 (커밋) / ↩ 되돌리기 | Commit the changes / Revert to the checkpoint |
+| 토론 과정 보기 · 토론 기록 폴더 열기 | Show debate rounds · Open the debate log folder |
+| ■ 중지 | Stop generating |
+| 새 대화 · 보관함 · 휴지통 | New chat · Archive · Trash |
+| ⤓ MD · Chat_md | Download this answer / the whole chat as Markdown |
+
+## 🔒 Privacy
+
+- Everything is stored locally in `data/` (conversations, attachments, debate logs) and `exports/`. Both are git-ignored and never uploaded to GitHub.
+- The models still run in the cloud: your questions and attachments are sent to **OpenAI / Anthropic** under your own account's terms.
+- AI Council never uses API keys and never falls back to an API when a CLI fails.
+
+## 💻 For developers
+
+- Python 3.10+ **standard library only**; the whole UI is a single file, `web/index.html`.
+- Tests use fake CLIs (no real model calls): `python tests/test_api.py`, `python tests/test_update.py`, `python tests/test_docs.py`
+- Contribution rules for humans and coding agents: [`CLAUDE.md`](CLAUDE.md) (= `AGENTS.md`, Korean).

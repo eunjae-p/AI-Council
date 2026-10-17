@@ -11,6 +11,7 @@ first = re.search(r"^## (V[\d.]+)", log, re.M).group(1)
 checks = [
     (ui == version, f"UI_VERSION({ui}) == VERSION({version})"),
     (f"**현재 버전: V{version}**" in readme, f"README 맨 위 '현재 버전: V{version}'"),
+    (f"**Current version: V{version}**" in readme, f"README English 'Current version: V{version}'"),
     (f"[V{version}](CHANGELOG.md#" in readme, f"README 최근 업데이트 표에 V{version}"),
     (first == f"V{version}", f"CHANGELOG 첫 버전 항목({first}) == V{version}"),
     (f"| [V{version}](#" in log, f"CHANGELOG 버전 한눈에 보기 표에 V{version}"),
