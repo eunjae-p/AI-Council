@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.16.0** (2026-10-19) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.17.0** (2026-10-19) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,10 +11,10 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.17.0](CHANGELOG.md#v0170-2026-10-19) | 10-19 | **GPT도 MCP(블렌더 등)·인터넷**, 토론+작업에서 실행 모델 선택 → 다른 모델 검토 → 수정 |
 | [V0.16.0](CHANGELOG.md#v0160-2026-10-19) | 10-19 | **🛠 작업 모드 = Claude Code처럼** — 파일 만들기·고치기·명령 실행(허용 목록 + 승인), 수정 모드는 작업 모드로 통합 |
 | [V0.15.0](CHANGELOG.md#v0150-2026-10-18) | 10-18 | **🌐 한국어 / English** — 화면·서버 안내·설치 스크립트 영어 지원, 왼쪽 위 언어 전환 |
 | [V0.14.1](CHANGELOG.md#v0141-2026-10-17) | 10-17 | **🇺🇸 영어 설명 추가** — README 아래에 English 안내 (화면 문구는 한국어 그대로) |
-| [V0.14.0](CHANGELOG.md#v0140-2026-10-15) | 10-15 | **✏️ 수정 모드** — GPT·Claude가 작업 폴더 파일을 직접 만들고 고침 (저장점·변경 확인·확정/되돌리기) |
 | [V0.13.2](CHANGELOG.md#v0132-2026-10-12) | 10-12 | Council 버전도 새 버전이 있을 때만 노란 업데이트 표시 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
@@ -134,9 +134,11 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 4. **저장점(선택)**: 작업 폴더가 Git 저장소면 끝난 뒤 **📝 변경된 파일** 카드 → **✅ 확정 (커밋)** / **↩ 되돌리기**.
    저장 안 된 변경이 있으면 시작 전에 "저장점 만들고 시작 / 저장점 없이 진행"을 고릅니다. Git 저장소가 아닌 폴더(예: `D:\` 아래 새 폴더)는 그냥 진행합니다.
 
-- **GPT(Codex)**: `workspace-write` 샌드박스 — 작업 폴더 안에서만 쓰고 명령도 실행하지만 **인터넷은 막혀** `npm install` 같은 설치는 실패할 수 있습니다. 설치가 필요한 작업은 Claude를 쓰세요.
-- **블렌더 등 연결된 도구**: 모드와 별개로 **🔌 MCP 켬** (Claude Code에 Blender MCP가 등록돼 있어야 함).
-- **토론 + 작업**: GPT·Claude가 **읽기만 하며** 계획을 토론하고, 결론이 나면 **Claude 한 명만** 결론대로 작업합니다.
+- **GPT(Codex)**: `workspace-write` 샌드박스 — 작업 폴더 안에서만 쓰고, 명령 실행과 **인터넷(설치 등)은 허용**됩니다. Codex는 명령별 승인을 할 수 없어 폴더 범위로 제한합니다.
+- **블렌더 등 연결된 도구**: 모드와 별개로 **🔌 Claude MCP** / **🔌 GPT MCP** 를 켭니다 (각 CLI에 Blender MCP가 등록돼 있어야 함).
+- **토론 + 작업 (협업)**: ① GPT·Claude가 **읽기만 하며** 계획 토론 → ② 결론 → ③ **실행: Claude / 실행: GPT** 로 고른 모델이 작업 →
+  ④ 다른 모델이 결과(파일·블렌더 씬)를 **읽기 전용으로 검토** → ⑤ 문제가 있으면 실행한 모델이 수정 (검토가 `LGTM`이면 생략).
+  같은 파일·같은 블렌더 씬을 동시에 고치지 않도록 순서대로 주고받습니다. 기록은 `3_구현`·`4_검토`·`5_수정.md`.
 - **서버 실행**: 오래 켜 두는 서버는 백그라운드로 실행하도록 지시합니다. 끄는 방법은 답변에 안내됩니다.
 - ⚠ **운영 중인 서비스 폴더는 복사본에서** 작업하고 확인 후 반영하는 것을 권장합니다. 모든 명령을 묻지 않고 실행하는 모드는 쓰지 않습니다.
 
@@ -156,11 +158,12 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 - 가격·API·약관처럼 바뀔 수 있는 정보에 켜세요. 답변 시간과 사용량이 늘어납니다.
 
 ### 🔌 MCP (연결된 도구)
-- 입력창 위 **🔌 MCP 켬/끔** (기본 꺼짐). 켜면 Claude 계정(claude.ai 커넥터)·Claude Code에 연결된 도구(예: Higgsfield, Notion)를 Claude가 쓸 수 있습니다.
+- 입력창 위 **🔌 Claude MCP** / **🔌 GPT MCP** (각각 켬/끔, 기본 꺼짐).
+  - **Claude MCP**: Claude 계정(claude.ai 커넥터)·Claude Code에 연결된 도구(예: Blender, Higgsfield, Notion). 아래처럼 도구별 허용.
+  - **GPT MCP**: Codex에 등록된 도구 (`~/.codex/config.toml`, Codex 데스크톱 앱에서 연결한 Blender 등). Codex는 도구별 허용을 고를 수 없어 **켜면 모두 켜집니다**.
 - **⚙ (MCP 도구 관리)** → **도구 목록 가져오기** → 바로 실행해도 되는 도구에 **"항상 허용"** 체크. 조회 도구(잔액·내역 조회 등)만 허용해 두는 것을 권장합니다.
 - 허용하지 않은 도구를 Claude가 쓰려 하면 **실행하지 않고** 답변 아래에 도구·입력 내용을 보여 줍니다 → **이번만 허용 / 항상 허용 / 허용 안 함**.
 - ⚠ 생성·수정·결제처럼 크레딧이 들 수 있는 도구는 빨간 **실행·비용 가능** 표시가 붙습니다. 입력 내용을 확인하고 허용하세요.
-- GPT(Codex)의 MCP는 아직 지원하지 않습니다.
 
 ### 첨부 (📎 · 끌어다 놓기 · Ctrl+V)
 | 종류 | 형식 · 크기 | 처리 |
@@ -242,7 +245,7 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.16.0** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.17.0** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
@@ -261,10 +264,11 @@ It drives the official **Codex CLI (GPT)** and **Claude Code CLI (Claude)** sign
 
 - **Discussion mode** — round 1: both models answer independently · round 2: each critiques the other · final: a **blind, neutral synthesis** (the summarizer sees the answers only as "Model A / Model B", randomly assigned) split into *Conclusion / Agreed / Disagreed / Needs verification*. Every round is saved as Markdown in a local folder.
 - **Two modes** — 💬 Chat (no file access) · 🛠 **Work** (like Claude Code / Codex: read, create and edit files, make folders, write code, run commands in the folder you choose)
-- **Command allowlist + approval** — allowlisted commands (`mkdir`, `ls`, `git status` …) run right away; any other command is blocked and shown below the answer with **Allow once / Always allow / Don't allow**. Codex runs in its `workspace-write` sandbox (folder only, no internet).
+- **Command allowlist + approval** — allowlisted commands (`mkdir`, `ls`, `git status` …) run right away; any other command is blocked and shown below the answer with **Allow once / Always allow / Don't allow**. Codex runs in its `workspace-write` sandbox (writes inside the folder only; internet allowed for installs).
 - **Optional Git checkpoint** — if the folder is a Git repository, review the changed files and diff afterwards, then **commit** or **revert** with one click.
 - **🌐 Web search** toggle — both models search the web and cite sources
-- **🔌 MCP** (Claude) — use tools connected to your Claude account; only tools you allow run automatically, everything else asks for approval first
+- **🔌 Claude MCP / GPT MCP** — use connected tools such as Blender with either model. Claude: only tools you allow run automatically, others ask first. GPT: all tools registered in Codex are enabled when on.
+- **Collaboration** — Discussion + Work: both plan → the model you pick (**Run: Claude / Run: GPT**) executes → the other reviews the actual result read-only → the executor fixes.
 - **Attachments** — text/JSON, images, video (12 frames via ffmpeg); drag & drop or Ctrl+V. ComfyUI workflow JSON is pre-summarized (nodes, models, color-coded required inputs)
 - **Conversation management** — auto titles, archive/trash, full-text search, long-conversation summaries, Markdown export per answer or per chat
 - **English / 한국어** — switch with the `EN` / `한국어` button; installer and update windows follow your OS language
@@ -303,7 +307,7 @@ Clone with `git` (not ZIP) so the built-in updater works.
 - **Mode**: 💬 Chat (no file access) · 🛠 Work (reads, creates and edits files and runs commands in the working folder)
 - **Target**: GPT · Claude · Discussion (both debate → neutral conclusion; *Show debate rounds* expands each round)
 - **Work mode**: blocked commands show a 🛡 card — **Allow once and run again** / **Always allow and run again**. Manage the allowlist with **🛡** next to the folder. In a Git repository you can review changes and **✅ Commit** or **↩ Revert**; with uncommitted changes you choose **Create checkpoint and start** or **Continue without**.
-- **Web search on/off**, **MCP on/off** (⚙ manages which tools are always allowed), **Models ▾** to pin model versions
+- **Web search on/off**, **Claude MCP / GPT MCP on/off** (⚙ manages Claude's always-allowed tools), **Run: Claude / Run: GPT** in Discussion + Work, **Models ▾** to pin model versions
 - **⤓ MD** downloads one answer; **Chat_md** downloads the whole chat; **■ Stop** (or Esc) stops generating
 - **Language**: `EN` / `한국어` at the top left. Saved messages are not translated; only Council's own labels and messages change.
 

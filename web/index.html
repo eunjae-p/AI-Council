@@ -160,7 +160,7 @@ details.indiv .msg{margin-top:10px}
   background:var(--warn-bg);border:1px solid var(--warn-line);color:var(--warn-text);font-size:12.5px;line-height:1.55;padding:10px 12px;border-radius:9px;box-shadow:0 8px 24px #0008;z-index:40;pointer-events:none}
 .tip:hover::before{content:'';position:absolute;left:50%;bottom:calc(100% + 4px);transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--warn-line);z-index:40}
 .webtog{background:var(--panel2);border:1px solid var(--line2);border-radius:10px;padding:6px 11px;font-size:13px;color:var(--muted)}
-.mcpgrp{display:inline-flex;gap:2px} .webtog.gear{padding:6px 9px}
+.seg[hidden]{display:none} .mcpgrp{display:inline-flex;gap:2px} .webtog.gear{padding:6px 9px}
 .editcard{border:1px solid var(--info-line);background:var(--info-bg);border-radius:12px;padding:12px 16px;font-size:13.5px}
 .editcard .eh{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap} .editcard .ew{color:var(--dim);font-size:12px}
 .editcard .efiles{margin:8px 0;display:grid;gap:3px} .editcard .efiles code{font:12.5px ui-monospace,Consolas,monospace}
@@ -182,7 +182,7 @@ details.indiv .msg{margin-top:10px}
 .msg .badge.web{background:var(--info-bg);color:var(--info-text)}
 .indiv .round{font-size:12px;color:var(--muted);margin:10px 4px 4px;font-weight:600}
 .indiv .dlog{margin:6px 4px 2px}
-.seg button.on[data-m]{background:var(--sel);color:var(--text)}
+.seg button.on[data-m],.seg button.on[data-x]{background:var(--sel);color:var(--text)}
 .workdir{display:none;flex:1;min-width:220px;padding:6px 10px;font-size:13.5px} .workdir.show{display:block}
 .badge{font-size:11px;border:1px solid var(--warn-line);color:var(--warn);border-radius:6px;padding:0 6px}
 .models{display:none;gap:8px;flex-wrap:wrap} .models.open{display:flex}
@@ -253,15 +253,16 @@ details.indiv .msg{margin-top:10px}
       <div class="inner">
         <div class="ctl">
           <div class="seg" id="mode">
-            <button data-m="chat" class="on" data-en="💬 Chat">💬 대화</button><button data-m="work" class="tip" data-tip="🛠 작업 모드 — Claude Code·Codex처럼 작업 폴더에서 직접 일합니다.&#10;· 파일 읽기·만들기·고치기, 폴더 만들기, 코드 작성, 명령 실행(설치·서버 실행 등)&#10;· 명령은 허용 목록(🛡)에 있는 것만 바로 실행되고, 나머지는 답변 아래에서 허용 여부를 묻습니다.&#10;· GPT(Codex)는 샌드박스 안에서 작업 폴더에만 쓰고 인터넷은 막힙니다.&#10;· 폴더가 Git 저장소면 끝난 뒤 바뀐 파일을 보여 주고 확정·되돌리기를 고를 수 있습니다.&#10;· 블렌더 등 연결된 도구는 🔌 MCP를 켜세요. 운영 중인 서비스는 복사본 폴더에서 쓰는 것을 권장합니다." data-en-tip="🛠 Work mode — works directly in the folder, like Claude Code / Codex.&#10;· Read, create and edit files, make folders, write code, run commands (installs, servers…)&#10;· Only commands on the allowlist (🛡) run right away; others ask for approval below the answer.&#10;· GPT (Codex) writes only inside the folder in a sandbox, with no internet.&#10;· If the folder is a Git repository, you can review the changed files afterwards and commit or revert.&#10;· For Blender and other connected tools, turn on 🔌 MCP. For live services, use a copy of the folder." data-en="🛠 Work">🛠 작업</button>
+            <button data-m="chat" class="on" data-en="💬 Chat">💬 대화</button><button data-m="work" class="tip" data-tip="🛠 작업 모드 — Claude Code·Codex처럼 작업 폴더에서 직접 일합니다.&#10;· 파일 읽기·만들기·고치기, 폴더 만들기, 코드 작성, 명령 실행(설치·서버 실행 등)&#10;· 명령은 허용 목록(🛡)에 있는 것만 바로 실행되고, 나머지는 답변 아래에서 허용 여부를 묻습니다.&#10;· GPT(Codex)는 샌드박스 안에서 작업 폴더에만 쓰고, 인터넷(설치 등)은 허용됩니다.&#10;· 폴더가 Git 저장소면 끝난 뒤 바뀐 파일을 보여 주고 확정·되돌리기를 고를 수 있습니다.&#10;· 블렌더 등 연결된 도구는 🔌 Claude MCP / GPT MCP를 켜세요. 토론으로 보내면 한 모델이 실행하고 다른 모델이 검토합니다. 운영 중인 서비스는 복사본 폴더에서 쓰는 것을 권장합니다." data-en-tip="🛠 Work mode — works directly in the folder, like Claude Code / Codex.&#10;· Read, create and edit files, make folders, write code, run commands (installs, servers…)&#10;· Only commands on the allowlist (🛡) run right away; others ask for approval below the answer.&#10;· GPT (Codex) writes only inside the folder in a sandbox; internet (installs etc.) is allowed.&#10;· If the folder is a Git repository, you can review the changed files afterwards and commit or revert.&#10;· For Blender and other connected tools, turn on 🔌 Claude MCP / GPT MCP. With Discussion, one model executes and the other reviews. For live services, use a copy of the folder." data-en="🛠 Work">🛠 작업</button>
           </div>
           <div class="seg" id="target">
             <button data-v="gpt">GPT</button><button data-v="claude">Claude</button><button data-v="both" class="on tip" data-tip="⚠ 사용량 주의 — 토론은 GPT·Claude를 총 5번 호출합니다 (1차 의견 2 + 교차 검토 2 + 결론 1).&#10;단독 질문보다 구독 사용량이 약 5배, 시간도 더 걸립니다. 웹 검색까지 켜면 더 늘어납니다.&#10;간단한 질문·워크플로우 분석·프롬프트 작성은 GPT나 Claude 단독을, 판단이 필요한 주제에만 토론을 쓰세요." data-en-tip="⚠ Heavy usage — Discussion calls GPT/Claude 5 times in total (2 opinions + 2 cross reviews + 1 conclusion).&#10;About 5× the subscription usage of a single question, and slower. Web search adds more.&#10;Use GPT or Claude alone for simple questions, workflow analysis or prompt writing; use Discussion for judgment calls."><span data-en="Discussion">토론 (Discussion)</span> <span class="warn-ico">!</span></button>
           </div>
           <button class="webtog" id="webToggle" title="켜면 GPT·Claude가 웹을 검색해 근거를 확인합니다 (시간·사용량 증가)" data-en-title="When on, GPT/Claude search the web to check facts (slower, more usage)">🌐 웹 검색 끔</button>
-          <span class="mcpgrp"><button class="webtog tip" id="mcpToggle" data-tip="🔌 MCP — Claude 계정·Claude Code에 연결된 도구(예: Higgsfield, Notion)를 씁니다.&#10;'항상 허용'한 도구만 바로 실행되고, 나머지는 실행 전에 답변 아래에서 허용 여부를 묻습니다.&#10;GPT(Codex)의 MCP는 아직 지원하지 않습니다. ⚙에서 도구를 관리하세요." data-en-tip="🔌 MCP — use tools connected to your Claude account / Claude Code (e.g. Higgsfield, Notion).&#10;Only tools you marked 'Always allow' run right away; others ask for approval below the answer.&#10;GPT (Codex) MCP is not supported yet. Manage tools with ⚙.">🔌 MCP 끔</button><button class="webtog gear" id="mcpManage" title="MCP 도구 관리" data-en-title="Manage MCP tools">⚙</button></span>
+          <span class="mcpgrp"><button class="webtog tip" id="mcpToggle" data-tip="🔌 Claude MCP — Claude 계정·Claude Code에 연결된 도구(예: Blender, Higgsfield, Notion)를 씁니다.&#10;'항상 허용'한 도구만 바로 실행되고, 나머지는 실행 전에 답변 아래에서 허용 여부를 묻습니다. ⚙에서 도구를 관리하세요." data-en-tip="🔌 Claude MCP — use tools connected to your Claude account / Claude Code (e.g. Blender, Higgsfield, Notion).&#10;Only tools you marked 'Always allow' run right away; others ask for approval below the answer. Manage tools with ⚙.">🔌 Claude MCP 끔</button><button class="webtog tip" id="mcpGptToggle" data-tip="🔌 GPT MCP — GPT(Codex)에 등록된 도구(Codex 데스크톱 앱에서 연결한 Blender 등, ~/.codex/config.toml)를 씁니다.&#10;Codex는 도구별 허용을 고를 수 없어, 켜면 Codex에 연결된 도구가 모두 켜집니다." data-en-tip="🔌 GPT MCP — use tools registered in GPT (Codex) (e.g. Blender connected in the Codex desktop app, ~/.codex/config.toml).&#10;Codex cannot allow tools one by one, so turning this on enables all of Codex's connected tools.">🔌 GPT MCP 끔</button><button class="webtog gear" id="mcpManage" title="MCP 도구 관리" data-en-title="Manage MCP tools">⚙</button></span>
           <button class="ghost small" id="modelToggle" data-en="Models ▾">모델 설정 ▾</button>
           <span class="status" id="modelInfo"></span>
+          <span class="seg" id="executor" hidden title="토론 결론대로 실행할 모델 — 다른 모델이 결과를 검토하고, 실행한 모델이 수정합니다" data-en-title="Model that carries out the conclusion — the other model reviews, then the executor fixes"><button data-x="claude" class="on" data-en="Run: Claude">실행: Claude</button><button data-x="gpt" data-en="Run: GPT">실행: GPT</button></span>
           <input class="workdir" id="workdir"><button class="webtog gear" id="cmdManage" hidden title="명령 실행 허용 목록" data-en-title="Command allowlist">🛡</button>
         </div>
         <div class="models" id="models">
@@ -311,7 +312,7 @@ details.indiv .msg{margin-top:10px}
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.16.0'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.17.0'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -427,7 +428,7 @@ function renderText(container, text) {
 // ---------- 메시지 ----------
 const KIND = { user:'user', GPT:'gpt', Claude:'claude', Council:'council', '오류':'error' };
 const LABEL = { user:T('나', 'You'), GPT:'GPT', Claude:'Claude', Council:T('Council 최종 결론', 'Council conclusion'), '오류':T('오류 기록 · 모델에는 전달되지 않음', 'Error log · not sent to the models') };
-const ROUND = { 1:T('1차 의견', 'Round 1'), 2:T('교차 검토', 'Cross review'), 3:T('구현', 'Implementation') };
+const ROUND = { 1:T('1차 의견', 'Round 1'), 2:T('교차 검토', 'Cross review'), 3:T('구현', 'Implementation'), 4:T('결과 검토', 'Result review'), 5:T('검토 반영 수정', 'Fix after review') };
 function who(item) { return item.role === 'user' ? 'user' : (item.model || 'assistant'); }
 function msgEl(item, index) {
   const w = who(item), box = el('article', 'msg ' + (KIND[w] || ''));
@@ -436,7 +437,7 @@ function msgEl(item, index) {
   head.append(el('span', 'who', (LABEL[w] || w) + (item.round ? ' · ' + ROUND[item.round] : '')));
   if (item.web) head.append(el('span', 'badge web', T('🌐 웹 검색', '🌐 Web search')));
   if (item.mcp) head.append(el('span', 'badge web', '🔌 MCP'));
-  if (['work', 'edit', 'read'].includes(item.mode)) head.append(el('span', 'badge', (item.mode === 'read' ? T('🛠 작업 · 계획', '🛠 Work · plan') : T('🛠 작업', '🛠 Work')) + (item.workdir ? ' · ' + item.workdir : '')));
+  if (['work', 'edit', 'read'].includes(item.mode)) head.append(el('span', 'badge', (item.mode === 'read' ? T('🛠 작업 · 읽기 전용', '🛠 Work · read-only') : T('🛠 작업', '🛠 Work')) + (item.workdir ? ' · ' + item.workdir : '')));
   if (item.cli_model) head.append(el('span', '', item.cli_model));
   if (item.elapsed) head.append(el('span', '', `${item.elapsed}s`));
   head.append(el('span', 'sp'), el('span', '', fmt(item.time)));
@@ -519,7 +520,7 @@ function cmdDenialCard(item, index) {
     if (!prefixes.length) return toast(T('허용할 수 있는 명령 형식이 아닙니다. 직접 실행해 주세요', 'This command cannot be allowlisted. Please run it yourself'), true);
     if (S.running) return toast(T('답변 생성 중에는 다시 실행할 수 없습니다', 'Cannot rerun while an answer is being generated'), true);
     if (save) { try { for (const p of prefixes) await api('/api/commands/allow', { prefix:p, allowed:true }); } catch (e) { return toast(e.message, true); } }
-    if (q.target) setTarget(q.target); restoreMode(q); if (q.mcp) setMcp(true);
+    if (q.target) setTarget(q.target); restoreMode(q); if (q.mcp) setMcp(true); if (q.mcp_gpt) setMcpGpt(true); if (q.executor) setExecutor(q.executor);
     S.allowCmdsOnce = save ? [] : prefixes;
     $('#q').value = q.content + T('\n\n(이전 실행에서 막힌 명령을 허용했습니다. 이미 만든 파일은 이어서 사용하세요.)', '\n\n(The previously blocked commands are now allowed. Continue from the files already created.)');
     send();
@@ -586,8 +587,8 @@ function renderThread() {
     const all = [];
     while (i < S.items.length && S.items[i].role !== 'user') { all.push([S.items[i], i]); i++; }
     // 파일 변경 기록·구현 답변은 토론 과정 밖, 결론 아래에 표시
-    const edits = all.filter(([x]) => x.role === 'edit' && !x.ref), impl = all.filter(([x]) => x.round === 3);
-    const group = all.filter(([x]) => x.role !== 'edit' && x.round !== 3);
+    const edits = all.filter(([x]) => x.role === 'edit' && !x.ref), impl = all.filter(([x]) => x.round >= 3);
+    const group = all.filter(([x]) => x.role !== 'edit' && !(x.round >= 3));
     const tail = () => { impl.forEach(([x, idx]) => box.append(msgEl(x, idx))); edits.forEach(([x]) => box.append(editCard(x))); };
     const council = group.find(([x]) => x.model === 'Council');
     if (council) {
@@ -810,7 +811,7 @@ function downloadAnswer(item, index) {
   lines.push('', `## ${label}`, '', String(item.content || '').trim(), '');
   const safe = t => t.replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').replace(/\s+/g, ' ').trim().slice(0, 60) || T('대화', 'chat');
   const short = { GPT:'GPT', Claude:'Claude', Council:T('결론', 'conclusion') }[item.model] || T('답변', 'answer');
-  const name = `${safe(title)}_${short}${item.round ? '_' + (item.round === 1 ? T('1차의견', 'round1') : T('교차검토', 'review')) : ''}_${stamp}.md`;
+  const name = `${safe(title)}_${short}${item.round ? '_' + ({ 1:T('1차의견', 'round1'), 2:T('교차검토', 'review'), 3:T('구현', 'implement'), 4:T('결과검토', 'check'), 5:T('수정', 'fix') }[item.round] || item.round) : ''}_${stamp}.md`;
   const a = el('a'); a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type:'text/markdown;charset=utf-8' })); a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   toast(T('내려받기: ', 'Downloaded: ') + name);
@@ -903,13 +904,20 @@ function setupLangButton() {
     store.set('councilLang', LANG === 'en' ? 'ko' : 'en'); location.reload();
   };
 }
-function setMcp(on) { S.mcp = !!on; store.set('councilMcp', S.mcp ? '1' : ''); const b = $('#mcpToggle'); b.classList.toggle('on', S.mcp); b.textContent = S.mcp ? T('🔌 MCP 켬', '🔌 MCP on') : T('🔌 MCP 끔', '🔌 MCP off'); }
+function setMcp(on) { S.mcp = !!on; store.set('councilMcp', S.mcp ? '1' : ''); const b = $('#mcpToggle'); b.classList.toggle('on', S.mcp); b.textContent = S.mcp ? T('🔌 Claude MCP 켬', '🔌 Claude MCP on') : T('🔌 Claude MCP 끔', '🔌 Claude MCP off'); }
+function setMcpGpt(on) { S.mcpGpt = !!on; store.set('councilMcpGpt', S.mcpGpt ? '1' : ''); const b = $('#mcpGptToggle'); b.classList.toggle('on', S.mcpGpt); b.textContent = S.mcpGpt ? T('🔌 GPT MCP 켬', '🔌 GPT MCP on') : T('🔌 GPT MCP 끔', '🔌 GPT MCP off'); }
+$('#mcpGptToggle').onclick = () => setMcpGpt(!S.mcpGpt);
+// 토론 + 작업: 결론대로 실행할 모델 (다른 모델이 검토)
+function setExecutor(v) { S.executor = v === 'gpt' ? 'gpt' : 'claude'; store.set('councilExecutor', S.executor);
+  document.querySelectorAll('#executor button').forEach(b => b.classList.toggle('on', b.dataset.x === S.executor)); }
+document.querySelectorAll('#executor button').forEach(b => b.onclick = () => setExecutor(b.dataset.x));
+function syncExecutor() { $('#executor').hidden = !(S.mode === 'work' && S.target === 'both'); }
 $('#mcpToggle').onclick = () => setMcp(!S.mcp);
 $('#mcpManage').onclick = () => openMcpManager();
 $('#cmdManage').onclick = () => openCmdManager();
-function setTarget(v) { S.target = v; store.set('councilTarget', v); document.querySelectorAll('#target button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); updateModelInfo(); }
+function setTarget(v) { S.target = v; store.set('councilTarget', v); document.querySelectorAll('#target button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); updateModelInfo(); if (typeof syncExecutor === 'function' && $('#executor')) syncExecutor(); }
 document.querySelectorAll('#mode button').forEach(b => b.onclick = () => setMode(b.dataset.m));
-function setMode(m) { if (m !== 'work') m = 'chat'; S.mode = m; store.set('councilMode', m); document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.m === m)); $('#workdir').classList.toggle('show', m === 'work'); $('#cmdManage').hidden = m !== 'work'; $('#workdir').placeholder = T('작업 폴더 (예: D:\\my-project) — 이 폴더에서 파일을 만들고 고치고 명령을 실행합니다', 'Working folder (e.g. D:\\my-project) — files are created/edited and commands run here'); $('#q').placeholder = m === 'work' ? T('할 일을 적어 주세요 — 예: 이 폴더에 Flask 서버를 만들고 실행해줘 (Enter 보내기 · Shift+Enter 줄바꿈)', 'Describe the task — e.g. create a Flask server in this folder and run it (Enter to send · Shift+Enter for a new line)') : T('질문을 입력하세요 · 📎·끌어다 놓기·Ctrl+V로 JSON·이미지·영상 첨부 (Enter 보내기 · Shift+Enter 줄바꿈)', 'Ask anything · attach JSON, images or video with 📎, drag & drop or Ctrl+V (Enter to send · Shift+Enter for a new line)'); }
+function setMode(m) { if (m !== 'work') m = 'chat'; S.mode = m; store.set('councilMode', m); document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.m === m)); $('#workdir').classList.toggle('show', m === 'work'); $('#cmdManage').hidden = m !== 'work'; if ($('#executor')) syncExecutor(); $('#workdir').placeholder = T('작업 폴더 (예: D:\\my-project) — 이 폴더에서 파일을 만들고 고치고 명령을 실행합니다', 'Working folder (e.g. D:\\my-project) — files are created/edited and commands run here'); $('#q').placeholder = m === 'work' ? T('할 일을 적어 주세요 — 예: 이 폴더에 Flask 서버를 만들고 실행해줘 (Enter 보내기 · Shift+Enter 줄바꿈)', 'Describe the task — e.g. create a Flask server in this folder and run it (Enter to send · Shift+Enter for a new line)') : T('질문을 입력하세요 · 📎·끌어다 놓기·Ctrl+V로 JSON·이미지·영상 첨부 (Enter 보내기 · Shift+Enter 줄바꿈)', 'Ask anything · attach JSON, images or video with 📎, drag & drop or Ctrl+V (Enter to send · Shift+Enter for a new line)'); }
 $('#workdir').addEventListener('input', () => store.set('councilWorkdir', $('#workdir').value.trim()));
 $('#modelToggle').onclick = () => { const m = $('#models'); m.classList.toggle('open'); $('#modelToggle').textContent = m.classList.contains('open') ? T('모델 설정 ▴', 'Models ▴') : T('모델 설정 ▾', 'Models ▾'); };
 
@@ -963,7 +971,7 @@ async function send() {
   let gotUser = false, wasStopped = false;
   try {
     const res = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json', 'X-Lang':LANG},
-      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, web:!!S.web, mcp:!!S.mcp, allow_once: allowOnceSent || [], allow_cmds_once: cmdsOnceSent, workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => f.upload ? ({ name:f.name, upload:f.upload }) : ({ name:f.name, content:f.content })) }) });
+      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, web:!!S.web, mcp:!!S.mcp, mcp_claude:!!S.mcp, mcp_gpt:!!S.mcpGpt, executor:S.executor || 'claude', allow_once: allowOnceSent || [], allow_cmds_once: cmdsOnceSent, workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => f.upload ? ({ name:f.name, upload:f.upload }) : ({ name:f.name, content:f.content })) }) });
     if (!res.ok) { let m = T('요청 실패', 'Request failed'); try { m = (await res.json()).error || m; } catch {} throw new Error(m); }
     const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
     for (;;) {
@@ -1259,7 +1267,7 @@ window.addEventListener('hashchange', () => { const id = (location.hash.match(/^
   setMode('chat'); // 기본값은 항상 대화 모드
   applyTheme(store.get('councilTheme') || 'dark');
   setWeb(store.get('councilWeb') === '1');
-  setMcp(store.get('councilMcp') === '1');
+  setMcp(store.get('councilMcp') === '1'); setMcpGpt(store.get('councilMcpGpt') === '1'); setExecutor(store.get('councilExecutor') || 'claude');
   setTarget(['gpt','claude','both'].includes(store.get('councilTarget')) ? store.get('councilTarget') : 'both');
   api('/api/status').then(s => { $('#ver').textContent = 'V' + s.version;
     if (s.version !== UI_VERSION) { const n = el('div', 'notice err', T(`서버(V${s.version})가 화면(V${UI_VERSION})보다 오래된 버전입니다. 바탕화면의 AI Council을 다시 실행하면 새 버전으로 바뀝니다.`, `The server (V${s.version}) is older than the page (V${UI_VERSION}). Run AI Council from the desktop again to switch to the new version.`)); $('#notices').before(n); }

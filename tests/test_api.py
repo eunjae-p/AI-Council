@@ -345,6 +345,11 @@ open(os.environ["FAKE_LOG"],"w").close()
 post("/api/chat", {"question":"gpt mcp","conversation_id":c14,"target":"gpt","mcp":True}, raw=True)
 lg = open(os.environ["FAKE_LOG"]).read()
 ok("'-c', 'mcp_servers.higgs.enabled=false', 'exec'" in lg and "plugin_srv" not in lg and "bad name" not in lg, f"only config.toml servers disabled {lg[:300]}")
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"gpt mcp on","conversation_id":c14,"target":"gpt","mcp_gpt":True}, raw=True)
+lg = open(os.environ["FAKE_LOG"]).read()
+ok("enabled=false" not in lg and "CODEX" in lg, "GPT MCP on: Codex MCP servers stay enabled")
+ok(get("/api/conversation?id="+c14)["items"][-1].get("mcp") is True, "GPT MCP use recorded")
 os.environ["FAKE_CONFIG_ERR"]="1"; _cc._codex_mcp_cache[:] = [0.0, []]
 ev = post("/api/chat", {"question":"config err","conversation_id":c14,"target":"gpt"}, raw=True); del os.environ["FAKE_CONFIG_ERR"]
 ok(get("/api/conversation?id="+c14)["items"][-1]["role"]=="assistant", f"config error retries without mcp override {[e['type'] for e in ev]}")
@@ -391,7 +396,9 @@ ok("테스트 커밋" in logtxt and (ed/"claude_new.txt").exists(), f"commit rec
 # GPT 수정: workspace-write 샌드박스
 open(os.environ["FAKE_LOG"],"w").close()
 post("/api/chat", {"question":"EDIT_FILE gpt","conversation_id":c15,"target":"gpt","mode":"edit","workdir":str(ed)}, raw=True)
-ok("'--sandbox', 'workspace-write'" in open(os.environ["FAKE_LOG"]).read() and (ed/"gpt_new.txt").exists(), "codex edit uses workspace-write")
+lg = open(os.environ["FAKE_LOG"]).read()
+ok("'--sandbox', 'workspace-write'" in lg and (ed/"gpt_new.txt").exists(), "codex work uses workspace-write")
+ok("sandbox_workspace_write.network_access=true" in lg and "danger-full-access" not in lg and "dangerously" not in lg, "GPT work mode: internet allowed, still sandboxed")
 recg = get("/api/conversation?id="+c15)["items"][-1]; post("/api/edit/apply", {"conversation_id":c15,"ref":recg["id"],"action":"revert"})
 ok(not (ed/"gpt_new.txt").exists(), "gpt changes reverted")
 # 토론 + 수정: 1·2라운드는 읽기 전용, 결론 뒤 Claude 한 모델만 구현
@@ -399,9 +406,17 @@ open(os.environ["FAKE_LOG"],"w").close()
 post("/api/chat", {"question":"EDIT_FILE 토론 후 수정","conversation_id":c15,"target":"both","mode":"edit","workdir":str(ed)}, raw=True)
 log = open(os.environ["FAKE_LOG"]).read()
 items = get("/api/conversation?id="+c15)["items"]
-impl = [i for i in items if i.get("round")==3]
-ok(len(impl)==1 and impl[0]["model"]=="Claude" and items[-1]["role"]=="edit", "discussion+edit: Claude implements after conclusion")
-ok(log.count("acceptEdits")==1 and "workspace-write" not in log and "planning round" in log, "planning rounds are read-only")
+rr = {i.get("round"): i["model"] for i in items[-8:] if i.get("round") in (3, 4, 5)}
+ok(rr == {3:"Claude", 4:"GPT", 5:"Claude"} and items[-1]["role"]=="edit", f"discussion+work: Claude runs, GPT reviews, Claude fixes {rr}")
+ok(log.count("acceptEdits")==2 and "workspace-write" not in log and "planning round" in log and "'read-only'" in log, "planning/review rounds are read-only")
+post("/api/edit/apply", {"conversation_id":c15,"ref":items[-1]["id"],"action":"revert"})
+# 실행 모델을 GPT 로: GPT 가 실행(workspace-write + 인터넷), Claude 가 검토(읽기 전용)
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"EDIT_FILE GPT 실행","conversation_id":c15,"target":"both","mode":"work","workdir":str(ed),"executor":"gpt"}, raw=True)
+log = open(os.environ["FAKE_LOG"]).read(); items = get("/api/conversation?id="+c15)["items"]
+rr = {i.get("round"): i["model"] for i in items[-8:] if i.get("round") in (3, 4, 5)}
+ok(rr.get(3)=="GPT" and rr.get(4)=="Claude" and log.count("workspace-write")>=1 and "acceptEdits" not in log, f"executor GPT, Claude reviews {rr}")
+ok([i for i in items if i["role"]=="user"][-1].get("executor")=="gpt", "executor saved")
 post("/api/edit/apply", {"conversation_id":c15,"ref":items[-1]["id"],"action":"revert"})
 # 작업 모드 명령: 허용 목록에 없으면 막히고 승인 요청, 이번만/항상 허용
 cw = tmp/"cmdwork"; cw.mkdir(); c16 = post("/api/conversations")["id"]

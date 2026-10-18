@@ -125,12 +125,14 @@ def resolve_command(name: str) -> list[str]:
 
 def codex_args(model: str = "", web: bool = False, disable_mcp: list[str] | tuple = (), write: bool = False) -> list[str]:
     args = ["--search"] if web else []  # --search, -c 는 exec 앞에 오는 전체 옵션
+    if write:  # 작업 모드: 샌드박스 안에서 인터넷 허용 (npm·pip 설치 등). 쓰기는 여전히 작업 폴더 안만
+        args += ["-c", "sandbox_workspace_write.network_access=true"]
     for server in disable_mcp:  # Codex 에 등록된 MCP 서버는 이번 실행에서 끈다 (GPT 쪽 MCP 는 아직 미지원)
         args += ["-c", f"mcp_servers.{server}.enabled=false"]
     args.append("exec")
     if model and model != ACCOUNT_DEFAULT:
         args += ["--model", model]
-    # 작업 모드: 작업 폴더 안에서만 쓰기·명령 실행이 되는 샌드박스 (네트워크는 막힘). 그 외에는 읽기 전용
+    # 작업 모드: 작업 폴더 안에서만 쓰기·명령 실행이 되는 샌드박스 (인터넷은 위 설정으로 허용). 그 외에는 읽기 전용
     args += ["--ephemeral", "--skip-git-repo-check", "--sandbox", "workspace-write" if write else "read-only", "--color", "never"]
     return args
 
@@ -350,18 +352,19 @@ def check_workdir(workdir: str) -> Path:
 def call_model(which: str, model: str, prompt: str, mode: str = "chat", workdir: Path | None = None,
                timeout: int = TIMEOUT_SECONDS, info: dict | None = None, cancel: CancelToken | None = None,
                images: list[str] | None = None, image_dir: Path | None = None, web: bool = False,
-               mcp_allow: list[str] | None = None, cmd_allow: list[str] | None = None) -> str:
+               mcp_allow: list[str] | None = None, cmd_allow: list[str] | None = None, codex_mcp: bool = False) -> str:
     """which: gpt | claude.  mode: chat(도구 없음, 빈 폴더) | work(작업 폴더 읽기 전용).
     images: 모델에 보여줄 이미지 파일 경로 (GPT: --image, Claude: 파일 읽기 도구).
     web: 웹 검색 허용 (GPT: codex --search, Claude: WebSearch·WebFetch 도구).
     CLI가 웹 검색 옵션을 모르면 웹 검색 없이 다시 시도하고 info["web_fallback"]=True 로 알린다.
     mcp_allow: None 이면 MCP 끔. 목록이면 Claude 의 MCP 를 켜고 그 도구들만 승인 없이 실행 허용
                (나머지 MCP 도구는 CLI 가 막고, 막힌 호출은 info["permission_denials"] 로 돌려준다).
-    cmd_allow: 작업 모드에서 묻지 않고 실행할 명령 접두어 (council_commands). 나머지 명령은 막히고 승인 요청."""
+    cmd_allow: 작업 모드에서 묻지 않고 실행할 명령 접두어 (council_commands). 나머지 명령은 막히고 승인 요청.
+    codex_mcp: GPT(Codex) 에 등록된 MCP 서버(블렌더 등)를 켠다. 끄면 이번 실행에서 모두 끈다."""
     if web:
         try:
             return _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, True, mcp_allow,
-                               cmd_allow)
+                               cmd_allow, codex_mcp)
         except Cancelled:
             raise
         except CliFailure as exc:
@@ -370,16 +373,18 @@ def call_model(which: str, model: str, prompt: str, mode: str = "chat", workdir:
             if info is not None:
                 info["web_fallback"] = True
     return _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, False, mcp_allow,
-                       cmd_allow)
+                       cmd_allow, codex_mcp)
 
 
 def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, web,
-                mcp_allow=None, cmd_allow=None) -> str:
+                mcp_allow=None, cmd_allow=None, codex_mcp=False) -> str:
     from council_commands import rules as command_rules
     images = [str(p) for p in images or []]
     cwd = workdir if mode in FOLDER_MODES and workdir else chat_dir()
     if which == "gpt":
-        disabled = codex_mcp_servers()
+        disabled = [] if codex_mcp else codex_mcp_servers()
+        if codex_mcp:
+            prompt += MCP_RULE
         name, base = "codex", codex_args(model, web, disabled, write=mode in WRITE_MODES)
         extra: list[str] = []  # read-only 샌드박스는 기본 인수에 포함
         for path in images:  # 이미지는 재시도 때도 빠지지 않도록 기본 인수에 넣는다

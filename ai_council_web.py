@@ -50,7 +50,7 @@ from council_state import CliState
 from council_mcp import McpStore, valid_tool
 import council_commands
 
-VERSION = "0.16.0"
+VERSION = "0.17.0"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -130,12 +130,41 @@ and point out risks.
 
 IMPLEMENT_NOTE = """
 ## Implement the agreed conclusion
-GPT and Claude discussed this request and reached the conclusion below. Implement it now by editing files
-in the working folder. Follow the conclusion; where it says something is unresolved or needs verification,
-choose the safest option and say so. Do not implement items marked as rejected.
+GPT and Claude discussed this request and reached the conclusion below. Carry it out now in the working folder
+(and with connected tools if needed). Follow the conclusion; where it says something is unresolved or needs
+verification, choose the safest option and say so. Do not implement items marked as rejected.
+{other} will review your result afterwards, so end with a clear report: what you did, files/objects changed,
+commands run, and anything not done.
 
 ### Conclusion
 {conclusion}
+"""
+
+REVIEW_NOTE = """
+## Cross review of {executor}'s work
+{executor} carried out the agreed conclusion. Check the actual result yourself — read the files in the working
+folder and, if connected tools are available (e.g. Blender), inspect the current state with read-only calls.
+Do not modify anything in this step.
+Write, in the user's language:
+1. What matches the conclusion
+2. Problems, bugs or missing parts — concrete and actionable (file/object, what is wrong, how to fix)
+3. Risks the user should know
+If there is nothing to fix, start your answer with the single word LGTM on its own line.
+
+### Conclusion
+{conclusion}
+
+### {executor}'s report
+{report}
+"""
+
+FIX_NOTE = """
+## Apply the review
+{reviewer} reviewed your work and reported the issues below. Fix the valid ones now in the working folder (and with
+connected tools if needed). If you disagree with a point, say why instead of changing it. End with a short report.
+
+### Review
+{review}
 """
 
 SYNTH_PROMPT = """Create one final answer for the user from the two answers below.
@@ -500,7 +529,9 @@ class Handler(BaseHTTPRequestHandler):
             workdir = check_workdir(str(body.get("workdir", ""))) if mode in FOLDER_MODES else None
             files = council_attach.validate(body.get("attachments"), store.data_dir, conversation_id)
             web = bool(body.get("web"))
-            mcp = bool(body.get("mcp"))
+            mcp = bool(body.get("mcp_claude", body.get("mcp")))  # Claude MCP (예전 이름: mcp)
+            mcp_gpt = bool(body.get("mcp_gpt"))                     # GPT(Codex) MCP
+            executor = "gpt" if str(body.get("executor", "")).lower() == "gpt" else "claude"  # 토론+작업에서 실행할 모델
             allow_once = [t for t in body.get("allow_once") or [] if valid_tool(t)][:20] if mcp else []
             cmd_once = [c.strip() for c in body.get("allow_cmds_once") or []
                         if council_commands.valid_prefix(c)][:20] if mode == "work" else []
@@ -528,7 +559,7 @@ class Handler(BaseHTTPRequestHandler):
             self.start_stream()
             try:
                 self.run_chat(conversation_id, question, target, gpt_model, claude_model, mode, workdir, files, web,
-                              mcp, allow_once, cmd_once)
+                              mcp, allow_once, cmd_once, mcp_gpt, executor)
             except Exception as exc:  # 예상 못 한 오류도 화면에 정확히 보이게
                 self.emit("error", text=f"서버 내부 오류: {type(exc).__name__}: {exc}")
         finally:
@@ -538,7 +569,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def run_chat(self, conversation_id: str, question: str, target: str, gpt_model: str, claude_model: str,
                  mode: str = "chat", workdir=None, files: list | None = None, web: bool = False,
-                 mcp: bool = False, allow_once: list | None = None, cmd_once: list | None = None) -> None:
+                 mcp: bool = False, allow_once: list | None = None, cmd_once: list | None = None,
+                 mcp_gpt: bool = False, executor: str = "claude") -> None:
         # 1) 필요할 때만 장기 요약 갱신 (실패해도 채팅은 계속)
         started_at = time.time()
         self.emit("stage", step=0, text="대화 맥락을 준비하는 중")
@@ -582,7 +614,7 @@ class Handler(BaseHTTPRequestHandler):
         timeout = ATTACH_TIMEOUT if (attached or images or mode in FOLDER_MODES) else TIMEOUT_SECONDS
         if mode == "work":
             timeout = max(timeout, WORK_TIMEOUT)
-        if web or mcp:
+        if web or mcp or mcp_gpt:
             timeout = max(timeout, WEB_TIMEOUT)
         # MCP: 사용자가 "항상 허용"한 도구 + 이번 질문에서만 허용한 도구
         mcp_allow = sorted(set(mcp_store.allowed()) | set(allow_once or [])) if mcp else None
@@ -598,7 +630,8 @@ class Handler(BaseHTTPRequestHandler):
                 track_git = False
         user_item = store.append_message(conversation_id, "user", question, "사용자", target=target,
                                          mode=mode, workdir=str(workdir) if workdir else None, web=web or None,
-                                         mcp=mcp or None, allow_once=allow_once or None,
+                                         mcp=mcp or None, mcp_gpt=mcp_gpt or None, allow_once=allow_once or None,
+                                         executor=executor if (mode == "work" and target == "both") else None,
                                          allow_cmds_once=cmd_once or None,
                                          attachments=council_attach.history_records(attached) or None)
         self.emit("saved", item=user_item, context=info)
@@ -613,7 +646,8 @@ class Handler(BaseHTTPRequestHandler):
             label, name, model = models[which]
             prompt = CHAT_PROMPT.format(me=label, context=context, question=question, attachments=attach_block)
             if mode == "work":
-                prompt += (PLAN_NOTE if phase == "plan" else WORK_NOTE).format(workdir=workdir)
+                note = PLAN_NOTE if phase == "plan" else READ_NOTE if phase == "review" else WORK_NOTE
+                prompt += note.format(workdir=workdir)
             selected = model_label(name, model) or (codex_default_model() if which == "gpt" else "")
             if selected:
                 prompt += MODEL_NOTE.format(model=selected, source="selected in the app" if model_label(name, model) else "from the CLI default config")
@@ -631,7 +665,8 @@ class Handler(BaseHTTPRequestHandler):
             call_mode = call_mode or mode
             answer = call_model(which, model, prompt, call_mode, workdir, timeout=timeout, info=run_info, cancel=token,
                                 images=images, image_dir=image_dir, web=web,
-                                mcp_allow=mcp_allow if which == "claude" else None, cmd_allow=cmd_allow)
+                                mcp_allow=mcp_allow if which == "claude" else None, cmd_allow=cmd_allow,
+                                codex_mcp=mcp_gpt and which == "gpt")
             real = actual_model(which, run_info)
             cli_state.record(which, model, real)
             if run_info.get("web_fallback"):
@@ -643,7 +678,7 @@ class Handler(BaseHTTPRequestHandler):
                 cli_model=real or model_label(name, model) or (f"기본값 {selected}" if selected else ""),
                 elapsed=round(time.time() - started, 1), mode=call_mode, round=round_no,
                 web=(web and not run_info.get("web_fallback")) or None,
-                mcp=(mcp and which == "claude") or None,
+                mcp=(mcp if which == "claude" else mcp_gpt) or None,
                 # 허용되지 않아 막힌 MCP 호출 → 화면에서 허용 여부를 묻는다
                 mcp_denials=[{"tool": d["tool"], "input": json.dumps(d["input"], ensure_ascii=False)[:600]}
                              for d in run_info.get("permission_denials", []) if d["tool"].startswith("mcp__")][:10] or None,
@@ -749,17 +784,37 @@ class Handler(BaseHTTPRequestHandler):
                     errors["Council"] = exc.details()
                     self.emit("model_error", model="Council", text=errors["Council"])
             if mode == "work" and "Council" in answers and not token.cancelled:
-                # 작업 모드 토론: 결론이 나면 Claude 한 모델만 실제로 작업한다 (두 모델이 동시에 고치면 충돌)
-                self.emit("stage", step=4, text="결론대로 Claude가 작업하는 중")
-                try:
-                    impl, item = ask("claude", base_prompt("claude") + IMPLEMENT_NOTE.format(conclusion=answers["Council"]), 3)
-                    debate.write_log(folder, "3_Claude_구현.md", "Claude · 구현", impl, item.get("cli_model", ""))
-                    self.emit("answer", item=item)
-                except Cancelled:
-                    stopped = True
-                except CliFailure as exc:
-                    errors["Claude 구현"] = exc.details()
-                    self.emit("model_error", model="Claude 구현", text=errors["Claude 구현"])
+                # 작업 모드 토론: 결론 → 한 모델이 실행 → 다른 모델이 결과를 검토 → 실행한 모델이 수정
+                # (두 모델이 같은 파일·같은 블렌더 씬을 동시에 고치면 충돌하므로 순서대로 주고받는다)
+                doer, checker = executor, ("claude" if executor == "gpt" else "gpt")
+                d_label, c_label = models[doer][0], models[checker][0]
+
+                def step(which, prompt, round_no, stage, log_name, log_title, call_mode=None):
+                    nonlocal stopped
+                    self.emit("stage", step=round_no + 1, text=stage)
+                    try:
+                        text, item = ask(which, prompt, round_no, call_mode)
+                        debate.write_log(folder, log_name, log_title, text, item.get("cli_model", ""))
+                        self.emit("answer", item=item)
+                        return text
+                    except Cancelled:
+                        stopped = True
+                    except CliFailure as exc:
+                        key = f"{models[which][0]} {log_title.split(' · ')[-1]}"
+                        errors[key] = exc.details()
+                        self.emit("model_error", model=key, text=errors[key])
+                    return None
+
+                report = step(doer, base_prompt(doer) + IMPLEMENT_NOTE.format(conclusion=answers["Council"], other=c_label), 3,
+                              f"결론대로 {d_label}가 작업하는 중", f"3_{d_label}_구현.md", f"{d_label} · 구현")
+                review = None
+                if report is not None and not token.cancelled:
+                    review = step(checker, base_prompt(checker, "review") + REVIEW_NOTE.format(
+                                      executor=d_label, conclusion=answers["Council"], report=report), 4,
+                                  f"{c_label}가 결과를 검토하는 중", f"4_{c_label}_검토.md", f"{c_label} · 검토", "read")
+                if review and not review.lstrip().upper().startswith("LGTM") and not token.cancelled:
+                    step(doer, base_prompt(doer) + FIX_NOTE.format(reviewer=c_label, review=review), 5,
+                         f"검토 내용을 반영해 {d_label}가 수정하는 중", f"5_{d_label}_수정.md", f"{d_label} · 수정")
 
         if track_git:
             # 끝나면 바뀐 파일·내용을 기록 → 화면에서 확정(커밋) 또는 되돌리기

@@ -62,7 +62,12 @@ PAIRS: list[tuple[str, str]] = [
     ("2라운드 · 서로의 답변을 읽고 교차 검토하는 중", "Round 2 · Each model is reviewing the other's answer"),
     ("토론 내용을 최종 결론으로 정리하는 중", "Writing the final conclusion"),
     ("결론대로 Claude가 파일을 수정하는 중", "Claude is editing files according to the conclusion"),
-    ("결론대로 Claude가 작업하는 중", "Claude is carrying out the conclusion"),
+    ("결론대로 {x}가 작업하는 중", "{x} is carrying out the conclusion"),
+    ("{x}가 결과를 검토하는 중", "{x} is reviewing the result"),
+    ("검토 내용을 반영해 {x}가 수정하는 중", "{x} is applying the review"),
+    ("{x} 구현", "{x} implementation"),
+    ("{x} 검토", "{x} review"),
+    ("{x} 수정", "{x} fix"),
     # --- 스트림 안내 ---
     ("오래된 대화를 장기 요약으로 정리했습니다 ({x}).", "Older messages were condensed into a long-term summary ({x})."),
     ("장기 요약 갱신에 실패했습니다. 원문은 그대로이며 최근 대화만으로 답변합니다.",
