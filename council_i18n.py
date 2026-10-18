@@ -123,6 +123,8 @@ PAIRS: list[tuple[str, str]] = [
     ("이 GPT 모델은 ChatGPT 구독 계정의 Codex에서 거절되었습니다. '계정 기본값'에서도 같은 오류라면 %USERPROFILE%\\.codex\\config.toml 의 model 설정 때문이니, 그 값을 바꾸거나 '모델 설정 → 직접 입력'으로 동작하는 모델을 지정하세요.",
      "This GPT model was rejected by Codex for ChatGPT accounts. If 'Account default' fails the same way, the model setting in %USERPROFILE%\\.codex\\config.toml is the cause: change it, or pick a working model under 'Models → Custom'."),
     ("{x} CLI 로그인이 필요합니다. 터미널에서 {y} 로그인 후 다시 시도하세요.", "{x} CLI needs sign-in. Sign in to {y} and try again."),
+    ("{x} 로그인이 만료되었거나 필요합니다. Council 왼쪽 아래 '버전 다시 확인' → 빨간 '로그인하기'를 누르거나, 터미널에서 '{y}' 를 실행한 뒤 다시 보내세요.",
+     "{x} sign-in has expired or is required. Click 'Check versions again' at the bottom left → the red 'Sign in', or run '{y}' in a terminal, then send again."),
     ("구독 사용량 한도에 도달했을 수 있습니다. 잠시 후 다시 시도하거나 다른 모델을 선택하세요.",
      "You may have reached your subscription usage limit. Try again later or choose another model."),
     ("MCP 목록을 가져오지 못했습니다. Claude 로그인 상태와 CLI 버전을 확인하세요.",

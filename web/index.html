@@ -312,7 +312,7 @@ details.indiv .msg{margin-top:10px}
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.17.0'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.17.1'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -988,7 +988,7 @@ async function send() {
         else if (e.type === 'stopped') { wasStopped = true; if (here()) pend.before(el('div', 'inline-warn', e.text)); }
         else if (e.type === 'model_error') { if (here()) pend.before(el('div', 'inline-err', `${e.model} ${T('오류', 'error')}\n${e.text}`)); }
         else if (e.type === 'error') { throw new Error(e.text); }
-        else if (e.type === 'done') { if (e.errors && Object.keys(e.errors).length) toast(T('일부 모델 호출이 실패했습니다', 'Some model calls failed'), true); refreshStatusInfo(); }
+        else if (e.type === 'done') { if (e.errors && Object.keys(e.errors).length) toast(T('일부 모델 호출이 실패했습니다', 'Some model calls failed'), true); refreshStatusInfo(); loadVersions(true); }
       }
     }
     pend.remove();

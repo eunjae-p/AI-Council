@@ -67,6 +67,18 @@ LOGIN_ARGS = {"codex": ["login", "status"], "claude": ["auth", "status"]}
 LOGIN_COMMANDS = {"codex": f"codex{_W} login", "claude": "claude auth login"}
 
 
+# 실제 호출에서 로그인 만료가 확인된 CLI ('auth status' 는 만료된 토큰도 로그인됨으로 보고할 수 있음)
+_expired: dict[str, float] = {}
+
+
+def mark_expired(name: str) -> None:
+    _expired[name] = time.time()
+
+
+def clear_expired(name: str) -> None:
+    _expired.pop(name, None)
+
+
 def logged_in(name: str) -> bool | None:
     """로그인 여부. 확인할 수 없으면 None (구독 사용량을 쓰지 않는 상태 확인 명령)."""
     try:
@@ -102,7 +114,7 @@ def check(force: bool = False) -> dict:
         login = _cached(f"login:{name}", 600, lambda n=name: logged_in(n)) if inst else None
         result[name] = {
             "installed": inst,
-            "logged_in": login,
+            "logged_in": False if name in _expired else login,
             "login_command": LOGIN_COMMANDS[name],
             "latest": late,
             "outdated": bool(inst and late and newer(late, inst)),
@@ -191,6 +203,7 @@ def open_login(name: str) -> dict:
     그 외 OS: 열 수 없으므로 명령만 돌려준다."""
     if name not in PACKAGES:
         raise ValueError("알 수 없는 CLI 입니다.")
+    clear_expired(name)  # 로그인 창을 열었으면 다음 확인은 실제 상태로
     if IS_MAC:
         # Mac: 터미널 앱을 열어 로그인 명령을 실행 (브라우저 로그인이 이어서 열림)
         exe = resolve_command(name)[-1]

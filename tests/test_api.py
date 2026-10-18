@@ -439,6 +439,15 @@ ok(any(x["prefix"]=="python" and x["powerful"] for x in post("/api/commands/allo
 ok(not any(x["prefix"]=="npm install" for x in post("/api/commands/reset", {})["allowed"]), "reset to defaults")
 import council_commands as cc2
 ok(cc2.prefixes_for("cd app && FOO=1 npm run dev | tee log.txt")==["npm run","tee"], f"prefixes {cc2.prefixes_for('cd app && FOO=1 npm run dev | tee log.txt')}")
+# 로그인 만료: 오류에 로그인 안내 + 왼쪽 아래 로그인 필요 표시
+ca = post("/api/conversations")["id"]
+ev = post("/api/chat", {"question":"AUTH_EXPIRED","conversation_id":ca,"target":"claude"}, raw=True)
+me = [e for e in ev if e["type"]=="model_error"]
+ok(me and "claude auth login" in me[0]["text"] and "만료" in me[0]["text"], "expired login -> sign-in hint")
+import council_versions as _cv
+ok("claude" in _cv._expired, "expired login marked for versions panel")
+post("/api/chat", {"question":"다시","conversation_id":ca,"target":"claude"}, raw=True)
+ok("claude" not in _cv._expired, "successful call clears expired mark")
 # 한국어/English: 브라우저가 X-Lang: en 을 보내면 서버 안내·오류 문구를 영어로, 기록 원문은 그대로
 import re as _re, council_i18n as i18n
 def get_en(p): return json.loads(urllib.request.urlopen(urllib.request.Request(B+p, headers={"X-Lang":"en"})).read())

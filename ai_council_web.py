@@ -20,6 +20,7 @@ from urllib.parse import parse_qs, urlparse
 
 from council_context import build_context, maybe_summarize
 from council_core import (
+    is_auth_error,
     TIMEOUT_SECONDS,
     Cancelled,
     CancelToken,
@@ -50,7 +51,7 @@ from council_state import CliState
 from council_mcp import McpStore, valid_tool
 import council_commands
 
-VERSION = "0.17.0"
+VERSION = "0.17.1"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -663,10 +664,18 @@ class Handler(BaseHTTPRequestHandler):
             started = time.time()
             run_info: dict = {}
             call_mode = call_mode or mode
-            answer = call_model(which, model, prompt, call_mode, workdir, timeout=timeout, info=run_info, cancel=token,
-                                images=images, image_dir=image_dir, web=web,
-                                mcp_allow=mcp_allow if which == "claude" else None, cmd_allow=cmd_allow,
-                                codex_mcp=mcp_gpt and which == "gpt")
+            try:
+                answer = call_model(which, model, prompt, call_mode, workdir, timeout=timeout, info=run_info, cancel=token,
+                                    images=images, image_dir=image_dir, web=web,
+                                    mcp_allow=mcp_allow if which == "claude" else None, cmd_allow=cmd_allow,
+                                    codex_mcp=mcp_gpt and which == "gpt")
+            except Cancelled:
+                raise
+            except CliFailure as exc:
+                if is_auth_error(f"{exc.stderr}\n{exc.stdout}"):
+                    council_versions.mark_expired(name)  # 왼쪽 아래에 '로그인 필요 · 로그인하기' 표시
+                raise
+            council_versions.clear_expired(name)
             real = actual_model(which, run_info)
             cli_state.record(which, model, real)
             if run_info.get("web_fallback"):

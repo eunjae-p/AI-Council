@@ -35,6 +35,18 @@ TIMEOUT_SECONDS = 180
 SUMMARY_TIMEOUT_SECONDS = 180
 
 
+LOGIN_HINT = {"claude": "claude auth login", "codex": "codex login"}
+_AUTH_WORDS = ("not logged in", "failed to authenticate", "oauth session expired", "session expired", "could not be refreshed",
+               "invalid api key", "please run /login", "authentication_error", "login required",
+               "please log in", "please login", "token expired", "refresh token")
+
+
+def is_auth_error(text: str) -> bool:
+    """CLI 출력이 로그인 만료·미로그인 오류인지 (Claude: OAuth session expired, Codex: 401 등)."""
+    low = (text or "").lower()
+    return any(w in low for w in _AUTH_WORDS)
+
+
 class CliFailure(RuntimeError):
     def __init__(self, name: str, message: str, stdout: str = "", stderr: str = ""):
         super().__init__(message)
@@ -56,8 +68,9 @@ class CliFailure(RuntimeError):
             tips.append("이 GPT 모델은 ChatGPT 구독 계정의 Codex에서 거절되었습니다. '계정 기본값'에서도 같은 오류라면 "
                         "%USERPROFILE%\\.codex\\config.toml 의 model 설정 때문이니, 그 값을 바꾸거나 "
                         "'모델 설정 → 직접 입력'으로 동작하는 모델을 지정하세요.")
-        if "not logged in" in blob or ("login" in blob and "please" in blob):
-            tips.append(f"{self.name} CLI 로그인이 필요합니다. 터미널에서 {self.name} 로그인 후 다시 시도하세요.")
+        if is_auth_error(blob):
+            tips.append(f"{self.name} 로그인이 만료되었거나 필요합니다. Council 왼쪽 아래 '버전 다시 확인' → 빨간 '로그인하기'를 누르거나, "
+                        f"터미널에서 '{LOGIN_HINT.get(self.name, self.name + ' login')}' 를 실행한 뒤 다시 보내세요.")
         if "rate limit" in blob or "usage limit" in blob:
             tips.append("구독 사용량 한도에 도달했을 수 있습니다. 잠시 후 다시 시도하거나 다른 모델을 선택하세요.")
         return "\n→ ".join(tips)
