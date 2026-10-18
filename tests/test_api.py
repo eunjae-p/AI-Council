@@ -439,6 +439,15 @@ ok(any(x["prefix"]=="python" and x["powerful"] for x in post("/api/commands/allo
 ok(not any(x["prefix"]=="npm install" for x in post("/api/commands/reset", {})["allowed"]), "reset to defaults")
 import council_commands as cc2
 ok(cc2.prefixes_for("cd app && FOO=1 npm run dev | tee log.txt")==["npm run","tee"], f"prefixes {cc2.prefixes_for('cd app && FOO=1 npm run dev | tee log.txt')}")
+# 진행 상황: 도구를 쓰는 Claude 실행은 stream-json 으로 받아 실시간 표시 + 답변에 작업 기록 저장
+cp_ = post("/api/conversations")["id"]; wdp = tmp/"progwork"; wdp.mkdir()
+ev = post("/api/chat", {"question":"블렌더 큐브","conversation_id":cp_,"target":"claude","mode":"work","workdir":str(wdp)}, raw=True)
+pr = [dict(e["item"], model=e["model"]) for e in ev if e["type"]=="progress"]
+ok(any("blender" in e["text"] and "execute_blender_code" in e["text"] for e in pr) and any(e["kind"]=="init" for e in pr), f"live progress events {pr[:3]}")
+last = get("/api/conversation?id="+cp_)["items"][-1]
+ok(last["content"] and last.get("activity") and last["activity"][-1]["kind"]=="tool", "answer parsed from stream + activity saved")
+ev = post("/api/chat", {"question":"그냥 대화","conversation_id":cp_,"target":"claude"}, raw=True)
+ok(not [e for e in ev if e["type"]=="progress"] and get("/api/conversation?id="+cp_)["items"][-1]["content"], "plain chat stays non-streaming")
 # 로그인 만료: 오류에 로그인 안내 + 왼쪽 아래 로그인 필요 표시
 ca = post("/api/conversations")["id"]
 ev = post("/api/chat", {"question":"AUTH_EXPIRED","conversation_id":ca,"target":"claude"}, raw=True)

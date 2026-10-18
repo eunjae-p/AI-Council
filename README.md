@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.17.1** (2026-10-19) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.17.2** (2026-10-19) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.17.2](CHANGELOG.md#v0172-2026-10-19) | 10-19 | Claude가 쓰는 도구·명령(블렌더·Bash 등)을 **실시간으로 표시**, 답변에 작업 기록 저장 |
 | [V0.17.1](CHANGELOG.md#v0171-2026-10-19) | 10-19 | 수정: 로그인 만료(`OAuth session expired`) 시 원인·로그인 방법 안내, 왼쪽 아래 로그인하기 표시 |
 | [V0.17.0](CHANGELOG.md#v0170-2026-10-19) | 10-19 | **GPT도 MCP(블렌더 등)·인터넷**, 토론+작업에서 실행 모델 선택 → 다른 모델 검토 → 수정 |
 | [V0.16.0](CHANGELOG.md#v0160-2026-10-19) | 10-19 | **🛠 작업 모드 = Claude Code처럼** — 파일 만들기·고치기·명령 실행(허용 목록 + 승인), 수정 모드는 작업 모드로 통합 |
 | [V0.15.0](CHANGELOG.md#v0150-2026-10-18) | 10-18 | **🌐 한국어 / English** — 화면·서버 안내·설치 스크립트 영어 지원, 왼쪽 위 언어 전환 |
-| [V0.14.1](CHANGELOG.md#v0141-2026-10-17) | 10-17 | **🇺🇸 영어 설명 추가** — README 아래에 English 안내 (화면 문구는 한국어 그대로) |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -131,7 +131,8 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
    목록에 없는 명령(예: `npm install`, `python app.py`)은 실행하지 않고 답변 아래에 **🛡 승인 카드**가 뜹니다 →
    **이번만 허용하고 다시 실행 / 항상 허용하고 다시 실행 / 허용 안 함**. 다시 실행하면 이미 만든 파일에서 이어서 작업합니다.
 3. 허용 목록 관리: 작업 폴더 옆 **🛡** 버튼 (추가·삭제·기본값으로). `python`·`node`·`rm`·`curl` 처럼 사실상 무엇이든 할 수 있는 명령은 빨간 표시가 붙습니다.
-4. **저장점(선택)**: 작업 폴더가 Git 저장소면 끝난 뒤 **📝 변경된 파일** 카드 → **✅ 확정 (커밋)** / **↩ 되돌리기**.
+4. **진행 상황**: Claude가 지금 쓰는 도구·명령(🔌 블렌더 · execute_blender_code, `$ npm install` 등)이 진행 표시 아래에 실시간으로 나오고, 끝나면 답변의 **작업 기록 보기**에 남습니다.
+5. **저장점(선택)**: 작업 폴더가 Git 저장소면 끝난 뒤 **📝 변경된 파일** 카드 → **✅ 확정 (커밋)** / **↩ 되돌리기**.
    저장 안 된 변경이 있으면 시작 전에 "저장점 만들고 시작 / 저장점 없이 진행"을 고릅니다. Git 저장소가 아닌 폴더(예: `D:\` 아래 새 폴더)는 그냥 진행합니다.
 
 - **GPT(Codex)**: `workspace-write` 샌드박스 — 작업 폴더 안에서만 쓰고, 명령 실행과 **인터넷(설치 등)은 허용**됩니다. Codex는 명령별 승인을 할 수 없어 폴더 범위로 제한합니다.
@@ -192,6 +193,7 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 | 화면 위에 "서버가 화면보다 오래된 버전" | 바탕화면 AI Council 다시 실행. 그래도 그대로면 작업 관리자 → 세부 정보에서 `pythonw.exe` 를 모두 끝낸 뒤 실행 |
 | "Git으로 설치되지 않은 폴더" | ZIP으로 받은 폴더입니다. `git clone` 으로 다시 받기 |
 | 영상 첨부가 안 됨 ("ffmpeg 없음") | `Setup.cmd` 실행 (또는 `winget install Gyan.FFmpeg`) 후 Council 재시작 |
+| 작업 모드에서 오래 걸리는데 아무 변화가 없음 | 진행 표시 아래 실시간 기록 확인: `MCP:` 줄에 blender 가 없으면 Claude Code에 Blender MCP 미등록, 도구 호출이 없으면 웹 검색만 하는 중일 수 있음 (블렌더 작업은 웹 검색 끔 권장) |
 | `Failed to authenticate: OAuth session expired` / 로그인 만료 | 왼쪽 아래 **버전 다시 확인** → 빨간 **로그인하기** (또는 터미널 `claude auth login` / `codex login`) 후 다시 보내기 |
 | GPT 모델 오류 (`not supported … ChatGPT account`) | 모델 설정에서 GPT를 **계정 기본값** 으로 |
 | 한쪽 구독만 있음 | 그 모델만 선택해서 사용 (토론은 두 구독이 모두 필요) |
@@ -246,7 +248,7 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.17.1** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.17.2** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 

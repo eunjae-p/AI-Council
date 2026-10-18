@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
 import sys,os,json
 _JSON = "--output-format" in sys.argv and not os.environ.get("FAKE_PLAIN")
+_DISCOVER = "stream-json" in sys.argv and "--tools" in sys.argv and sys.argv[sys.argv.index("--tools")+1] == "" and "--system-prompt" not in sys.argv
+_STREAM = "stream-json" in sys.argv and not _DISCOVER
 _DENY = []
 def out(text):
     if _JSON:
         model = sys.argv[sys.argv.index("--model")+1] if "--model" in sys.argv else "claude-opus-5-5"
-        print(json.dumps({"type":"result","is_error":False,"result":text,"permission_denials":_DENY,
-              "modelUsage":{"claude-haiku-4-5-20251001":{"outputTokens":30},model:{"outputTokens":12}}}, ensure_ascii=False))
+        res = {"type":"result","is_error":False,"result":text,"permission_denials":_DENY,
+               "modelUsage":{"claude-haiku-4-5-20251001":{"outputTokens":30},model:{"outputTokens":12}}}
+        if _STREAM:  # 진행 상황 줄 + 마지막 result 줄
+            print(json.dumps({"type":"system","subtype":"init","mcp_servers":[{"name":"blender","status":"connected"}]}), flush=True)
+            print(json.dumps({"type":"assistant","message":{"content":[{"type":"text","text":"작업을 시작합니다"},
+                  {"type":"tool_use","name":"mcp__blender__execute_blender_code","input":{"code":"bpy.ops.mesh.primitive_cube_add()"}}]}}, ensure_ascii=False), flush=True)
+        print(json.dumps(res, ensure_ascii=False))
     else:
         print(text)
-if "stream-json" in sys.argv:  # MCP 목록 확인: 시작 정보(init)만 내보내고 모델 답변 전 대기 (Council 이 종료시킴)
+if _DISCOVER:  # MCP 목록 확인: 시작 정보(init)만 내보내고 모델 답변 전 대기 (Council 이 종료시킴)
     print(json.dumps({"type":"system","subtype":"init","tools":["Read","mcp__claude_ai_Higgsfield__balance","mcp__claude_ai_Higgsfield__generate_video"],
           "mcp_servers":[{"name":"claude.ai Higgsfield","status":"connected"}]}), flush=True)
     import time; time.sleep(30); print(json.dumps({"type":"result","result":"late"})); sys.exit(0)

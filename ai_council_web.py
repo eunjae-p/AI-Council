@@ -51,7 +51,7 @@ from council_state import CliState
 from council_mcp import McpStore, valid_tool
 import council_commands
 
-VERSION = "0.17.1"
+VERSION = "0.17.2"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -662,7 +662,16 @@ class Handler(BaseHTTPRequestHandler):
             """모델 1회 호출 + 기록. 성공하면 (답변, 저장된 항목). 실패하면 CliFailure."""
             label, name, model = models[which]
             started = time.time()
-            run_info: dict = {}
+            activity: list[dict] = []
+
+            def on_progress(ev: dict) -> None:
+                # Claude 가 지금 쓰는 도구·명령을 실시간으로 화면에 (끝나면 답변의 '작업 기록'으로 저장)
+                entry = {"t": round(time.time() - started, 1), "kind": ev.get("kind", ""), "text": str(ev.get("text", ""))[:300]}
+                if len(activity) < 200:
+                    activity.append(entry)
+                self.emit("progress", model=label, item=entry)
+
+            run_info: dict = {"on_progress": on_progress}
             call_mode = call_mode or mode
             try:
                 answer = call_model(which, model, prompt, call_mode, workdir, timeout=timeout, info=run_info, cancel=token,
@@ -688,6 +697,7 @@ class Handler(BaseHTTPRequestHandler):
                 elapsed=round(time.time() - started, 1), mode=call_mode, round=round_no,
                 web=(web and not run_info.get("web_fallback")) or None,
                 mcp=(mcp if which == "claude" else mcp_gpt) or None,
+                activity=[a for a in activity if a["kind"] != "text" or len(activity) < 60] or None,
                 # 허용되지 않아 막힌 MCP 호출 → 화면에서 허용 여부를 묻는다
                 mcp_denials=[{"tool": d["tool"], "input": json.dumps(d["input"], ensure_ascii=False)[:600]}
                              for d in run_info.get("permission_denials", []) if d["tool"].startswith("mcp__")][:10] or None,

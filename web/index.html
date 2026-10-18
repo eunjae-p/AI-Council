@@ -139,6 +139,10 @@ details.indiv{border:1px dashed var(--line2);border-radius:12px;padding:6px 10px
 details.indiv>summary{cursor:pointer;color:var(--muted);font-size:13px;padding:2px}
 details.indiv .msg{margin-top:10px}
 .pending .ptime{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--dim);font-size:12.5px}
+.pendwrap .plog{margin:6px 2px 0;font:12px/1.6 ui-monospace,Consolas,monospace;color:var(--muted);max-height:260px;overflow:auto}
+.act{display:flex;gap:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .act .at{color:var(--dim);flex:none;min-width:34px} .act .aw{color:var(--council);flex:none}
+.act .ax{overflow:hidden;text-overflow:ellipsis} .act.text .ax{color:var(--dim);font-family:system-ui,sans-serif} .act.init .ax{color:var(--info-text)}
+details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:pointer;color:var(--muted)} details.actlog .act{font:12px/1.6 ui-monospace,Consolas,monospace;color:var(--muted)}
 .pending{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:14px;padding:10px 14px;border:1px dashed var(--line2);border-radius:12px}
 .spin{width:14px;height:14px;border-radius:50%;border:2px solid var(--spin-track);border-top-color:var(--council);animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -312,7 +316,7 @@ details.indiv .msg{margin-top:10px}
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.17.1'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.17.2'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -447,6 +451,10 @@ function msgEl(item, index) {
   }
   const body = el('div', 'content'); renderText(body, item.content);
   box.append(head, body);
+  if (item.activity && item.activity.length) {
+    const d = el('details', 'actlog'); d.append(el('summary', '', T(`작업 기록 보기 (${item.activity.filter(a => a.kind === 'tool').length}개 도구·명령)`, `Show activity (${item.activity.filter(a => a.kind === 'tool').length} tool calls/commands)`)));
+    item.activity.forEach(a => d.append(activityLine(a))); box.append(d);
+  }
   if (item.mcp_denials && item.mcp_denials.length && index != null) box.append(mcpDenialCard(item, index));
   if (item.cmd_denials && item.cmd_denials.length && index != null) box.append(cmdDenialCard(item, index));
   if (item.attachments && item.attachments.length) {
@@ -470,6 +478,13 @@ function msgEl(item, index) {
     box.append(a);
   }
   return box;
+}
+// 진행 기록 한 줄: 0:12  $ npm install  /  🔌 Blender · execute_blender_code
+function activityLine(a, who) {
+  const sec = Math.floor(a.t || 0), r = el('div', 'act ' + (a.kind || ''));
+  r.append(el('span', 'at', `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`));
+  if (who) r.append(el('span', 'aw', who));
+  r.append(el('span', 'ax', a.text || '')); return r;
 }
 // ---------- MCP: 승인이 필요한 도구 ----------
 const KIND_LABEL = { read:T('조회', 'read'), action:T('실행·비용 가능', 'action · may cost'), unknown:T('확인 필요', 'unclear') };
@@ -930,8 +945,8 @@ function setBusy(on, text) {
 }
 function pendingEl(text) {
   // 진행 중 표시 + 경과 시간 (웹 검색·MCP·토론은 몇 분 걸릴 수 있어 멈춘 것처럼 보이지 않게)
-  const p = el('div', 'pending'), t0 = Date.now(), clock = el('span', 'ptime', '0:00'); p.id = 'pending';
-  p.append(el('span', 'spin'), el('span', 'ptext', text), clock);
+  const p = el('div', 'pendwrap'), row = el('div', 'pending'), t0 = Date.now(), clock = el('span', 'ptime', '0:00'); p.id = 'pending';
+  row.append(el('span', 'spin'), el('span', 'ptext', text), clock); p.append(row, el('div', 'plog'));
   const tick = setInterval(() => { if (!p.isConnected && Date.now() - t0 > 3000) { clearInterval(tick); return; }
     const sec = Math.floor((Date.now() - t0) / 1000); clock.textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; }, 1000);
   return p;
@@ -979,7 +994,8 @@ async function send() {
       buf += dec.decode(value, { stream:true }); const lines = buf.split('\n'); buf = lines.pop();
       for (const line of lines) {
         if (!line) continue; const e = JSON.parse(line);
-        if (e.type === 'stage') { $('#status').textContent = e.text; const t = pend.querySelector('.ptext'); if (t) t.textContent = e.text; }
+        if (e.type === 'progress') { const lg = pend.querySelector('.plog'); if (lg) { lg.append(activityLine(e.item || {}, e.model)); while (lg.children.length > 14) lg.firstChild.remove(); } }
+        else if (e.type === 'stage') { $('#status').textContent = e.text; const t = pend.querySelector('.ptext'); if (t) t.textContent = e.text; }
         else if (e.type === 'saved') { gotUser = true; if (here()) { pend.before(msgEl(e.item)); }
           const c = e.context; $('#ctxInfo').textContent = c ? T(`모델에 전달: ${c.summarized_through ? `요약(1-${c.summarized_through}) + ` : ''}최근 ${c.total - c.recent_from}개 메시지`, `Sent to models: ${c.summarized_through ? `summary(1-${c.summarized_through}) + ` : ''}last ${c.total - c.recent_from} messages`) : ''; }
         else if (e.type === 'answer') { if (here()) { pend.before(e.item.role === 'edit' ? editCard(e.item) : msgEl(e.item)); scrollBottom(); } }

@@ -150,9 +150,11 @@ def codex_args(model: str = "", web: bool = False, disable_mcp: list[str] | tupl
     return args
 
 
-def claude_args(model: str = "") -> list[str]:
+def claude_args(model: str = "", stream: bool = False) -> list[str]:
     # JSON 출력: 답변 본문(result)과 실제로 쓴 모델(modelUsage)을 함께 받는다
-    args = ["-p", "--no-session-persistence", "--output-format", "json"]
+    # stream: 도구를 쓰는 실행은 한 줄씩(stream-json) 받아 진행 상황(어떤 도구·명령을 쓰는지)을 화면에 보여 준다
+    args = ["-p", "--no-session-persistence", "--output-format", "stream-json", "--verbose"] if stream else \
+        ["-p", "--no-session-persistence", "--output-format", "json"]
     if model and model != ACCOUNT_DEFAULT:
         args += ["--model", model]
     return args
@@ -227,6 +229,45 @@ class CancelToken:
                 self._processes.discard(process)
 
 
+def _communicate_lines(process: subprocess.Popen[bytes], prompt: str, timeout: int, on_line) -> tuple[bytes, bytes]:
+    """communicate() 와 같지만 stdout 을 한 줄씩 읽으며 on_line(줄) 을 부른다 (진행 상황 표시용)."""
+    import threading as _th
+    out_chunks: list[bytes] = []
+    err_chunks: list[bytes] = []
+
+    def read_out() -> None:
+        assert process.stdout is not None
+        for raw in process.stdout:
+            out_chunks.append(raw)
+            try:
+                on_line(raw.decode("utf-8", "replace"))
+            except Exception:
+                pass  # 진행 표시 실패가 작업을 멈추면 안 된다
+
+    def read_err() -> None:
+        assert process.stderr is not None
+        err_chunks.append(process.stderr.read())
+
+    readers = [_th.Thread(target=read_out, daemon=True), _th.Thread(target=read_err, daemon=True)]
+    for t in readers:
+        t.start()
+    try:
+        assert process.stdin is not None
+        process.stdin.write(prompt.encode("utf-8"))
+        process.stdin.close()
+    except (BrokenPipeError, OSError):
+        pass
+    try:
+        process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        for t in readers:
+            t.join(0.2)
+        raise subprocess.TimeoutExpired(process.args, timeout, b"".join(out_chunks), b"".join(err_chunks))
+    for t in readers:
+        t.join(10)
+    return b"".join(out_chunks), b"".join(err_chunks)
+
+
 def run_cli(name: str, arguments: list[str], prompt: str, timeout: int = TIMEOUT_SECONDS, cwd: Path | str | None = None,
             info: dict | None = None, cancel: CancelToken | None = None) -> str:
     """CLI에 prompt를 stdin으로 전달하고 stdout을 돌려준다. 실패하면 CliFailure."""
@@ -249,14 +290,20 @@ def run_cli(name: str, arguments: list[str], prompt: str, timeout: int = TIMEOUT
 
     if cancel is not None:
         cancel.attach(process)
+    on_line = (info or {}).get("on_line")
     try:
-        stdout_bytes, stderr_bytes = process.communicate(input=prompt.encode("utf-8"), timeout=timeout)
-    except subprocess.TimeoutExpired:
+        if on_line:
+            stdout_bytes, stderr_bytes = _communicate_lines(process, prompt, timeout, on_line)
+        else:
+            stdout_bytes, stderr_bytes = process.communicate(input=prompt.encode("utf-8"), timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
         _kill_tree(process)
         try:
             stdout_bytes, stderr_bytes = process.communicate(timeout=10)
         except Exception:
             stdout_bytes, stderr_bytes = b"", b""
+        stdout_bytes = stdout_bytes or (exc.output or b"")
+        stderr_bytes = stderr_bytes or (exc.stderr or b"")
         raise CliFailure(
             name,
             f"{timeout}초 제한 시간을 초과했습니다.",
@@ -446,6 +493,10 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
                 if mcp:
                     system += " You may use the MCP tools connected to the user's account, following the rules in the prompt."
                 extra += ["--system-prompt", system]
+    if name == "claude" and info is not None and info.get("on_progress") and extra[:2] != ["--disallowedTools", "*"]:
+        # 도구를 쓰는 실행: 한 줄씩 받아 어떤 도구·명령을 쓰는지 바로 보여 준다
+        base = claude_args(model, stream=True)
+        info["on_line"] = lambda line, cb=info["on_progress"]: _claude_progress(line, cb)
     try:
         try:
             out = run_cli(name, base + extra, prompt, timeout, cwd, info, cancel)
@@ -479,11 +530,66 @@ def _claude_json(text: str) -> dict | None:
     text = (text or "").strip()
     if not text.startswith("{"):
         return None
+    if "\n" in text:  # stream-json: 마지막 result 줄
+        for line in reversed(text.splitlines()):
+            line = line.strip()
+            if line.startswith("{") and '"type"' in line:
+                try:
+                    data = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(data, dict) and data.get("type") == "result":
+                    return data if "result" in data else None
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
         return None
     return data if isinstance(data, dict) and "result" in data else None
+
+
+def _tool_summary(name: str, data: dict) -> str:
+    """도구 호출 한 건을 한 줄로: 'Bash: npm install' · 'Blender · execute_blender_code' · 'Write: app.py'"""
+    data = data if isinstance(data, dict) else {}
+    if name.startswith("mcp__"):
+        _, _, rest = name.partition("__")
+        server, _, tool = rest.partition("__")
+        detail = data.get("code") or data.get("query") or data.get("prompt") or ""
+        first = str(detail).strip().splitlines()[0][:120] if str(detail).strip() else ""
+        return f"🔌 {server.replace('claude_ai_', '')} · {tool or rest}" + (f" — {first}" if first else "")
+    if name == "Bash":
+        return f"$ {str(data.get('command', ''))[:160]}"
+    for key in ("file_path", "path", "pattern", "url", "query"):
+        if data.get(key):
+            return f"{name}: {str(data[key])[:160]}"
+    return name
+
+
+def _claude_progress(line: str, callback) -> None:
+    """stream-json 한 줄 → 진행 상황 콜백 (도구 호출, 짧은 설명 글)."""
+    line = line.strip()
+    if not line.startswith("{"):
+        return
+    try:
+        msg = json.loads(line)
+    except json.JSONDecodeError:
+        return
+    if not isinstance(msg, dict):
+        return
+    if msg.get("type") == "system" and msg.get("subtype") == "init":
+        servers = [s.get("name", "") + ("" if s.get("status") in (None, "connected") else f"({s.get('status')})")
+                   for s in msg.get("mcp_servers") or [] if isinstance(s, dict)]
+        callback({"kind": "init", "text": "MCP: " + (", ".join(servers) if servers else "-")})
+        return
+    if msg.get("type") != "assistant":
+        return
+    for block in (msg.get("message") or {}).get("content") or []:
+        if not isinstance(block, dict):
+            continue
+        if block.get("type") == "tool_use":
+            callback({"kind": "tool", "text": _tool_summary(str(block.get("name", "")), block.get("input") or {})})
+        elif block.get("type") == "text" and str(block.get("text", "")).strip():
+            text = " ".join(str(block["text"]).split())
+            callback({"kind": "text", "text": text[:200] + ("…" if len(text) > 200 else "")})
 
 
 def _claude_result(stdout: str, info: dict | None) -> str:
