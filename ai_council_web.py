@@ -51,7 +51,7 @@ from council_state import CliState
 from council_mcp import McpStore, valid_tool
 import council_commands
 
-VERSION = "0.17.2"
+VERSION = "0.17.3"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"

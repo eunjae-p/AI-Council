@@ -316,7 +316,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.17.2'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.17.3'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -569,13 +569,23 @@ async function openMcpManager() {
     list.innerHTML = '';
     info.textContent = st.error ? T('확인 실패: ', 'Check failed: ') + st.error : st.checked_at ? T(`마지막 확인: ${fmt(st.checked_at)} · 서버 ${st.servers.length}개 · 도구 ${st.tools.length}개`, `Last checked: ${fmt(st.checked_at)} · ${st.servers.length} servers · ${st.tools.length} tools`) : T('아직 도구 목록을 가져오지 않았습니다. 아래 "도구 목록 가져오기"를 누르세요.', 'No tool list yet. Click "Load tool list" below.');
     const by = {}; st.tools.forEach(t => (by[t.server] = by[t.server] || []).push(t));
-    Object.keys(by).sort().forEach(srv => { const sv = st.servers.find(x => x.name.replace(/[^A-Za-z0-9_-]/g, '_') === srv);
-      list.append(el('div', 'srv', `${srv.replace(/^claude_ai_/, '')}${sv && sv.status ? ' · ' + sv.status : ''}`));
-      by[srv].forEach(t => { const l = el('label'), cb = el('input'); cb.type = 'checkbox'; cb.checked = t.allowed;
-        cb.onchange = async () => {
+    const keys = [...new Set([...st.servers.map(x => x.key), ...Object.keys(by)])].sort();
+    const allow = async (name, on, cb) => { try { render(await api('/api/mcp/allow', { tool:name, allowed:on })); } catch (e) { toast(e.message, true); if (cb) cb.checked = !on; } };
+    keys.forEach(key => { const sv = st.servers.find(x => x.key === key) || { key, rule:'mcp__' + key, allowed: st.allowed.includes('mcp__' + key) };
+      const head = el('label', 'srv'), scb = el('input'); scb.type = 'checkbox'; scb.checked = !!sv.allowed;
+      scb.onchange = () => { if (scb.checked && !confirm(T(`'${key.replace(/^claude_ai_/, '')}' 서버의 모든 도구를 묻지 않고 실행할까요?\n(생성·수정·결제처럼 실제 동작을 하는 도구도 포함됩니다)`, `Run every tool of '${key.replace(/^claude_ai_/, '')}' without asking?\n(Including tools that create, edit or spend credits.)`))) { scb.checked = false; return; } allow(sv.rule, scb.checked, scb); };
+      head.append(scb, el('span', '', key.replace(/^claude_ai_/, '') + (sv.status ? ' · ' + (sv.status === 'connected' ? T('연결됨', 'connected') : sv.status) : '')), el('span', 'kind unknown', T('서버 전체 항상 허용', 'always allow whole server')));
+      list.append(head);
+      if (!by[key]) list.append(el('div', 'empty-list', T('도구 이름은 처음 사용할 때 확인됩니다. 서버 전체를 허용하거나, 쓰려고 할 때 뜨는 승인 카드에서 허용하세요.', 'Tool names appear on first use. Allow the whole server, or approve from the card shown when a tool is used.')));
+      (by[key] || []).forEach(t => { const l = el('label'), cb = el('input'); cb.type = 'checkbox'; cb.checked = t.allowed || !!sv.allowed; cb.disabled = !!sv.allowed;
+        cb.onchange = () => {
           if (cb.checked && t.kind === 'action' && !confirm(T(`'${t.tool}'은(는) 생성·수정·결제처럼 실제 동작을 하거나 크레딧을 쓸 수 있는 도구로 보입니다.\n항상 허용할까요?`, `'${t.tool}' looks like a tool that takes real actions or spends credits (create, edit, pay…).\nAlways allow it?`))) { cb.checked = false; return; }
-          try { render(await api('/api/mcp/allow', { tool:t.name, allowed:cb.checked })); } catch (e) { toast(e.message, true); cb.checked = !cb.checked; } };
-        l.append(cb, el('span', '', t.tool)); const k = el('span', 'kind ' + t.kind, KIND_LABEL[t.kind]); l.append(k); list.append(l); }); });
+          allow(t.name, cb.checked, cb); };
+        l.append(cb, el('span', '', t.tool)); l.append(el('span', 'kind ' + t.kind, KIND_LABEL[t.kind])); list.append(l); }); });
+    if ((st.codex_servers || []).length) {
+      list.append(el('div', 'srv', T('GPT(Codex) MCP 서버 — 🔌 GPT MCP 를 켜면 모두 사용', 'GPT (Codex) MCP servers — all used when 🔌 GPT MCP is on')));
+      st.codex_servers.forEach(x => list.append(el('div', 'empty-list', `${x.name}${x.enabled ? '' : T(' (꺼짐)', ' (disabled)')}`)));
+    }
   };
   const m = modal(T('MCP 도구 관리', 'Manage MCP tools'), body, [{ label:T('닫기', 'Close') }, { label:T('도구 목록 가져오기', 'Load tool list'), keep:true, onClick: async () => {
     info.textContent = T('Claude Code에서 연결된 도구를 확인하는 중… (최대 1분)', 'Checking tools connected to Claude Code… (up to 1 min)');

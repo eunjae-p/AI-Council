@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.17.2** (2026-10-19) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.17.3** (2026-10-19) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.17.3](CHANGELOG.md#v0173-2026-10-19) | 10-19 | 수정: MCP 도구 관리에 서버가 0개로 나오던 문제, **서버 전체 항상 허용**, GPT MCP 서버 표시 |
 | [V0.17.2](CHANGELOG.md#v0172-2026-10-19) | 10-19 | Claude가 쓰는 도구·명령(블렌더·Bash 등)을 **실시간으로 표시**, 답변에 작업 기록 저장 |
 | [V0.17.1](CHANGELOG.md#v0171-2026-10-19) | 10-19 | 수정: 로그인 만료(`OAuth session expired`) 시 원인·로그인 방법 안내, 왼쪽 아래 로그인하기 표시 |
 | [V0.17.0](CHANGELOG.md#v0170-2026-10-19) | 10-19 | **GPT도 MCP(블렌더 등)·인터넷**, 토론+작업에서 실행 모델 선택 → 다른 모델 검토 → 수정 |
 | [V0.16.0](CHANGELOG.md#v0160-2026-10-19) | 10-19 | **🛠 작업 모드 = Claude Code처럼** — 파일 만들기·고치기·명령 실행(허용 목록 + 승인), 수정 모드는 작업 모드로 통합 |
-| [V0.15.0](CHANGELOG.md#v0150-2026-10-18) | 10-18 | **🌐 한국어 / English** — 화면·서버 안내·설치 스크립트 영어 지원, 왼쪽 위 언어 전환 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -162,7 +162,8 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 - 입력창 위 **🔌 Claude MCP** / **🔌 GPT MCP** (각각 켬/끔, 기본 꺼짐).
   - **Claude MCP**: Claude 계정(claude.ai 커넥터)·Claude Code에 연결된 도구(예: Blender, Higgsfield, Notion). 아래처럼 도구별 허용.
   - **GPT MCP**: Codex에 등록된 도구 (`~/.codex/config.toml`, Codex 데스크톱 앱에서 연결한 Blender 등). Codex는 도구별 허용을 고를 수 없어 **켜면 모두 켜집니다**.
-- **⚙ (MCP 도구 관리)** → **도구 목록 가져오기** → 바로 실행해도 되는 도구에 **"항상 허용"** 체크. 조회 도구(잔액·내역 조회 등)만 허용해 두는 것을 권장합니다.
+- **블렌더 연결**: Claude Code에 등록 (PowerShell에서는 `--`를 따옴표로): `claude mcp add -s user blender '--' uv run --directory D:\tools\blender_mcp\mcp blender-mcp` → `claude mcp list` 에 `blender ✓ Connected`.
+- **⚙ (MCP 도구 관리)** → **도구 목록 가져오기** → 바로 실행해도 되는 도구 또는 **서버 전체**에 **"항상 허용"** 체크. 조회 도구(잔액·내역 조회 등)만 허용해 두는 것을 권장합니다.
 - 허용하지 않은 도구를 Claude가 쓰려 하면 **실행하지 않고** 답변 아래에 도구·입력 내용을 보여 줍니다 → **이번만 허용 / 항상 허용 / 허용 안 함**.
 - ⚠ 생성·수정·결제처럼 크레딧이 들 수 있는 도구는 빨간 **실행·비용 가능** 표시가 붙습니다. 입력 내용을 확인하고 허용하세요.
 
@@ -248,7 +249,7 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.17.2** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.17.3** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 

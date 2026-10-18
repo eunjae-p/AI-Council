@@ -21,6 +21,8 @@ if _DISCOVER:  # MCP 목록 확인: 시작 정보(init)만 내보내고 모델 �
           "mcp_servers":[{"name":"claude.ai Higgsfield","status":"connected"}]}), flush=True)
     import time; time.sleep(30); print(json.dumps({"type":"result","result":"late"})); sys.exit(0)
 if "--version" in sys.argv: print("2.1.290 (Claude Code)"); sys.exit(0)
+if sys.argv[1:3]==["mcp","list"]:
+    print("Checking MCP server health...\n\nclaude.ai Higgsfield: https://mcp.higgsfield.ai/mcp - ✓ Connected\nblender: uv run --directory D:\\tools\\blender_mcp\\mcp blender-mcp - ✓ Connected\nbroken: x - ✗ Failed to connect"); sys.exit(0)
 if sys.argv[1:3]==["auth","status"]: sys.exit(1)
 if sys.argv[1:2]==["update"]: print("Successfully updated"); sys.exit(0)
 p=sys.stdin.read()

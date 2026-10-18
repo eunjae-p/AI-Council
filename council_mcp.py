@@ -100,20 +100,87 @@ class McpStore:
         allowed = set(self.allowed())
         tools = [{"name": t, "server": split_name(t)[0], "tool": split_name(t)[1], "kind": classify(t),
                   "allowed": t in allowed} for t in state.get("tools", []) if valid_tool(t)]
-        return {"checked_at": state.get("checked_at"), "servers": state.get("servers", []), "tools": tools,
+        servers = []
+        for srv in state.get("servers", []):
+            key = server_key(srv.get("name", ""))
+            servers.append({**srv, "key": key, "rule": f"mcp__{key}", "allowed": f"mcp__{key}" in allowed})
+        return {"checked_at": state.get("checked_at"), "servers": servers, "tools": tools,
+                "codex_servers": state.get("codex_servers", []),
                 "allowed": sorted(allowed), "error": state.get("error", "")}
 
     def refresh(self) -> dict:
         """Claude Code 를 잠깐 실행해 시작 정보(init)에서 MCP 서버·도구 목록만 읽고 바로 종료한다.
         모델이 답을 만들기 전에 끝내므로 사용량은 거의 들지 않는다."""
+        errors: list[str] = []
+        servers: list[dict] = []
+        tools: list[str] = []
         try:
             servers, tools = discover_claude()
-            data = {"checked_at": time.time(), "servers": servers, "tools": tools, "error": ""}
         except CliFailure as exc:
-            data = {**self._load(self.state_path), "checked_at": time.time(), "error": str(exc)}
+            errors.append(str(exc))
+        # 새 Claude Code 는 시작 정보에 MCP 서버가 늦게(또는 안) 나오는 경우가 있어 'claude mcp list' 로도 확인한다
+        listed = list_claude_servers()
+        names = {server_key(x["name"]) for x in servers}
+        servers += [x for x in listed if server_key(x["name"]) not in names]
+        for x in servers:  # mcp list 의 상태(✓ Connected 등)가 더 정확하면 덮어쓴다
+            hit = next((y for y in listed if server_key(y["name"]) == server_key(x["name"])), None)
+            if hit and hit.get("status"):
+                x["status"] = hit["status"]
+        data = {"checked_at": time.time(), "servers": servers, "tools": tools, "codex_servers": list_codex_servers(),
+                "error": "" if (servers or not errors) else errors[0]}
         with _lock:
             self._save(self.state_path, data)
         return self.state()
+
+
+def server_key(name: str) -> str:
+    """서버 이름 → 도구 이름 접두어 (claude.ai Higgsfield_pej → claude_ai_Higgsfield_pej)."""
+    return re.sub(r"[^A-Za-z0-9_-]", "_", str(name or "")).strip("_")[:80] or "server"
+
+
+_LIST_LINE = re.compile(r"^(?P<name>[^:]+?): (?P<target>.+) - (?P<status>.+)$")
+
+
+def _run_quiet(cmd: list[str], timeout: int = DISCOVER_TIMEOUT) -> str:
+    try:
+        proc = subprocess.run(win_cmdline(cmd), capture_output=True, timeout=timeout, stdin=subprocess.DEVNULL,
+                              cwd=str(chat_dir()), creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return (proc.stdout or b"").decode("utf-8", "replace") + "\n" + (proc.stderr or b"").decode("utf-8", "replace")
+
+
+def list_claude_servers() -> list[dict]:
+    """'claude mcp list' 결과 → [{name, status}] (Claude Code 에 등록된 서버 + claude.ai 커넥터)."""
+    try:
+        cmd = resolve_command("claude") + ["mcp", "list"]
+    except CliFailure:
+        return []
+    out = []
+    for line in _run_quiet(cmd).splitlines():
+        m = _LIST_LINE.match(line.strip())
+        if not m or m.group("name").lower().startswith(("checking", "warning")):
+            continue
+        status = m.group("status").strip()
+        ok = "connected" in status.lower() and "fail" not in status.lower() and "not" not in status.lower()
+        out.append({"name": m.group("name").strip(), "status": "connected" if ok else status[:60]})
+    return out
+
+
+def list_codex_servers() -> list[dict]:
+    """'codex mcp list --json' → [{name, enabled}] (GPT MCP 를 켰을 때 쓰이는 서버, 참고용 표시)."""
+    try:
+        cmd = resolve_command("codex") + ["mcp", "list", "--json"]
+    except CliFailure:
+        return []
+    text = _run_quiet(cmd, 30).strip()
+    start = text.find("[")
+    try:
+        data = json.loads(text[start:text.rfind("]") + 1]) if start >= 0 else []
+    except ValueError:
+        return []
+    return [{"name": str(x.get("name", "")), "enabled": x.get("enabled", True) is not False}
+            for x in data if isinstance(x, dict) and x.get("name")]
 
 
 def discover_claude() -> tuple[list[dict], list[str]]:

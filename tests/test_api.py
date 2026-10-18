@@ -439,6 +439,15 @@ ok(any(x["prefix"]=="python" and x["powerful"] for x in post("/api/commands/allo
 ok(not any(x["prefix"]=="npm install" for x in post("/api/commands/reset", {})["allowed"]), "reset to defaults")
 import council_commands as cc2
 ok(cc2.prefixes_for("cd app && FOO=1 npm run dev | tee log.txt")==["npm run","tee"], f"prefixes {cc2.prefixes_for('cd app && FOO=1 npm run dev | tee log.txt')}")
+# MCP 목록: 'claude mcp list' 로도 서버 확인 (시작 정보에 없는 서버 포함), 서버 전체 허용 규칙
+st = post("/api/mcp/refresh", {})
+keys = {x["key"]: x for x in st["servers"]}
+ok("blender" in keys and keys["blender"]["status"]=="connected" and "broken" in keys and keys["broken"]["status"]!="connected", f"servers from mcp list {list(keys)}")
+st = post("/api/mcp/allow", {"tool":"mcp__blender","allowed":True}); ok(any(x["key"]=="blender" and x["allowed"] for x in st["servers"]), "server-wide allow saved")
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"블렌더","conversation_id":post("/api/conversations")["id"],"target":"claude","mcp_claude":True}, raw=True)
+ok("mcp__blender" in open(os.environ["FAKE_LOG"]).read(), "server-wide rule passed to --allowedTools")
+post("/api/mcp/allow", {"tool":"mcp__blender","allowed":False})
 # 진행 상황: 도구를 쓰는 Claude 실행은 stream-json 으로 받아 실시간 표시 + 답변에 작업 기록 저장
 cp_ = post("/api/conversations")["id"]; wdp = tmp/"progwork"; wdp.mkdir()
 ev = post("/api/chat", {"question":"블렌더 큐브","conversation_id":cp_,"target":"claude","mode":"work","workdir":str(wdp)}, raw=True)
