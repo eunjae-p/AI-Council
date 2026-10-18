@@ -146,7 +146,8 @@ r = post("/api/chat", {"question":"작업","conversation_id":c6,"target":"claude
 wd = _tf.mkdtemp(dir=str(tmp)); open(os.environ["FAKE_LOG"],"w").close()
 ev = post("/api/chat", {"question":"작업 질문","conversation_id":c6,"target":"claude","mode":"work","workdir":wd}, raw=True)
 log = open(os.environ["FAKE_LOG"]).read()
-ok("'--tools', 'Read,Glob,Grep'" in log and "CWD="+os.path.realpath(wd) in log and "Work mode" in log, "work mode: read tools, cwd=workdir")
+ok("'--tools', 'Read,Glob,Grep,Edit,Write,Bash'" in log and "CWD="+os.path.realpath(wd) in log and "Work mode" in log
+   and "acceptEdits" in log and "Bash(mkdir:*)" in log and "bypassPermissions" not in log, "work mode: read/write/command tools, allowlist, cwd=workdir")
 its = get("/api/conversation?id="+c6)["items"]; ok(its[-2].get("mode")=="work" and its[-2].get("workdir"), "mode saved on message")
 os.environ["FAKE_OLD"]="1"
 ev = post("/api/chat", {"question":"구버전","conversation_id":c6,"target":"claude"}, raw=True)
@@ -365,17 +366,18 @@ for f in ("Setup-mac.command", "AI-Council.command", "Update-mac.command"):
 import subprocess as _sp3
 ed = tmp/"editrepo"; ed.mkdir()
 c15 = post("/api/conversations")["id"]
-r = post("/api/chat", {"question":"EDIT_FILE 고쳐줘","conversation_id":c15,"target":"claude","mode":"edit","workdir":str(ed)})
-ok(r[0]==409 and r[1]["edit_status"]["repo"] is False, "edit mode refuses non-git folder")
+post("/api/chat", {"question":"EDIT_FILE 고쳐줘","conversation_id":c15,"target":"claude","mode":"edit","workdir":str(ed)}, raw=True)
+its = get("/api/conversation?id="+c15)["items"]
+ok((ed/"claude_new.txt").exists() and its[-1]["role"]=="assistant" and its[-2].get("mode")=="work", "non-git folder: works without checkpoint, old 'edit' = work")
+(ed/"claude_new.txt").unlink()
 st = post("/api/edit/checkpoint", {"workdir":str(ed)}); ok(st["repo"] and st["clean"], f"checkpoint creates repo {st}")
 (ed/"app.txt").write_text("원본\n", encoding="utf-8")
-r = post("/api/chat", {"question":"EDIT_FILE 고쳐줘","conversation_id":c15,"target":"claude","mode":"edit","workdir":str(ed)})
-ok(r[0]==409 and "app.txt" in r[1]["edit_status"]["changed"], "edit mode refuses dirty folder")
+ok(post("/api/edit/status", {"workdir":str(ed)})["clean"] is False, "dirty folder detected (UI offers checkpoint)")
 post("/api/edit/checkpoint", {"workdir":str(ed)})
 open(os.environ["FAKE_LOG"],"w").close()
 ev = post("/api/chat", {"question":"EDIT_FILE 고쳐줘","conversation_id":c15,"target":"claude","mode":"edit","workdir":str(ed)}, raw=True)
 log = open(os.environ["FAKE_LOG"]).read()
-ok("'--permission-mode', 'acceptEdits'" in log and "Edit,Write" in log and "Bash" not in log, "claude edit permissions: Edit/Write only, acceptEdits")
+ok("'--permission-mode', 'acceptEdits'" in log and "Edit,Write,Bash" in log, "claude work permissions: edit + commands, acceptEdits")
 its = get("/api/conversation?id="+c15)["items"]; rec = its[-1]
 ok(rec["role"]=="edit" and {f["path"]:f["status"] for f in rec["files"]}=={"claude_new.txt":"new","app.txt":"modified"} and "+Claude 수정" in rec["diff"], f"changes recorded {rec.get('files')}")
 ok(post("/api/edit/apply", {"conversation_id":c15,"ref":rec["id"],"action":"revert"})["ok"], "revert ok")
@@ -401,6 +403,27 @@ impl = [i for i in items if i.get("round")==3]
 ok(len(impl)==1 and impl[0]["model"]=="Claude" and items[-1]["role"]=="edit", "discussion+edit: Claude implements after conclusion")
 ok(log.count("acceptEdits")==1 and "workspace-write" not in log and "planning round" in log, "planning rounds are read-only")
 post("/api/edit/apply", {"conversation_id":c15,"ref":items[-1]["id"],"action":"revert"})
+# 작업 모드 명령: 허용 목록에 없으면 막히고 승인 요청, 이번만/항상 허용
+cw = tmp/"cmdwork"; cw.mkdir(); c16 = post("/api/conversations")["id"]
+post("/api/chat", {"question":"RUN_CMD: npm install express","conversation_id":c16,"target":"claude","mode":"work","workdir":str(cw)}, raw=True)
+a = get("/api/conversation?id="+c16)["items"][-1]
+ok(a.get("cmd_denials") and a["cmd_denials"][0]["prefixes"]==["npm install"] and not (cw/"cmd_ran.txt").exists(), f"blocked command -> approval card {a.get('cmd_denials')}")
+post("/api/chat", {"question":"RUN_CMD: npm install express","conversation_id":c16,"target":"claude","mode":"work","workdir":str(cw),
+                   "allow_cmds_once":["npm install", "rm -rf /;x"]}, raw=True)
+ok((cw/"cmd_ran.txt").exists(), "allow once runs the command")
+u = [i for i in get("/api/conversation?id="+c16)["items"] if i["role"]=="user"][-1]
+ok(u.get("allow_cmds_once")==["npm install"], "invalid prefixes dropped")
+(cw/"cmd_ran.txt").unlink()
+post("/api/chat", {"question":"RUN_CMD: npm install express","conversation_id":c16,"target":"claude","mode":"work","workdir":str(cw)}, raw=True)
+ok(not (cw/"cmd_ran.txt").exists(), "allow once is not remembered")
+st = post("/api/commands/allow", {"prefix":"npm install","allowed":True}); ok(any(x["prefix"]=="npm install" for x in st["allowed"]), "always allow saved")
+post("/api/chat", {"question":"RUN_CMD: npm install express","conversation_id":c16,"target":"claude","mode":"work","workdir":str(cw)}, raw=True)
+ok((cw/"cmd_ran.txt").exists(), "always-allowed command runs")
+ok(post("/api/commands/allow", {"prefix":"a && b"})[0]==400, "unsafe prefix rejected")
+ok(any(x["prefix"]=="python" and x["powerful"] for x in post("/api/commands/allow", {"prefix":"python"})["allowed"]), "powerful command flagged")
+ok(not any(x["prefix"]=="npm install" for x in post("/api/commands/reset", {})["allowed"]), "reset to defaults")
+import council_commands as cc2
+ok(cc2.prefixes_for("cd app && FOO=1 npm run dev | tee log.txt")==["npm run","tee"], f"prefixes {cc2.prefixes_for('cd app && FOO=1 npm run dev | tee log.txt')}")
 # 한국어/English: 브라우저가 X-Lang: en 을 보내면 서버 안내·오류 문구를 영어로, 기록 원문은 그대로
 import re as _re, council_i18n as i18n
 def get_en(p): return json.loads(urllib.request.urlopen(urllib.request.Request(B+p, headers={"X-Lang":"en"})).read())

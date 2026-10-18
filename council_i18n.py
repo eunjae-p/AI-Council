@@ -36,6 +36,7 @@ PAIRS: list[tuple[str, str]] = [
     ("알 수 없는 작업입니다.", "Unknown action."),
     ("알 수 없는 CLI 입니다.", "Unknown CLI."),
     ("도구 이름이 올바르지 않습니다.", "Invalid tool name."),
+    ("명령 접두어가 올바르지 않습니다.", "Invalid command prefix."),
     ("이 API는 더 이상 쓰지 않습니다. /api/chat 에 target=both(토론)를 사용하세요.",
      "This API is no longer used. Use /api/chat with target=both (discussion)."),
     ("처리 실패: {x}", "Failed: {x}"),
@@ -61,6 +62,7 @@ PAIRS: list[tuple[str, str]] = [
     ("2라운드 · 서로의 답변을 읽고 교차 검토하는 중", "Round 2 · Each model is reviewing the other's answer"),
     ("토론 내용을 최종 결론으로 정리하는 중", "Writing the final conclusion"),
     ("결론대로 Claude가 파일을 수정하는 중", "Claude is editing files according to the conclusion"),
+    ("결론대로 Claude가 작업하는 중", "Claude is carrying out the conclusion"),
     # --- 스트림 안내 ---
     ("오래된 대화를 장기 요약으로 정리했습니다 ({x}).", "Older messages were condensed into a long-term summary ({x})."),
     ("장기 요약 갱신에 실패했습니다. 원문은 그대로이며 최근 대화만으로 답변합니다.",

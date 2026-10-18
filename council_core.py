@@ -130,7 +130,7 @@ def codex_args(model: str = "", web: bool = False, disable_mcp: list[str] | tupl
     args.append("exec")
     if model and model != ACCOUNT_DEFAULT:
         args += ["--model", model]
-    # 수정 모드: 작업 폴더 안에서만 쓰기 가능한 샌드박스 (네트워크는 막힘). 그 외에는 읽기 전용
+    # 작업 모드: 작업 폴더 안에서만 쓰기·명령 실행이 되는 샌드박스 (네트워크는 막힘). 그 외에는 읽기 전용
     args += ["--ephemeral", "--skip-git-repo-check", "--sandbox", "workspace-write" if write else "read-only", "--color", "never"]
     return args
 
@@ -271,8 +271,11 @@ def run_cli(name: str, arguments: list[str], prompt: str, timeout: int = TIMEOUT
 
 
 # ---------- 대화 모드 / 작업 모드 ----------
-MODES = {"chat", "work", "edit"}  # edit: 작업 폴더의 파일을 직접 만들고 고침 (council_edit 가 Git 으로 관리)
-FOLDER_MODES = {"work", "edit"}
+# chat: 도구 없음 · work: 작업 폴더에서 읽기·만들기·고치기·명령 실행(허용 목록 + 승인)
+# read: 작업 폴더 읽기만 (토론 1·2라운드의 계획 단계에서 내부적으로 사용) · edit: 예전 이름 (= work)
+MODES = {"chat", "work", "edit", "read"}
+FOLDER_MODES = {"work", "edit", "read"}
+WRITE_MODES = {"work", "edit"}
 CHAT_SYSTEM_PROMPT = (
     "You are a helpful, knowledgeable assistant in a chat app. Answer the user's question directly "
     "and conversationally. You have no tools and no file access in this mode."
@@ -347,16 +350,18 @@ def check_workdir(workdir: str) -> Path:
 def call_model(which: str, model: str, prompt: str, mode: str = "chat", workdir: Path | None = None,
                timeout: int = TIMEOUT_SECONDS, info: dict | None = None, cancel: CancelToken | None = None,
                images: list[str] | None = None, image_dir: Path | None = None, web: bool = False,
-               mcp_allow: list[str] | None = None) -> str:
+               mcp_allow: list[str] | None = None, cmd_allow: list[str] | None = None) -> str:
     """which: gpt | claude.  mode: chat(도구 없음, 빈 폴더) | work(작업 폴더 읽기 전용).
     images: 모델에 보여줄 이미지 파일 경로 (GPT: --image, Claude: 파일 읽기 도구).
     web: 웹 검색 허용 (GPT: codex --search, Claude: WebSearch·WebFetch 도구).
     CLI가 웹 검색 옵션을 모르면 웹 검색 없이 다시 시도하고 info["web_fallback"]=True 로 알린다.
     mcp_allow: None 이면 MCP 끔. 목록이면 Claude 의 MCP 를 켜고 그 도구들만 승인 없이 실행 허용
-               (나머지 MCP 도구는 CLI 가 막고, 막힌 호출은 info["permission_denials"] 로 돌려준다)."""
+               (나머지 MCP 도구는 CLI 가 막고, 막힌 호출은 info["permission_denials"] 로 돌려준다).
+    cmd_allow: 작업 모드에서 묻지 않고 실행할 명령 접두어 (council_commands). 나머지 명령은 막히고 승인 요청."""
     if web:
         try:
-            return _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, True, mcp_allow)
+            return _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, True, mcp_allow,
+                               cmd_allow)
         except Cancelled:
             raise
         except CliFailure as exc:
@@ -364,16 +369,18 @@ def call_model(which: str, model: str, prompt: str, mode: str = "chat", workdir:
                 raise
             if info is not None:
                 info["web_fallback"] = True
-    return _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, False, mcp_allow)
+    return _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, False, mcp_allow,
+                       cmd_allow)
 
 
 def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, web,
-                mcp_allow=None) -> str:
+                mcp_allow=None, cmd_allow=None) -> str:
+    from council_commands import rules as command_rules
     images = [str(p) for p in images or []]
     cwd = workdir if mode in FOLDER_MODES and workdir else chat_dir()
     if which == "gpt":
         disabled = codex_mcp_servers()
-        name, base = "codex", codex_args(model, web, disabled, write=mode == "edit")
+        name, base = "codex", codex_args(model, web, disabled, write=mode in WRITE_MODES)
         extra: list[str] = []  # read-only 샌드박스는 기본 인수에 포함
         for path in images:  # 이미지는 재시도 때도 빠지지 않도록 기본 인수에 넣는다
             base += ["--image", path]
@@ -387,8 +394,9 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
         if mcp:
             prompt += MCP_RULE
         builtin = ["Read", "Glob", "Grep"] if mode in FOLDER_MODES else (["Read"] if images else [])
-        if mode == "edit":
-            builtin += ["Edit", "Write"]  # 파일 만들기·고치기만. 명령 실행(Bash)은 주지 않는다
+        if mode in WRITE_MODES:
+            # 파일 만들기·고치기 + 명령 실행. 명령은 허용 목록(접두어)만 바로 실행되고 나머지는 막혀 승인 요청으로 돌아온다
+            builtin += ["Edit", "Write", "Bash"]
         if web:
             builtin += WEB_TOOLS.split(",")
         if mode not in FOLDER_MODES and images:
@@ -401,10 +409,12 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
             if mode in FOLDER_MODES and images and image_dir:
                 extra += ["--add-dir", str(image_dir)]
             approved = (WEB_TOOLS.split(",") if web else []) + [t for t in (mcp_allow or []) if t.startswith("mcp__")]
+            if mode in WRITE_MODES:
+                approved += command_rules(cmd_allow or [])
             if approved:
                 extra += ["--allowedTools", ",".join(approved)]
-            if mode == "edit":
-                extra += ["--permission-mode", "acceptEdits"]  # 작업 폴더 안 파일 편집만 자동 승인
+            if mode in WRITE_MODES:
+                extra += ["--permission-mode", "acceptEdits"]  # 작업 폴더 안 파일 편집만 자동 승인 (명령은 위 허용 목록만)
             if not mcp:
                 extra += ["--strict-mcp-config", "--disallowedTools", "mcp__*"]
             if mode not in FOLDER_MODES:
@@ -427,7 +437,7 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
             blob = f"{exc.stderr}\n{exc.stdout}"
             if name == "codex" and disabled and "config.toml" in blob:
                 # MCP 끄기 설정이 Codex 설정과 맞지 않으면 끄기 없이 한 번 더 시도
-                base = codex_args(model, web, write=mode == "edit") + [x for path in images for x in ("--image", path)]
+                base = codex_args(model, web, write=mode in WRITE_MODES) + [x for path in images for x in ("--image", path)]
                 if info is not None:
                     info["codex_mcp_not_disabled"] = True
                 out = run_cli(name, base + extra, prompt, timeout, cwd, info, cancel)
@@ -472,7 +482,8 @@ def _claude_result(stdout: str, info: dict | None) -> str:
     if info is not None and isinstance(denials, list):
         info["permission_denials"] = [
             {"tool": str(d.get("tool_name", "")), "input": d.get("tool_input") if isinstance(d.get("tool_input"), dict) else {}}
-            for d in denials if isinstance(d, dict) and str(d.get("tool_name", "")).startswith("mcp__")]
+            for d in denials if isinstance(d, dict)
+            and (str(d.get("tool_name", "")).startswith("mcp__") or d.get("tool_name") == "Bash")]
     usage = data.get("modelUsage") or {}
     if isinstance(usage, dict) and usage and info is not None:
         def score(item):

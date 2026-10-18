@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.15.0** (2026-10-18) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.16.0** (2026-10-19) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.16.0](CHANGELOG.md#v0160-2026-10-19) | 10-19 | **🛠 작업 모드 = Claude Code처럼** — 파일 만들기·고치기·명령 실행(허용 목록 + 승인), 수정 모드는 작업 모드로 통합 |
 | [V0.15.0](CHANGELOG.md#v0150-2026-10-18) | 10-18 | **🌐 한국어 / English** — 화면·서버 안내·설치 스크립트 영어 지원, 왼쪽 위 언어 전환 |
 | [V0.14.1](CHANGELOG.md#v0141-2026-10-17) | 10-17 | **🇺🇸 영어 설명 추가** — README 아래에 English 안내 (화면 문구는 한국어 그대로) |
 | [V0.14.0](CHANGELOG.md#v0140-2026-10-15) | 10-15 | **✏️ 수정 모드** — GPT·Claude가 작업 폴더 파일을 직접 만들고 고침 (저장점·변경 확인·확정/되돌리기) |
 | [V0.13.2](CHANGELOG.md#v0132-2026-10-12) | 10-12 | Council 버전도 새 버전이 있을 때만 노란 업데이트 표시 |
-| [V0.13.1](CHANGELOG.md#v0131-2026-10-12) | 10-12 | Mac: 중지 버튼이 하위 프로세스까지 종료 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -43,7 +43,7 @@
 
 - **ComfyUI 워크플로우 JSON 분석** — 노드·색상 등급(MUST/SHOULD)·모델 파일을 코드가 먼저 정리해 정확하게 분석
 - **이미지·영상 분석** — 끌어다 놓기·Ctrl+V 붙여넣기, 영상은 프레임 12장으로 분석
-- **✏️ 수정 모드** — Claude Code·Codex처럼 작업 폴더의 파일을 직접 만들고 고침. 끝나면 바뀐 내용을 보고 확정/되돌리기
+- **🛠 작업 모드** — Claude Code·Codex처럼 작업 폴더에서 폴더·파일 만들기, 코드 작성, 명령 실행(설치·서버 실행 등). 명령은 허용 목록 + 승인
 - **🌐 웹 검색** — 최신 정보·공식 문서 확인이 필요할 때 켜기
 - **🔌 MCP** — Claude에 연결된 도구(Higgsfield·Notion 등) 사용, 허용한 도구만 실행
 - **🌐 한국어 / English** — 왼쪽 위 `EN` / `한국어` 버튼으로 화면 언어 전환 (처음에는 브라우저 언어를 따름)
@@ -119,24 +119,26 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 
 ## 🧭 사용법
 
-### 대화 · 작업 · ✏️ 수정 모드
-| 모드 | 파일 접근 | 언제 |
+### 💬 대화 / 🛠 작업 모드
+| 모드 | 할 수 있는 일 | 언제 |
 |---|---|---|
-| 💬 **대화** (기본) | 없음 | 일반 질문 |
-| 🛠 **작업** | 작업 폴더 **읽기만** | 코드·워크플로우 분석, 검토 |
-| ✏️ **수정** | 작업 폴더 **만들기·고치기** | 기능 추가, 버그 수정, 새 파일 작성 |
+| 💬 **대화** (기본) | 질문에 답만 (파일·명령 접근 없음) | 일반 질문, 프롬프트 작성 |
+| 🛠 **작업** | 작업 폴더에서 **읽기·만들기·고치기 + 명령 실행** | 폴더·코드·서버 만들기, 버그 수정, 설치, 블렌더 작업(🔌 MCP와 함께) |
 
-**✏️ 수정 모드 사용 순서**
-1. 입력창 위 **✏️ 수정** → 작업 폴더 경로 입력 → 할 일을 적고 보내기.
-2. 처음이면 **"저장점 만들고 시작"** 창이 뜹니다. 지금 상태를 Git 커밋(저장점)으로 남겨 두고 시작합니다.
-   (폴더가 Git 저장소가 아니면 만들어 줍니다. 저장점이 있어야 바뀐 내용을 정확히 보여 주고 되돌릴 수 있습니다.)
-3. 끝나면 답변 아래에 **📝 변경된 파일** 카드: 파일 목록(새 파일·수정·삭제), **변경 내용 보기**(추가 줄 초록, 삭제 줄 빨강).
-4. **✅ 확정 (커밋)** — 바뀐 내용을 Git 커밋으로 저장 / **↩ 되돌리기** — 저장점 상태로 복구(새로 만든 파일은 삭제).
+**🛠 작업 모드 사용법**
+1. 입력창 위 **🛠 작업** → 작업 폴더 경로 입력 (예: `D:\my-project`) → 할 일을 적고 보내기.
+2. **명령 실행은 허용 목록 + 승인**: `mkdir`, `ls`, `git status` 같은 명령은 바로 실행됩니다.
+   목록에 없는 명령(예: `npm install`, `python app.py`)은 실행하지 않고 답변 아래에 **🛡 승인 카드**가 뜹니다 →
+   **이번만 허용하고 다시 실행 / 항상 허용하고 다시 실행 / 허용 안 함**. 다시 실행하면 이미 만든 파일에서 이어서 작업합니다.
+3. 허용 목록 관리: 작업 폴더 옆 **🛡** 버튼 (추가·삭제·기본값으로). `python`·`node`·`rm`·`curl` 처럼 사실상 무엇이든 할 수 있는 명령은 빨간 표시가 붙습니다.
+4. **저장점(선택)**: 작업 폴더가 Git 저장소면 끝난 뒤 **📝 변경된 파일** 카드 → **✅ 확정 (커밋)** / **↩ 되돌리기**.
+   저장 안 된 변경이 있으면 시작 전에 "저장점 만들고 시작 / 저장점 없이 진행"을 고릅니다. Git 저장소가 아닌 폴더(예: `D:\` 아래 새 폴더)는 그냥 진행합니다.
 
-- **안전 장치**: Claude는 파일 편집 도구(Edit·Write)만 받고 **명령 실행(서버 재시작·설치·삭제 명령 등)은 할 수 없습니다.**
-  GPT(Codex)는 `workspace-write` 샌드박스 — 작업 폴더 안에서만 쓰기, 네트워크 차단.
-- **토론 + 수정**: GPT·Claude가 **읽기만 하며** 계획을 토론하고, 결론이 나면 **Claude 한 명만** 그 결론대로 파일을 고칩니다 (둘이 같은 파일을 동시에 고치지 않도록).
-- ⚠ **운영 중인 사이트 폴더는 직접 고치지 말고 개발용 복사본 폴더**에서 쓰고, 확인 후 반영하는 것을 권장합니다.
+- **GPT(Codex)**: `workspace-write` 샌드박스 — 작업 폴더 안에서만 쓰고 명령도 실행하지만 **인터넷은 막혀** `npm install` 같은 설치는 실패할 수 있습니다. 설치가 필요한 작업은 Claude를 쓰세요.
+- **블렌더 등 연결된 도구**: 모드와 별개로 **🔌 MCP 켬** (Claude Code에 Blender MCP가 등록돼 있어야 함).
+- **토론 + 작업**: GPT·Claude가 **읽기만 하며** 계획을 토론하고, 결론이 나면 **Claude 한 명만** 결론대로 작업합니다.
+- **서버 실행**: 오래 켜 두는 서버는 백그라운드로 실행하도록 지시합니다. 끄는 방법은 답변에 안내됩니다.
+- ⚠ **운영 중인 서비스 폴더는 복사본에서** 작업하고 확인 후 반영하는 것을 권장합니다. 모든 명령을 묻지 않고 실행하는 모드는 쓰지 않습니다.
 
 ### 토론 (Discussion) ⚠
 1. **1라운드 독립 의견** — GPT·Claude가 서로의 답을 보지 않고 동시에 답합니다.
@@ -174,7 +176,7 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 - **화면 테마**: 왼쪽 위 `AI Council` 옆 🌙/☀️/🖥️ 버튼으로 다크·라이트·시스템 설정 따르기를 바꿉니다.
 - **모델 표시**: 계정 기본값을 써도 실제 모델 이름이 보입니다 (예: `GPT-6.1 Sol (계정 기본)`).
 - **왼쪽 아래**: CLI 버전·업데이트·로그인 상태, 오늘 사용 횟수, **남은 사용량 보기** (공식 사용량 페이지).
-- **대화 목록 아이콘**: 💬 대화 모드 · 🔧 작업 모드 · ✏️ 수정 모드 · `GPT`/`Claude` 배지 = 그 대화에서 답한 모델.
+- **대화 목록 아이콘**: 💬 대화 모드 · 🔧 작업 모드 · `GPT`/`Claude` 배지 = 그 대화에서 답한 모델.
 - **■ 중지**: 답변 생성을 즉시 멈춥니다. `Esc`는 한 번 더 확인합니다(창이 열려 있으면 창만 닫음). 완료된 답변은 남고, 중지 기록에 시점·경과 시간이 남습니다.
 
 ## 🛠 문제 해결
@@ -223,6 +225,9 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 | `council_workflow.py` | ComfyUI 워크플로우 JSON 요약 |
 | `council_state.py` | 사용 횟수, 계정 기본 모델 기억 |
 | `council_mcp.py` | MCP 도구 목록 확인, 항상 허용 목록 |
+| `council_commands.py` | 작업 모드 명령 허용 목록·승인 |
+| `council_edit.py` | 작업 모드 Git 저장점·변경 확인·확정/되돌리기 |
+| `council_i18n.py` | 서버 안내·오류 영어 번역 |
 | `council_versions.py` | CLI 버전 확인·버튼 업데이트·로그인 |
 | `council_update.py` | Council 자체 업데이트 (`Update.cmd` 가 화면 없이 실행) |
 | `Setup.cmd` · `setup.ps1` | 처음 설치 도우미 (Windows) |
@@ -237,7 +242,7 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.15.0** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.16.0** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
@@ -255,8 +260,9 @@ It drives the official **Codex CLI (GPT)** and **Claude Code CLI (Claude)** sign
 | **Discussion** ⚠ | Design reviews and decisions with no single right answer | 5 (≈5× usage) |
 
 - **Discussion mode** — round 1: both models answer independently · round 2: each critiques the other · final: a **blind, neutral synthesis** (the summarizer sees the answers only as "Model A / Model B", randomly assigned) split into *Conclusion / Agreed / Disagreed / Needs verification*. Every round is saved as Markdown in a local folder.
-- **Three modes** — 💬 Chat (no file access) · 🛠 Work (reads a folder you choose, read-only) · ✏️ **Edit** (creates and edits files in that folder, like Claude Code / Codex)
-- **Safe edit mode** — a Git checkpoint is required first; afterwards you see the changed files and diff, then **commit** or **revert** with one click. Claude gets file-edit tools only (no shell commands); Codex runs in its `workspace-write` sandbox.
+- **Two modes** — 💬 Chat (no file access) · 🛠 **Work** (like Claude Code / Codex: read, create and edit files, make folders, write code, run commands in the folder you choose)
+- **Command allowlist + approval** — allowlisted commands (`mkdir`, `ls`, `git status` …) run right away; any other command is blocked and shown below the answer with **Allow once / Always allow / Don't allow**. Codex runs in its `workspace-write` sandbox (folder only, no internet).
+- **Optional Git checkpoint** — if the folder is a Git repository, review the changed files and diff afterwards, then **commit** or **revert** with one click.
 - **🌐 Web search** toggle — both models search the web and cite sources
 - **🔌 MCP** (Claude) — use tools connected to your Claude account; only tools you allow run automatically, everything else asks for approval first
 - **Attachments** — text/JSON, images, video (12 frames via ffmpeg); drag & drop or Ctrl+V. ComfyUI workflow JSON is pre-summarized (nodes, models, color-coded required inputs)
@@ -294,9 +300,9 @@ Clone with `git` (not ZIP) so the built-in updater works.
 
 ## 🧭 Using it
 
-- **Mode**: 💬 Chat (no file access) · 🛠 Work (reads a working folder) · ✏️ Edit (creates and edits files in it)
+- **Mode**: 💬 Chat (no file access) · 🛠 Work (reads, creates and edits files and runs commands in the working folder)
 - **Target**: GPT · Claude · Discussion (both debate → neutral conclusion; *Show debate rounds* expands each round)
-- **Edit mode**: on first use, **Create checkpoint and start** saves a Git commit. When the models finish, review the changed files and diff, then **✅ Commit** or **↩ Revert**.
+- **Work mode**: blocked commands show a 🛡 card — **Allow once and run again** / **Always allow and run again**. Manage the allowlist with **🛡** next to the folder. In a Git repository you can review changes and **✅ Commit** or **↩ Revert**; with uncommitted changes you choose **Create checkpoint and start** or **Continue without**.
 - **Web search on/off**, **MCP on/off** (⚙ manages which tools are always allowed), **Models ▾** to pin model versions
 - **⤓ MD** downloads one answer; **Chat_md** downloads the whole chat; **■ Stop** (or Esc) stops generating
 - **Language**: `EN` / `한국어` at the top left. Saved messages are not translated; only Council's own labels and messages change.

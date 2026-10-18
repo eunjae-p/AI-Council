@@ -48,19 +48,22 @@ import council_media
 import council_update
 from council_state import CliState
 from council_mcp import McpStore, valid_tool
+import council_commands
 
-VERSION = "0.15.0"
+VERSION = "0.16.0"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
 MAX_BODY = 12_000_000
 ATTACH_TIMEOUT = 300  # 첨부·작업 모드는 분석량이 많아 제한 시간을 늘림
 WEB_TIMEOUT = 480     # 웹 검색을 켜면 검색·페이지 읽기 시간이 더 걸림
+WORK_TIMEOUT = 900    # 작업 모드는 파일 작성·명령 실행이 이어져 더 오래 걸림
 _emit_lock = threading.Lock()  # 토론 모드는 두 모델이 동시에 결과를 보냄
 
 store = ConversationStore()
 cli_state = CliState(store.data_dir)
 mcp_store = McpStore(store.data_dir)
+cmd_store = council_commands.CommandStore(store.data_dir)
 _busy: set[str] = set()
 _cli_updating: set[str] = set()  # 업데이트 중인 CLI (그동안 새 질문을 받지 않음)
 _tokens: dict[str, CancelToken] = {}  # 대화 ID → 진행 중인 작업의 중지 토큰
@@ -100,23 +103,29 @@ This answer is generated with model `{model}` ({source}). If asked which model y
 
 WORK_NOTE = """
 ## Work mode
-You may read files under this working folder with your read-only tools: {workdir}
+Working folder: {workdir}
+You can read, create and modify files under this folder and run shell commands to get the user's task done
+(create folders, write code, install dependencies, run scripts, start servers, use connected tools).
+- Shell commands run without asking only if they start with a command the user pre-approved. Other commands are
+  blocked and the user will be asked to approve them; do not try workarounds for a blocked command — finish what
+  you can and list the exact commands you still need.
+- Work inside the working folder. Do not delete or overwrite files unless the user asked for it.
+- Long-running processes (dev servers, watchers): start them in the background so they keep running after you
+  finish, and report how to open or stop them. Do not wait on them in the foreground.
+- End with a short summary: files created or changed, commands run, and anything left for the user to do.
+"""
+
+READ_NOTE = """
+## Working folder (read-only in this step)
+You may read files under this working folder: {workdir}
 Do not modify any files. Cite file paths you used.
 """
 
-EDIT_NOTE = """
-## Edit mode
-You may create and modify files under this working folder to complete the user's request: {workdir}
-- Make focused, minimal changes; do not touch unrelated files and do not delete files unless asked.
-- Do not run or restart servers, install packages, or change anything outside this folder.
-- The user will review the changes as a diff and can commit or revert them.
-- End your answer with a short list of the files you created or changed and why.
-"""
-
 PLAN_NOTE = """
-## Edit mode — planning round
-This discussion will end with one model implementing the agreed plan in the working folder: {workdir}
-In this round you can only read files. Propose concrete changes (which files, what to change, why) and point out risks.
+## Work mode — planning round
+This discussion will end with one model carrying out the agreed plan in the working folder: {workdir}
+In this round you can only read files. Propose concrete steps (files to create or change, commands to run, why)
+and point out risks.
 """
 
 IMPLEMENT_NOTE = """
@@ -235,6 +244,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
             elif parsed.path == "/api/update/check":
                 self.send_json(council_update.check(VERSION, force=arg("refresh") == "1"))
+            elif parsed.path == "/api/commands":
+                self.send_json(cmd_store.state())
             elif parsed.path == "/api/mcp":
                 self.send_json(mcp_store.state())
             elif parsed.path == "/api/versions":
@@ -346,6 +357,15 @@ class Handler(BaseHTTPRequestHandler):
                     text = "변경을 되돌렸습니다 (수정 전 상태로 복구)."
                 done = store.append_message(conversation_id, "edit", text, "변경", ref=ref, action=action)
                 self.send_json({"ok": True, "item": done})
+            elif path == "/api/commands/allow":
+                prefix = str(body.get("prefix", "")).strip()
+                if not council_commands.valid_prefix(prefix):
+                    raise ValueError("명령 접두어가 올바르지 않습니다.")
+                cmd_store.set_allowed(prefix, bool(body.get("allowed", True)))
+                self.send_json(cmd_store.state())
+            elif path == "/api/commands/reset":
+                cmd_store.reset()
+                self.send_json(cmd_store.state())
             elif path == "/api/mcp/refresh":
                 self.send_json(mcp_store.refresh())
             elif path == "/api/mcp/allow":
@@ -473,13 +493,17 @@ class Handler(BaseHTTPRequestHandler):
             if not store.exists(conversation_id):
                 raise ValueError("대화를 찾을 수 없습니다. 목록을 새로고침하세요.")
             mode = str(body.get("mode", "chat")).strip().lower()
-            if mode not in MODES:
+            if mode not in MODES or mode == "read":
                 raise ValueError("지원하지 않는 모드입니다.")
+            if mode == "edit":
+                mode = "work"  # 예전 수정 모드 = 작업 모드
             workdir = check_workdir(str(body.get("workdir", ""))) if mode in FOLDER_MODES else None
             files = council_attach.validate(body.get("attachments"), store.data_dir, conversation_id)
             web = bool(body.get("web"))
             mcp = bool(body.get("mcp"))
             allow_once = [t for t in body.get("allow_once") or [] if valid_tool(t)][:20] if mcp else []
+            cmd_once = [c.strip() for c in body.get("allow_cmds_once") or []
+                        if council_commands.valid_prefix(c)][:20] if mode == "work" else []
             if not question and files:
                 question = "첨부한 파일을 분석해줘."
         except (ValueError, json.JSONDecodeError) as exc:
@@ -491,19 +515,6 @@ class Handler(BaseHTTPRequestHandler):
         if target not in {"gpt", "claude", "both"}:
             self.send_json({"error": "지원하지 않는 답변 모델입니다."}, 400)
             return
-        if mode == "edit":
-            # 수정 모드는 깨끗한 Git 저장소에서만 (끝난 뒤 diff = 모델이 바꾼 내용, 되돌리기 가능)
-            try:
-                st = council_edit.status(workdir)
-            except council_edit.EditError as exc:
-                self.send_json({"error": str(exc)}, 409)
-                return
-            if not st["clean"]:
-                why = ("Git 저장소가 아닙니다." if not st["repo"] else "저장되지 않은 변경 사항이 있습니다." if st["changed"]
-                       else "아직 커밋이 없습니다.")
-                self.send_json({"error": f"수정 모드를 시작할 수 없습니다: {why} 먼저 저장점을 만드세요.",
-                                "edit_status": st}, 409)
-                return
         with _busy_lock:
             if _cli_updating:
                 self.send_json({"error": "GPT/Claude 프로그램을 업데이트하는 중입니다. 끝난 뒤 다시 보내 주세요."}, 409)
@@ -517,7 +528,7 @@ class Handler(BaseHTTPRequestHandler):
             self.start_stream()
             try:
                 self.run_chat(conversation_id, question, target, gpt_model, claude_model, mode, workdir, files, web,
-                              mcp, allow_once)
+                              mcp, allow_once, cmd_once)
             except Exception as exc:  # 예상 못 한 오류도 화면에 정확히 보이게
                 self.emit("error", text=f"서버 내부 오류: {type(exc).__name__}: {exc}")
         finally:
@@ -527,7 +538,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def run_chat(self, conversation_id: str, question: str, target: str, gpt_model: str, claude_model: str,
                  mode: str = "chat", workdir=None, files: list | None = None, web: bool = False,
-                 mcp: bool = False, allow_once: list | None = None) -> None:
+                 mcp: bool = False, allow_once: list | None = None, cmd_once: list | None = None) -> None:
         # 1) 필요할 때만 장기 요약 갱신 (실패해도 채팅은 계속)
         started_at = time.time()
         self.emit("stage", step=0, text="대화 맥락을 준비하는 중")
@@ -569,15 +580,26 @@ class Handler(BaseHTTPRequestHandler):
             self.emit("done", meta=store.detail(conversation_id)["meta"], errors={})
             return
         timeout = ATTACH_TIMEOUT if (attached or images or mode in FOLDER_MODES) else TIMEOUT_SECONDS
-        if mode == "edit":
-            timeout = max(timeout, WEB_TIMEOUT)
+        if mode == "work":
+            timeout = max(timeout, WORK_TIMEOUT)
         if web or mcp:
             timeout = max(timeout, WEB_TIMEOUT)
         # MCP: 사용자가 "항상 허용"한 도구 + 이번 질문에서만 허용한 도구
         mcp_allow = sorted(set(mcp_store.allowed()) | set(allow_once or [])) if mcp else None
+        # 작업 모드 명령: 허용 목록 + 이번 질문에서만 허용한 명령 접두어
+        cmd_allow = sorted(set(cmd_store.allowed()) | set(cmd_once or [])) if mode == "work" else None
+        # 작업 폴더가 깨끗한 Git 저장소면 끝난 뒤 바뀐 파일을 보여 주고 확정/되돌리기 (아니면 건너뜀)
+        track_git = False
+        if mode == "work":
+            try:
+                st = council_edit.status(workdir)
+                track_git = bool(st["repo"] and st["clean"])
+            except council_edit.EditError:
+                track_git = False
         user_item = store.append_message(conversation_id, "user", question, "사용자", target=target,
                                          mode=mode, workdir=str(workdir) if workdir else None, web=web or None,
                                          mcp=mcp or None, allow_once=allow_once or None,
+                                         allow_cmds_once=cmd_once or None,
                                          attachments=council_attach.history_records(attached) or None)
         self.emit("saved", item=user_item, context=info)
 
@@ -591,9 +613,7 @@ class Handler(BaseHTTPRequestHandler):
             label, name, model = models[which]
             prompt = CHAT_PROMPT.format(me=label, context=context, question=question, attachments=attach_block)
             if mode == "work":
-                prompt += WORK_NOTE.format(workdir=workdir)
-            elif mode == "edit":
-                prompt += (PLAN_NOTE if phase == "plan" else EDIT_NOTE).format(workdir=workdir)
+                prompt += (PLAN_NOTE if phase == "plan" else WORK_NOTE).format(workdir=workdir)
             selected = model_label(name, model) or (codex_default_model() if which == "gpt" else "")
             if selected:
                 prompt += MODEL_NOTE.format(model=selected, source="selected in the app" if model_label(name, model) else "from the CLI default config")
@@ -611,7 +631,7 @@ class Handler(BaseHTTPRequestHandler):
             call_mode = call_mode or mode
             answer = call_model(which, model, prompt, call_mode, workdir, timeout=timeout, info=run_info, cancel=token,
                                 images=images, image_dir=image_dir, web=web,
-                                mcp_allow=mcp_allow if which == "claude" else None)
+                                mcp_allow=mcp_allow if which == "claude" else None, cmd_allow=cmd_allow)
             real = actual_model(which, run_info)
             cli_state.record(which, model, real)
             if run_info.get("web_fallback"):
@@ -626,7 +646,11 @@ class Handler(BaseHTTPRequestHandler):
                 mcp=(mcp and which == "claude") or None,
                 # 허용되지 않아 막힌 MCP 호출 → 화면에서 허용 여부를 묻는다
                 mcp_denials=[{"tool": d["tool"], "input": json.dumps(d["input"], ensure_ascii=False)[:600]}
-                             for d in run_info.get("permission_denials", [])][:10] or None,
+                             for d in run_info.get("permission_denials", []) if d["tool"].startswith("mcp__")][:10] or None,
+                # 허용 목록에 없어 막힌 명령 → 화면에서 허용 여부를 묻는다
+                cmd_denials=[{"command": str(d["input"].get("command", ""))[:500],
+                              "prefixes": council_commands.prefixes_for(str(d["input"].get("command", "")))}
+                             for d in run_info.get("permission_denials", []) if d["tool"] == "Bash"][:10] or None,
             )
             return answer, item
 
@@ -637,7 +661,7 @@ class Handler(BaseHTTPRequestHandler):
             def work(which: str, prompt: str) -> None:
                 label = models[which][0]
                 try:
-                    answer, item = ask(which, prompt, round_no, "work" if mode == "edit" else None)
+                    answer, item = ask(which, prompt, round_no, "read" if mode == "work" else None)
                 except Cancelled:
                     return
                 except CliFailure as exc:
@@ -724,9 +748,9 @@ class Handler(BaseHTTPRequestHandler):
                 except CliFailure as exc:
                     errors["Council"] = exc.details()
                     self.emit("model_error", model="Council", text=errors["Council"])
-            if mode == "edit" and "Council" in answers and not token.cancelled:
-                # 수정 모드 토론: 결론이 나면 Claude 한 모델만 실제로 파일을 고친다 (두 모델이 동시에 고치면 충돌)
-                self.emit("stage", step=4, text="결론대로 Claude가 파일을 수정하는 중")
+            if mode == "work" and "Council" in answers and not token.cancelled:
+                # 작업 모드 토론: 결론이 나면 Claude 한 모델만 실제로 작업한다 (두 모델이 동시에 고치면 충돌)
+                self.emit("stage", step=4, text="결론대로 Claude가 작업하는 중")
                 try:
                     impl, item = ask("claude", base_prompt("claude") + IMPLEMENT_NOTE.format(conclusion=answers["Council"]), 3)
                     debate.write_log(folder, "3_Claude_구현.md", "Claude · 구현", impl, item.get("cli_model", ""))
@@ -737,7 +761,7 @@ class Handler(BaseHTTPRequestHandler):
                     errors["Claude 구현"] = exc.details()
                     self.emit("model_error", model="Claude 구현", text=errors["Claude 구현"])
 
-        if mode == "edit":
+        if track_git:
             # 끝나면 바뀐 파일·내용을 기록 → 화면에서 확정(커밋) 또는 되돌리기
             try:
                 ch = council_edit.changes(workdir)

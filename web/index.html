@@ -252,8 +252,8 @@ details.indiv .msg{margin-top:10px}
     <div class="composer">
       <div class="inner">
         <div class="ctl">
-          <div class="seg" id="mode" title="대화: 도구·파일 접근 없이 빠르게 답변 / 작업: 지정한 폴더의 파일을 읽으며 답변" data-en-title="Chat: quick answers without files or tools / Work: reads files in the chosen folder / Edit: creates and edits files">
-            <button data-m="chat" class="on" data-en="💬 Chat">💬 대화</button><button data-m="work" title="작업 폴더의 파일을 읽기만 하며 답변 (수정하지 않음)" data-en-title="Reads files in the working folder (read-only, no changes)" data-en="🛠 Work">🛠 작업</button><button data-m="edit" class="tip" data-tip="✏️ 수정 모드 — GPT·Claude가 작업 폴더의 파일을 직접 만들고 고칩니다.&#10;· 작업 폴더는 Git 저장소여야 하고, 시작 전에 저장점(커밋)을 만듭니다.&#10;· 끝나면 바뀐 파일과 내용을 보여 주고, 확정(커밋) 또는 되돌리기를 고릅니다.&#10;· 파일 수정만 하고 서버 재시작·설치 같은 명령은 실행하지 않습니다.&#10;· 운영 중인 사이트라면 개발용 복사본 폴더에서 쓰는 것을 권장합니다." data-en-tip="✏️ Edit mode — GPT/Claude create and edit files in the working folder.&#10;· The folder must be a Git repository; a checkpoint (commit) is made before starting.&#10;· Afterwards you see the changed files and diff, then commit or revert.&#10;· Files are edited only — no commands such as server restarts or installs are run.&#10;· For a live site, use a development copy of the folder." data-en="✏️ Edit">✏️ 수정</button>
+          <div class="seg" id="mode">
+            <button data-m="chat" class="on" data-en="💬 Chat">💬 대화</button><button data-m="work" class="tip" data-tip="🛠 작업 모드 — Claude Code·Codex처럼 작업 폴더에서 직접 일합니다.&#10;· 파일 읽기·만들기·고치기, 폴더 만들기, 코드 작성, 명령 실행(설치·서버 실행 등)&#10;· 명령은 허용 목록(🛡)에 있는 것만 바로 실행되고, 나머지는 답변 아래에서 허용 여부를 묻습니다.&#10;· GPT(Codex)는 샌드박스 안에서 작업 폴더에만 쓰고 인터넷은 막힙니다.&#10;· 폴더가 Git 저장소면 끝난 뒤 바뀐 파일을 보여 주고 확정·되돌리기를 고를 수 있습니다.&#10;· 블렌더 등 연결된 도구는 🔌 MCP를 켜세요. 운영 중인 서비스는 복사본 폴더에서 쓰는 것을 권장합니다." data-en-tip="🛠 Work mode — works directly in the folder, like Claude Code / Codex.&#10;· Read, create and edit files, make folders, write code, run commands (installs, servers…)&#10;· Only commands on the allowlist (🛡) run right away; others ask for approval below the answer.&#10;· GPT (Codex) writes only inside the folder in a sandbox, with no internet.&#10;· If the folder is a Git repository, you can review the changed files afterwards and commit or revert.&#10;· For Blender and other connected tools, turn on 🔌 MCP. For live services, use a copy of the folder." data-en="🛠 Work">🛠 작업</button>
           </div>
           <div class="seg" id="target">
             <button data-v="gpt">GPT</button><button data-v="claude">Claude</button><button data-v="both" class="on tip" data-tip="⚠ 사용량 주의 — 토론은 GPT·Claude를 총 5번 호출합니다 (1차 의견 2 + 교차 검토 2 + 결론 1).&#10;단독 질문보다 구독 사용량이 약 5배, 시간도 더 걸립니다. 웹 검색까지 켜면 더 늘어납니다.&#10;간단한 질문·워크플로우 분석·프롬프트 작성은 GPT나 Claude 단독을, 판단이 필요한 주제에만 토론을 쓰세요." data-en-tip="⚠ Heavy usage — Discussion calls GPT/Claude 5 times in total (2 opinions + 2 cross reviews + 1 conclusion).&#10;About 5× the subscription usage of a single question, and slower. Web search adds more.&#10;Use GPT or Claude alone for simple questions, workflow analysis or prompt writing; use Discussion for judgment calls."><span data-en="Discussion">토론 (Discussion)</span> <span class="warn-ico">!</span></button>
@@ -262,7 +262,7 @@ details.indiv .msg{margin-top:10px}
           <span class="mcpgrp"><button class="webtog tip" id="mcpToggle" data-tip="🔌 MCP — Claude 계정·Claude Code에 연결된 도구(예: Higgsfield, Notion)를 씁니다.&#10;'항상 허용'한 도구만 바로 실행되고, 나머지는 실행 전에 답변 아래에서 허용 여부를 묻습니다.&#10;GPT(Codex)의 MCP는 아직 지원하지 않습니다. ⚙에서 도구를 관리하세요." data-en-tip="🔌 MCP — use tools connected to your Claude account / Claude Code (e.g. Higgsfield, Notion).&#10;Only tools you marked 'Always allow' run right away; others ask for approval below the answer.&#10;GPT (Codex) MCP is not supported yet. Manage tools with ⚙.">🔌 MCP 끔</button><button class="webtog gear" id="mcpManage" title="MCP 도구 관리" data-en-title="Manage MCP tools">⚙</button></span>
           <button class="ghost small" id="modelToggle" data-en="Models ▾">모델 설정 ▾</button>
           <span class="status" id="modelInfo"></span>
-          <input class="workdir" id="workdir" placeholder="작업 폴더 (예: D:\ComfyUI\user\default\workflows) — 읽기 전용">
+          <input class="workdir" id="workdir"><button class="webtog gear" id="cmdManage" hidden title="명령 실행 허용 목록" data-en-title="Command allowlist">🛡</button>
         </div>
         <div class="models" id="models">
           <label><span data-en="GPT model (Codex CLI)">GPT 모델 (Codex CLI)</span>
@@ -311,7 +311,7 @@ details.indiv .msg{margin-top:10px}
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.15.0'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.16.0'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -436,7 +436,7 @@ function msgEl(item, index) {
   head.append(el('span', 'who', (LABEL[w] || w) + (item.round ? ' · ' + ROUND[item.round] : '')));
   if (item.web) head.append(el('span', 'badge web', T('🌐 웹 검색', '🌐 Web search')));
   if (item.mcp) head.append(el('span', 'badge web', '🔌 MCP'));
-  if (item.mode === 'work' || item.mode === 'edit') head.append(el('span', 'badge', (item.mode === 'edit' ? T('✏️ 수정', '✏️ Edit') : T('작업', 'Work')) + (item.workdir ? ' · ' + item.workdir : '')));
+  if (['work', 'edit', 'read'].includes(item.mode)) head.append(el('span', 'badge', (item.mode === 'read' ? T('🛠 작업 · 계획', '🛠 Work · plan') : T('🛠 작업', '🛠 Work')) + (item.workdir ? ' · ' + item.workdir : '')));
   if (item.cli_model) head.append(el('span', '', item.cli_model));
   if (item.elapsed) head.append(el('span', '', `${item.elapsed}s`));
   head.append(el('span', 'sp'), el('span', '', fmt(item.time)));
@@ -447,6 +447,7 @@ function msgEl(item, index) {
   const body = el('div', 'content'); renderText(body, item.content);
   box.append(head, body);
   if (item.mcp_denials && item.mcp_denials.length && index != null) box.append(mcpDenialCard(item, index));
+  if (item.cmd_denials && item.cmd_denials.length && index != null) box.append(cmdDenialCard(item, index));
   if (item.attachments && item.attachments.length) {
     const a = el('div', 'atts');
     item.attachments.forEach(att => {
@@ -491,13 +492,59 @@ function mcpDenialCard(item, index) {
     if (!q) return toast(T('원래 질문을 찾지 못했습니다', 'Could not find the original question'), true);
     if (S.running) return toast(T('답변 생성 중에는 다시 실행할 수 없습니다', 'Cannot rerun while an answer is being generated'), true);
     if (save) { try { for (const t of tools) await api('/api/mcp/allow', { tool:t, allowed:true }); } catch (e) { return toast(e.message, true); } }
-    setMcp(true); if (q.target) setTarget(q.target);
+    setMcp(true); if (q.target) setTarget(q.target); restoreMode(q);
     S.allowOnce = save ? [] : tools; $('#q').value = q.content; send();
   };
   once.onclick = () => rerun(false); always.onclick = () => { if (tools.some(t => toolKind(t) === 'action') && !confirm(T('실행·비용이 들 수 있는 도구를 항상 허용할까요?\n앞으로 Claude가 묻지 않고 이 도구를 실행할 수 있습니다.', 'Always allow tools that may take actions or cost credits?\nClaude will run them without asking from now on.'))) return; rerun(true); };
   no.onclick = () => { c.remove(); toast(T('실행하지 않았습니다', 'Not run')); };
   row.append(once, always, no); c.append(row);
   return c;
+}
+// ---------- 작업 모드: 허용 목록에 없어 막힌 명령 ----------
+function restoreMode(q) { if (['work', 'edit'].includes(q.mode)) { setMode('work'); if (q.workdir) $('#workdir').value = q.workdir; } }
+function cmdDenialCard(item, index) {
+  const c = el('div', 'mcpdeny'), prefixes = [...new Set(item.cmd_denials.flatMap(d => d.prefixes || []))];
+  c.append(el('b', '', T('🛡 허용 목록에 없는 명령이라 실행하지 않았습니다', '🛡 These commands are not on the allowlist, so they were not run')));
+  item.cmd_denials.forEach(d => c.append(el('pre', '', '$ ' + d.command)));
+  if (prefixes.length) {
+    const t = el('div', ''); t.append(T('허용할 명령: ', 'Will allow commands starting with: '));
+    prefixes.forEach(p => { t.append(el('code', '', p)); if (POWERFUL_CMDS.includes(p.split(' ')[0])) t.append(el('span', 'kind action', T('무엇이든 실행 가능', 'can run anything'))); t.append(' '); });
+    c.append(t);
+  }
+  let q = null; for (let i = index - 1; i >= 0; i--) if (S.items[i].role === 'user') { q = S.items[i]; break; }
+  const row = el('div', 'row');
+  const once = el('button', 'small', T('이번만 허용하고 다시 실행', 'Allow once and run again')), always = el('button', 'small', T('항상 허용하고 다시 실행', 'Always allow and run again')), no = el('button', 'ghost small', T('허용 안 함', "Don't allow"));
+  const rerun = async (save) => {
+    if (!q) return toast(T('원래 질문을 찾지 못했습니다', 'Could not find the original question'), true);
+    if (!prefixes.length) return toast(T('허용할 수 있는 명령 형식이 아닙니다. 직접 실행해 주세요', 'This command cannot be allowlisted. Please run it yourself'), true);
+    if (S.running) return toast(T('답변 생성 중에는 다시 실행할 수 없습니다', 'Cannot rerun while an answer is being generated'), true);
+    if (save) { try { for (const p of prefixes) await api('/api/commands/allow', { prefix:p, allowed:true }); } catch (e) { return toast(e.message, true); } }
+    if (q.target) setTarget(q.target); restoreMode(q); if (q.mcp) setMcp(true);
+    S.allowCmdsOnce = save ? [] : prefixes;
+    $('#q').value = q.content + T('\n\n(이전 실행에서 막힌 명령을 허용했습니다. 이미 만든 파일은 이어서 사용하세요.)', '\n\n(The previously blocked commands are now allowed. Continue from the files already created.)');
+    send();
+  };
+  once.onclick = () => rerun(false);
+  always.onclick = () => { if (prefixes.some(p => POWERFUL_CMDS.includes(p.split(' ')[0])) && !confirm(T('이 명령은 사실상 무엇이든 실행할 수 있습니다 (코드 실행·삭제·다운로드 등).\n앞으로 묻지 않고 실행할까요?', 'This command can effectively run anything (code, deletion, downloads…).\nRun it without asking from now on?'))) return; rerun(true); };
+  no.onclick = () => { c.remove(); toast(T('실행하지 않았습니다', 'Not run')); };
+  row.append(once, always, no); c.append(row);
+  return c;
+}
+const POWERFUL_CMDS = ['python', 'python3', 'py', 'node', 'bash', 'sh', 'zsh', 'powershell', 'pwsh', 'cmd', 'rm', 'del', 'rmdir', 'curl', 'wget', 'sudo', 'npx', 'mv', 'chmod', 'chown'];
+async function openCmdManager() {
+  const body = el('div'), list = el('div', 'mcplist'), add = el('div', 'row'), inp = el('input'), addBtn = el('button', 'small', T('추가', 'Add'));
+  inp.placeholder = T('예: npm install', 'e.g. npm install'); inp.style.flex = '1'; inp.style.padding = '6px 9px';
+  body.append(el('div', '', T('작업 모드에서 묻지 않고 바로 실행할 명령입니다. 명령이 여기 적힌 단어로 시작하면 실행되고, 아니면 답변 아래에서 허용 여부를 묻습니다.', 'Commands that run without asking in Work mode. A command runs right away if it starts with one of these; otherwise you are asked below the answer.')), list, add);
+  const render = st => { list.innerHTML = '';
+    st.allowed.forEach(x => { const r = el('label'), del = el('button', 'ghost small', '×'); del.title = T('목록에서 빼기', 'Remove');
+      del.onclick = async () => { try { render(await api('/api/commands/allow', { prefix:x.prefix, allowed:false })); } catch (e) { toast(e.message, true); } };
+      r.append(el('span', '', x.prefix)); if (x.powerful) r.append(el('span', 'kind action', T('무엇이든 실행 가능', 'can run anything'))); r.append(del); list.append(r); }); };
+  addBtn.onclick = async () => { const v = inp.value.trim(); if (!v) return;
+    if (POWERFUL_CMDS.includes(v.split(' ')[0]) && !confirm(T('이 명령은 사실상 무엇이든 실행할 수 있습니다. 추가할까요?', 'This command can effectively run anything. Add it?'))) return;
+    try { render(await api('/api/commands/allow', { prefix:v, allowed:true })); inp.value = ''; } catch (e) { toast(e.message, true); } };
+  add.append(inp, addBtn);
+  modal(T('명령 실행 허용 목록', 'Command allowlist'), body, [{ label:T('기본값으로', 'Reset to defaults'), keep:true, onClick: async () => { if (confirm(T('허용 목록을 기본값으로 되돌릴까요?', 'Reset the allowlist to defaults?'))) render(await api('/api/commands/reset', {})); } }, { label:T('닫기', 'Close'), primary:true }]);
+  try { render(await api('/api/commands')); } catch (e) { toast(e.message, true); }
 }
 async function openMcpManager() {
   const body = el('div'), info = el('div', '', T('불러오는 중…', 'Loading…')), list = el('div', 'mcplist');
@@ -629,7 +676,7 @@ const MODE_ICON = {
   work: { label: T('작업 모드', 'Work mode'), svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>' },
 };
 function convIcons(x) {
-  const modes = (x.modes && x.modes.length ? x.modes : ['chat']).filter(m => MODE_ICON[m]);
+  const modes = [...new Set((x.modes && x.modes.length ? x.modes : ['chat']).map(m => m === 'edit' ? 'work' : m))].filter(m => MODE_ICON[m]);
   const md = el('span', 'md');
   md.title = modes.map(m => MODE_ICON[m].label).join(' + ');
   modes.forEach(m => { const i = el('span', m); i.innerHTML = MODE_ICON[m].svg; md.append(i); });
@@ -859,9 +906,10 @@ function setupLangButton() {
 function setMcp(on) { S.mcp = !!on; store.set('councilMcp', S.mcp ? '1' : ''); const b = $('#mcpToggle'); b.classList.toggle('on', S.mcp); b.textContent = S.mcp ? T('🔌 MCP 켬', '🔌 MCP on') : T('🔌 MCP 끔', '🔌 MCP off'); }
 $('#mcpToggle').onclick = () => setMcp(!S.mcp);
 $('#mcpManage').onclick = () => openMcpManager();
+$('#cmdManage').onclick = () => openCmdManager();
 function setTarget(v) { S.target = v; store.set('councilTarget', v); document.querySelectorAll('#target button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); updateModelInfo(); }
 document.querySelectorAll('#mode button').forEach(b => b.onclick = () => setMode(b.dataset.m));
-function setMode(m) { S.mode = m; store.set('councilMode', m); document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.m === m)); $('#workdir').classList.toggle('show', m === 'work' || m === 'edit'); $('#workdir').placeholder = m === 'edit' ? T('작업 폴더 (예: D:\\flow-dev) — 이 폴더의 파일을 직접 수정합니다', 'Working folder (e.g. D:\\my-project-dev) — files here will be edited') : T('작업 폴더 (예: D:\\ComfyUI\\user\\default\\workflows) — 읽기 전용', 'Working folder (e.g. D:\\ComfyUI\\user\\default\\workflows) — read-only'); $('#q').placeholder = m === 'edit' ? T('무엇을 만들거나 고칠지 적어 주세요 — 끝나면 바뀐 파일을 확인하고 확정·되돌리기 (Enter 보내기)', 'Describe what to create or change — review the changed files afterwards, then commit or revert (Enter to send)') : m === 'work' ? T('작업 폴더의 파일을 참고해 답할 질문 (Enter 보내기 · Shift+Enter 줄바꿈)', 'Ask about the files in the working folder (Enter to send · Shift+Enter for a new line)') : T('질문을 입력하세요 · 📎·끌어다 놓기·Ctrl+V로 JSON·이미지·영상 첨부 (Enter 보내기 · Shift+Enter 줄바꿈)', 'Ask anything · attach JSON, images or video with 📎, drag & drop or Ctrl+V (Enter to send · Shift+Enter for a new line)'); }
+function setMode(m) { if (m !== 'work') m = 'chat'; S.mode = m; store.set('councilMode', m); document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.m === m)); $('#workdir').classList.toggle('show', m === 'work'); $('#cmdManage').hidden = m !== 'work'; $('#workdir').placeholder = T('작업 폴더 (예: D:\\my-project) — 이 폴더에서 파일을 만들고 고치고 명령을 실행합니다', 'Working folder (e.g. D:\\my-project) — files are created/edited and commands run here'); $('#q').placeholder = m === 'work' ? T('할 일을 적어 주세요 — 예: 이 폴더에 Flask 서버를 만들고 실행해줘 (Enter 보내기 · Shift+Enter 줄바꿈)', 'Describe the task — e.g. create a Flask server in this folder and run it (Enter to send · Shift+Enter for a new line)') : T('질문을 입력하세요 · 📎·끌어다 놓기·Ctrl+V로 JSON·이미지·영상 첨부 (Enter 보내기 · Shift+Enter 줄바꿈)', 'Ask anything · attach JSON, images or video with 📎, drag & drop or Ctrl+V (Enter to send · Shift+Enter for a new line)'); }
 $('#workdir').addEventListener('input', () => store.set('councilWorkdir', $('#workdir').value.trim()));
 $('#modelToggle').onclick = () => { const m = $('#models'); m.classList.toggle('open'); $('#modelToggle').textContent = m.classList.contains('open') ? T('모델 설정 ▴', 'Models ▴') : T('모델 설정 ▾', 'Models ▾'); };
 
@@ -891,13 +939,13 @@ async function send() {
   const gpt = modelValue($('#gptModel'), $('#gptCustom')), claude = modelValue($('#claudeModel'), $('#claudeCustom'));
   if (S.target !== 'claude' && !gpt) { $('#models').classList.add('open'); $('#gptCustom').focus(); return; }
   if (S.target !== 'gpt' && !claude) { $('#models').classList.add('open'); $('#claudeCustom').focus(); return; }
-  if ((S.mode === 'work' || S.mode === 'edit') && !$('#workdir').value.trim()) { $('#workdir').focus(); toast(T('작업 폴더를 입력하세요', 'Enter a working folder'), true); return; }
-  if (S.mode === 'edit') {  // 수정 모드: 깨끗한 Git 저장소인지 먼저 확인, 아니면 저장점 만들기 안내
+  if (S.mode === 'work' && !$('#workdir').value.trim()) { $('#workdir').focus(); toast(T('작업 폴더를 입력하세요', 'Enter a working folder'), true); return; }
+  if (S.mode === 'work' && !S.skipGitCheck) {  // 작업 폴더가 Git 저장소인데 저장 안 된 변경이 있으면 저장점을 권한다 (선택)
     let st; try { st = await api('/api/edit/status', { workdir:$('#workdir').value.trim() }); } catch (e) { toast(e.message, true); return; }
-    if (!st.clean) {
-      const why = !st.repo ? T('이 폴더는 아직 Git 저장소가 아닙니다.', 'This folder is not a Git repository yet.') : st.changed.length ? T(`저장되지 않은 변경이 ${st.changed.length}개 있습니다:\n`, `There are ${st.changed.length} uncommitted change(s):\n`) + st.changed.slice(0, 12).map(x => ' · ' + x).join('\n') : T('아직 커밋이 없습니다.', 'There are no commits yet.');
-      modal(T('수정 전에 저장점을 만들어야 합니다', 'Create a checkpoint before editing'), `${why}\n\n` + T('지금 상태를 저장점(Git 커밋)으로 만든 뒤 시작하면, 끝나고 바뀐 내용을 정확히 보여 주고 언제든 되돌릴 수 있습니다.', 'Saving the current state as a checkpoint (Git commit) lets Council show exactly what changed afterwards and revert at any time.'),
-        [{ label:T('취소', 'Cancel') }, { label:T('저장점 만들고 시작', 'Create checkpoint and start'), primary:true, onClick: async () => { try { await api('/api/edit/checkpoint', { workdir:$('#workdir').value.trim() }); toast(T('저장점을 만들었습니다', 'Checkpoint created')); send(); } catch (e) { toast(e.message, true); } } }]);
+    if (st.repo && !st.clean) {
+      const why = st.changed.length ? T(`저장되지 않은 변경이 ${st.changed.length}개 있습니다:\n`, `There are ${st.changed.length} uncommitted change(s):\n`) + st.changed.slice(0, 12).map(x => ' · ' + x).join('\n') : T('아직 커밋이 없습니다.', 'There are no commits yet.');
+      modal(T('저장점을 만들고 시작할까요?', 'Create a checkpoint first?'), `${why}\n\n` + T('지금 상태를 저장점(Git 커밋)으로 만든 뒤 시작하면, 끝나고 바뀐 파일을 보여 주고 확정·되돌리기를 할 수 있습니다.\n저장점 없이 진행하면 바뀐 파일 확인·되돌리기는 없습니다.', 'Saving the current state as a checkpoint (Git commit) lets Council show the changed files afterwards and commit or revert.\nWithout a checkpoint there is no change review or revert.'),
+        [{ label:T('취소', 'Cancel') }, { label:T('저장점 없이 진행', 'Continue without'), onClick: () => { S.skipGitCheck = true; send(); } }, { label:T('저장점 만들고 시작', 'Create checkpoint and start'), primary:true, onClick: async () => { try { await api('/api/edit/checkpoint', { workdir:$('#workdir').value.trim() }); toast(T('저장점을 만들었습니다', 'Checkpoint created')); send(); } catch (e) { toast(e.message, true); } } }]);
       return;
     }
   }
@@ -907,14 +955,15 @@ async function send() {
   if (!S.items.length) box.innerHTML = '';
   const pend = pendingEl(T('대화 맥락을 준비하는 중', 'Preparing conversation context')); box.append(pend); scrollBottom();
   const draft = question; q.value = ''; autoGrow();
-  const allowOnceSent = S.allowOnce || []; S.allowOnce = [];
+  const allowOnceSent = S.allowOnce || []; S.allowOnce = []; S.skipGitCheck = false;
+  const cmdsOnceSent = S.allowCmdsOnce || []; S.allowCmdsOnce = [];
   const sentFiles = S.files.slice(); S.files = []; renderChips();
   if (sentFiles.length) { const t = pend.querySelector('.ptext'); if (t) t.textContent = T('첨부 파일을 보내는 중', 'Sending attachments'); }
   const here = () => S.current === convId;
   let gotUser = false, wasStopped = false;
   try {
     const res = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json', 'X-Lang':LANG},
-      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, web:!!S.web, mcp:!!S.mcp, allow_once: allowOnceSent || [], workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => f.upload ? ({ name:f.name, upload:f.upload }) : ({ name:f.name, content:f.content })) }) });
+      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, web:!!S.web, mcp:!!S.mcp, allow_once: allowOnceSent || [], allow_cmds_once: cmdsOnceSent, workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => f.upload ? ({ name:f.name, upload:f.upload }) : ({ name:f.name, content:f.content })) }) });
     if (!res.ok) { let m = T('요청 실패', 'Request failed'); try { m = (await res.json()).error || m; } catch {} throw new Error(m); }
     const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
     for (;;) {
