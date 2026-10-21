@@ -316,7 +316,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.17.4'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.17.5'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -559,7 +559,11 @@ async function openCmdManager() {
   addBtn.onclick = async () => { const v = inp.value.trim(); if (!v) return;
     if (POWERFUL_CMDS.includes(v.split(' ')[0]) && !confirm(T('이 명령은 사실상 무엇이든 실행할 수 있습니다. 추가할까요?', 'This command can effectively run anything. Add it?'))) return;
     try { render(await api('/api/commands/allow', { prefix:v, allowed:true })); inp.value = ''; } catch (e) { toast(e.message, true); } };
-  add.append(inp, addBtn);
+  const preset = el('button', 'small', T('개발 명령 한 번에 허용', 'Allow common dev commands'));
+  preset.title = 'node · npm · npx · python · pip · uv · git';
+  preset.onclick = async () => { if (!confirm(T('node, npm, npx, python, pip, uv, git 명령을 묻지 않고 실행하도록 허용할까요?\n(코드 실행·패키지 설치가 가능해집니다. 목록에서 언제든 뺄 수 있습니다)', 'Allow node, npm, npx, python, pip, uv and git to run without asking?\n(This allows running code and installing packages. You can remove them any time.)'))) return;
+    try { render(await api('/api/commands/preset', {})); toast(T('개발 명령을 허용했습니다', 'Dev commands allowed')); } catch (e) { toast(e.message, true); } };
+  add.append(inp, addBtn, preset);
   modal(T('명령 실행 허용 목록', 'Command allowlist'), body, [{ label:T('기본값으로', 'Reset to defaults'), keep:true, onClick: async () => { if (confirm(T('허용 목록을 기본값으로 되돌릴까요?', 'Reset the allowlist to defaults?'))) render(await api('/api/commands/reset', {})); } }, { label:T('닫기', 'Close'), primary:true }]);
   try { render(await api('/api/commands')); } catch (e) { toast(e.message, true); }
 }

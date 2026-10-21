@@ -437,6 +437,11 @@ ok((cw/"cmd_ran.txt").exists(), "always-allowed command runs")
 ok(post("/api/commands/allow", {"prefix":"a && b"})[0]==400, "unsafe prefix rejected")
 ok(any(x["prefix"]=="python" and x["powerful"] for x in post("/api/commands/allow", {"prefix":"python"})["allowed"]), "powerful command flagged")
 ok(not any(x["prefix"]=="npm install" for x in post("/api/commands/reset", {})["allowed"]), "reset to defaults")
+st = post("/api/commands/preset", {}); ok({"node","npm","python","git"} <= {x["prefix"] for x in st["allowed"]}, "dev preset allowed")
+post("/api/commands/reset", {})
+post("/api/chat", {"question":"RUN_CMD: npm install x && echo done","conversation_id":c16,"target":"claude","mode":"work","workdir":str(cw)}, raw=True)
+a2 = get("/api/conversation?id="+c16)["items"][-1]
+ok(a2.get("cmd_denials") and a2["cmd_denials"][0]["prefixes"]==["npm install"], f"already-allowed echo not listed {a2.get('cmd_denials')}")
 import council_commands as cc2
 ok(cc2.prefixes_for("cd app && FOO=1 npm run dev | tee log.txt")==["npm run","tee"], f"prefixes {cc2.prefixes_for('cd app && FOO=1 npm run dev | tee log.txt')}")
 # MCP 목록: 'claude mcp list' 로도 서버 확인 (시작 정보에 없는 서버 포함), 서버 전체 허용 규칙

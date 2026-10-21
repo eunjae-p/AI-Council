@@ -51,7 +51,7 @@ from council_state import CliState
 from council_mcp import McpStore, valid_tool
 import council_commands
 
-VERSION = "0.17.4"
+VERSION = "0.17.5"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -393,6 +393,10 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("명령 접두어가 올바르지 않습니다.")
                 cmd_store.set_allowed(prefix, bool(body.get("allowed", True)))
                 self.send_json(cmd_store.state())
+            elif path == "/api/commands/preset":
+                for prefix in council_commands.DEV_PRESET:  # 개발 명령 한 번에 허용 (사용자가 버튼을 누른 경우만)
+                    cmd_store.set_allowed(prefix, True)
+                self.send_json(cmd_store.state())
             elif path == "/api/commands/reset":
                 cmd_store.reset()
                 self.send_json(cmd_store.state())
@@ -703,7 +707,10 @@ class Handler(BaseHTTPRequestHandler):
                              for d in run_info.get("permission_denials", []) if d["tool"].startswith("mcp__")][:10] or None,
                 # 허용 목록에 없어 막힌 명령 → 화면에서 허용 여부를 묻는다
                 cmd_denials=[{"command": str(d["input"].get("command", ""))[:500],
-                              "prefixes": council_commands.prefixes_for(str(d["input"].get("command", "")))}
+                              # 이미 허용된 접두어(echo 등)는 빼고, 실제로 막힌 것만
+                              "prefixes": [x for x in council_commands.prefixes_for(str(d["input"].get("command", "")))
+                                           if x not in (cmd_allow or [])] or
+                                          council_commands.prefixes_for(str(d["input"].get("command", "")))}
                              for d in run_info.get("permission_denials", []) if d["tool"] == "Bash"][:10] or None,
             )
             return answer, item

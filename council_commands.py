@@ -27,6 +27,8 @@ DEFAULT_PREFIXES = [
     "git status", "git diff", "git log", "git init", "git add",
     "python --version", "python3 --version", "node --version", "npm --version",
 ]
+# 🛡 "개발 명령 한 번에 허용" 버튼: 코드 작성·실행·설치에 자주 쓰는 명령 (사용자가 누를 때만 추가)
+DEV_PRESET = ["node", "npm", "npx", "python", "python3", "py", "pip", "pip3", "uv", "git"]
 # 두 단어까지 접두어로 쓰는 명령 (npm install, git commit, pip install …)
 TWO_WORD = {"git", "npm", "npx", "pnpm", "yarn", "pip", "pip3", "uv", "cargo", "docker", "brew", "winget", "conda", "go"}
 # 인터프리터는 사실상 무엇이든 실행할 수 있다 → 화면에서 따로 경고
