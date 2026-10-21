@@ -223,7 +223,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <body>
 <div class="app" id="app">
   <aside class="side">
-    <div class="brand"><h1>AI Council</h1><span class="bright"><button class="ghost small themebtn langbtn" id="langBtn"></button><button class="ghost small themebtn" id="themeBtn" title="화면 테마 바꾸기">🌙</button><span id="ver">V0.6</span></span></div>
+    <div class="brand"><h1>AI Council</h1><span class="bright"><button class="ghost small themebtn langbtn" id="langBtn"></button><button class="ghost small themebtn" id="notifyBtn"></button><button class="ghost small themebtn" id="themeBtn" title="화면 테마 바꾸기">🌙</button><span id="ver">V0.6</span></span></div>
     <div class="top">
       <button class="primary" id="newBtn" data-en="＋ New chat">＋ 새 대화</button>
       <input id="search" type="search" placeholder="모든 대화 검색…" data-en-placeholder="Search all chats…" autocomplete="off">
@@ -316,7 +316,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.17.3'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.17.4'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -455,8 +455,9 @@ function msgEl(item, index) {
     const d = el('details', 'actlog'); d.append(el('summary', '', T(`작업 기록 보기 (${item.activity.filter(a => a.kind === 'tool').length}개 도구·명령)`, `Show activity (${item.activity.filter(a => a.kind === 'tool').length} tool calls/commands)`)));
     item.activity.forEach(a => d.append(activityLine(a))); box.append(d);
   }
-  if (item.mcp_denials && item.mcp_denials.length && index != null) box.append(mcpDenialCard(item, index));
-  if (item.cmd_denials && item.cmd_denials.length && index != null) box.append(cmdDenialCard(item, index));
+  // 같은 질문에서 여러 답변(토론의 GPT·Claude 등)이 승인을 요청하면 마지막 답변 아래 한 장으로 모아 보여 준다
+  if (item._mcpAll && index != null) box.append(mcpDenialCard({ ...item, mcp_denials:item._mcpAll }, index));
+  if (item._cmdAll && index != null) box.append(cmdDenialCard({ ...item, cmd_denials:item._cmdAll }, index));
   if (item.attachments && item.attachments.length) {
     const a = el('div', 'atts');
     item.attachments.forEach(att => {
@@ -602,6 +603,15 @@ function renderThread() {
       el('div', '', T('질문마다 GPT, Claude, 또는 토론을 고를 수 있습니다. 토론은 두 모델이 각자 답한 뒤 서로의 답을 검토하고 최종 결론을 냅니다. 최신 정보가 필요하면 🌐 웹 검색을 켜세요.', 'Pick GPT, Claude, or Discussion for each question. In Discussion, both models answer, review each other, and a neutral conclusion is written. Turn on 🌐 Web search for up-to-date facts.')));
     box.append(w); return;
   }
+  // 승인 요청 모으기: 질문 하나당 MCP·명령 승인 카드 한 장씩
+  let turn = [];
+  const flush = () => { for (const key of ['mcp_denials', 'cmd_denials']) {
+      const all = [], seen = new Set(), withD = turn.filter(x => (x[key] || []).length);
+      withD.forEach(x => x[key].forEach(d => { const k = d.tool || d.command; if (!seen.has(k)) { seen.add(k); all.push(d); } }));
+      turn.forEach(x => { delete x[key === 'mcp_denials' ? '_mcpAll' : '_cmdAll']; });
+      if (withD.length) withD[withD.length - 1][key === 'mcp_denials' ? '_mcpAll' : '_cmdAll'] = all; }
+    turn = []; };
+  S.items.forEach(x => { if (x.role === 'user') flush(); else turn.push(x); }); flush();
   // 수정 결과 확정/되돌리기 기록 (ref → 기록)
   S.editDone = {}; S.items.forEach(x => { if (x.role === 'edit' && x.ref) S.editDone[x.ref] = x; });
   // 사용자 질문 하나 + 뒤따르는 답변들을 한 묶음으로 표시
@@ -921,6 +931,56 @@ function applyTheme(pref) {
 $('#themeBtn').onclick = () => { const order = ['dark', 'light', 'system'], next = order[(order.indexOf(S.theme) + 1) % 3]; applyTheme(next); toast(THEMES[next].label); };
 sysLight.addEventListener('change', () => { if (S.theme === 'system') applyTheme('system'); });
 // ---------- 화면 언어 (한국어 / English) ----------
+// ---------- 알림: 답변이 끝나면 데스크톱 알림 (다른 창·탭을 보고 있을 때) ----------
+const NOTIFY_OK = typeof Notification !== 'undefined';
+function notifyOn() { return NOTIFY_OK && store.get('councilNotify') !== '0' && Notification.permission === 'granted'; }
+function setupNotifyButton() {
+  const b = $('#notifyBtn');
+  const sync = () => { const on = notifyOn(), blocked = NOTIFY_OK && Notification.permission === 'denied';
+    b.textContent = on ? '🔔' : '🔕';
+    b.title = !NOTIFY_OK ? T('이 브라우저는 알림을 지원하지 않습니다', 'This browser does not support notifications')
+      : blocked ? T('알림이 차단되어 있습니다 — 주소창 왼쪽 자물쇠(사이트 설정)에서 알림을 허용하세요', 'Notifications are blocked — allow them in the site settings (lock icon left of the address bar)')
+      : on ? T('답변 완료 알림 켬 (누르면 끔)', 'Answer notifications on (click to turn off)') : T('답변 완료 알림 끔 (누르면 켬)', 'Answer notifications off (click to turn on)'); };
+  b.onclick = async () => {
+    if (!NOTIFY_OK) return toast(b.title, true);
+    if (notifyOn()) { store.set('councilNotify', '0'); sync(); return toast(T('알림을 껐습니다', 'Notifications off')); }
+    store.set('councilNotify', '1');
+    if (Notification.permission === 'default') { try { await Notification.requestPermission(); } catch {} }
+    sync();
+    if (Notification.permission === 'denied') toast(b.title, true);
+    else if (notifyOn()) { new Notification('AI Council', { body:T('답변이 끝나면 이렇게 알려 드립니다.', "You'll get a notification like this when an answer is ready.") }); }
+  };
+  sync(); S.syncNotify = sync;
+}
+async function askNotifyOnce() {  // 처음 보낼 때 한 번만 알림 권한을 묻는다 (보내기 클릭 = 사용자 동작)
+  if (!NOTIFY_OK || Notification.permission !== 'default' || store.get('councilNotifyAsked')) return;
+  store.set('councilNotifyAsked', '1');
+  try { await Notification.requestPermission(); } catch {}
+  if (S.syncNotify) S.syncNotify();
+}
+let unseen = 0;
+window.addEventListener('focus', () => { unseen = 0; document.title = 'AI Council'; });
+async function notifyDone(convId, kind, question) {
+  if (document.hasFocus() && !document.hidden) return;   // 지금 보고 있으면 알리지 않음
+  unseen++; document.title = `(${unseen}) AI Council`;
+  if (!notifyOn()) return;
+  let title = T('AI Council · 답변 완료', 'AI Council · Answer ready'), body = question || '';
+  try {
+    const d = await api('/api/conversation?id=' + encodeURIComponent(convId)), items = d.items || [];
+    let i = items.length - 1; while (i >= 0 && items[i].role !== 'user') i--;
+    const after = items.slice(i + 1), ans = after.filter(x => x.role === 'assistant');
+    const best = ans.find(x => x.model === 'Council') || ans[ans.length - 1];
+    if (after.some(x => (x.mcp_denials || []).length || (x.cmd_denials || []).length)) { title = T('AI Council · 승인 필요', 'AI Council · Approval needed'); body = T('도구·명령 실행 승인을 기다리고 있습니다. ', 'Waiting for your approval to run a tool/command. ') + body; }
+    else if (kind === 'error') title = T('AI Council · 오류', 'AI Council · Error');
+    else if (kind === 'stopped') title = T('AI Council · 중지됨', 'AI Council · Stopped');
+    else if (best) body = `${best.model === 'Council' ? T('결론', 'Conclusion') : best.model}: ${String(best.content || '').replace(/\s+/g, ' ').slice(0, 140)}`;
+    title += d.meta && d.meta.title ? ` — ${d.meta.title}` : '';
+  } catch {}
+  try {
+    const n = new Notification(title, { body: body.slice(0, 200), tag: 'council-' + convId });
+    n.onclick = () => { window.focus(); if (S.current !== convId) openConversation(convId).catch(() => {}); n.close(); };
+  } catch {}
+}
 function setupLangButton() {
   const b = $('#langBtn'); b.textContent = LANG === 'en' ? '한국어' : 'EN';
   b.title = LANG === 'en' ? '한국어로 보기' : 'Switch to English';
@@ -965,6 +1025,7 @@ function pendingEl(text) {
 async function send() {
   const q = $('#q'), question = q.value.trim();
   if ((!question && !S.files.length) || S.running) return;
+  askNotifyOnce();
   if (S.cliUpdating) { toast(T('GPT/Claude 프로그램을 업데이트하는 중입니다. 끝난 뒤 보내 주세요', 'The GPT/Claude programs are updating. Send when it finishes'), true); return; }
   if (S.files.some(f => f.uploading)) { toast(T('파일 업로드가 끝난 뒤 보내 주세요', 'Wait for the upload to finish'), true); return; }
   if (S.files.some(f => f.failed)) { toast(T('업로드에 실패한 첨부를 지운 뒤 보내 주세요', 'Remove the failed attachment first'), true); return; }
@@ -1020,6 +1081,7 @@ async function send() {
     pend.remove();
     if (here()) await openConversation(convId);
     $('#status').textContent = wasStopped ? T('중지됨', 'Stopped') : T('답변 완료', 'Done');
+    notifyDone(convId, wasStopped ? 'stopped' : 'done', question);
   } catch (err) {
     pend.remove();
     if (!gotUser && !q.value) { q.value = draft; autoGrow(); }
@@ -1028,6 +1090,7 @@ async function send() {
       if (!last || last.role !== 'error') { $('#msgs').append(el('div', 'inline-err', T('오류: ', 'Error: ') + err.message)); } scrollBottom(); }
     else toast(T('오류: ', 'Error: ') + err.message, true);
     $('#status').textContent = T('오류로 중단됨', 'Stopped by an error');
+    notifyDone(convId, 'error', question);
   } finally {
     setBusy(false, $('#status').textContent); $('#send').disabled = false;
     loadList().catch(() => {});
@@ -1286,7 +1349,7 @@ window.addEventListener('beforeunload', e => { if (S.running) { e.preventDefault
 window.addEventListener('hashchange', () => { const id = (location.hash.match(/^#c=([\w-]+)/) || [])[1]; if (id && id !== S.current) openConversation(id).catch(() => {}); });
 
 (async function init() {
-  applyStaticLang(); setupLangButton();
+  applyStaticLang(); setupLangButton(); setupNotifyButton();
   bindModel($('#gptModel'), $('#gptCustom'), 'councilGptModel');
   bindModel($('#claudeModel'), $('#claudeCustom'), 'councilClaudeModel');
   $('#workdir').value = store.get('councilWorkdir') || '';

@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.17.3** (2026-10-19) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.17.4** (2026-10-21) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.17.4](CHANGELOG.md#v0174-2026-10-21) | 10-21 | **🔔 답변 완료 알림**(데스크톱), 토론에서 승인 카드 한 장으로 모으기 |
 | [V0.17.3](CHANGELOG.md#v0173-2026-10-19) | 10-19 | 수정: MCP 도구 관리에 서버가 0개로 나오던 문제, **서버 전체 항상 허용**, GPT MCP 서버 표시 |
 | [V0.17.2](CHANGELOG.md#v0172-2026-10-19) | 10-19 | Claude가 쓰는 도구·명령(블렌더·Bash 등)을 **실시간으로 표시**, 답변에 작업 기록 저장 |
 | [V0.17.1](CHANGELOG.md#v0171-2026-10-19) | 10-19 | 수정: 로그인 만료(`OAuth session expired`) 시 원인·로그인 방법 안내, 왼쪽 아래 로그인하기 표시 |
 | [V0.17.0](CHANGELOG.md#v0170-2026-10-19) | 10-19 | **GPT도 MCP(블렌더 등)·인터넷**, 토론+작업에서 실행 모델 선택 → 다른 모델 검토 → 수정 |
-| [V0.16.0](CHANGELOG.md#v0160-2026-10-19) | 10-19 | **🛠 작업 모드 = Claude Code처럼** — 파일 만들기·고치기·명령 실행(허용 목록 + 승인), 수정 모드는 작업 모드로 통합 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -177,6 +177,7 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 워크플로우 색상 등급: 빨강 = MUST, 노랑·주황 = SHOULD (판정 제외: MarkdownNote, Note, Label (rgthree), SetNode, GetNode).
 
 ### 화면 안내
+- **🔔 알림**: 왼쪽 위 🔔/🔕. 다른 창·탭을 보고 있을 때 답변이 끝나면(또는 승인이 필요하면) 데스크톱 알림. 알림을 누르면 그 대화로 이동. 처음 보낼 때 브라우저가 알림 허용을 묻습니다 (차단했다면 주소창 왼쪽 자물쇠 → 알림 허용).
 - **화면 언어**: 왼쪽 위 `EN` / `한국어` 버튼. 처음에는 브라우저 언어를 따릅니다(한국어가 아니면 영어). 대화 기록 원문은 바뀌지 않고, Council 안내·오류 문구만 바뀝니다. 설치·업데이트 창은 Windows/Mac 언어를 따릅니다.
 - **화면 테마**: 왼쪽 위 `AI Council` 옆 🌙/☀️/🖥️ 버튼으로 다크·라이트·시스템 설정 따르기를 바꿉니다.
 - **모델 표시**: 계정 기본값을 써도 실제 모델 이름이 보입니다 (예: `GPT-6.1 Sol (계정 기본)`).
@@ -249,7 +250,7 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.17.3** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.17.4** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
@@ -313,6 +314,7 @@ Clone with `git` (not ZIP) so the built-in updater works.
 - **Work mode**: blocked commands show a 🛡 card — **Allow once and run again** / **Always allow and run again**. Manage the allowlist with **🛡** next to the folder. In a Git repository you can review changes and **✅ Commit** or **↩ Revert**; with uncommitted changes you choose **Create checkpoint and start** or **Continue without**.
 - **Web search on/off**, **Claude MCP / GPT MCP on/off** (⚙ manages Claude's always-allowed tools), **Run: Claude / Run: GPT** in Discussion + Work, **Models ▾** to pin model versions
 - **⤓ MD** downloads one answer; **Chat_md** downloads the whole chat; **■ Stop** (or Esc) stops generating
+- **🔔 Notifications**: desktop notification when an answer is ready (or needs approval) while you're in another window; toggle with 🔔/🔕 at the top left.
 - **Language**: `EN` / `한국어` at the top left. Saved messages are not translated; only Council's own labels and messages change.
 
 ## 🔒 Privacy
