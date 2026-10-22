@@ -335,8 +335,9 @@ def run_cli(name: str, arguments: list[str], prompt: str, timeout: int = TIMEOUT
 # ---------- 대화 모드 / 작업 모드 ----------
 # chat: 도구 없음 · work: 작업 폴더에서 읽기·만들기·고치기·명령 실행(허용 목록 + 승인)
 # read: 작업 폴더 읽기만 (토론 1·2라운드의 계획 단계에서 내부적으로 사용) · edit: 예전 이름 (= work)
-MODES = {"chat", "work", "edit", "read"}
-FOLDER_MODES = {"work", "edit", "read"}
+# image: 🎨 이미지 생성 (GPT 가 Codex 이미지 생성 도구로 만들고, 작업 폴더 = 저장 폴더)
+MODES = {"chat", "work", "edit", "read", "image"}
+FOLDER_MODES = {"work", "edit", "read", "image"}
 WRITE_MODES = {"work", "edit"}
 CHAT_SYSTEM_PROMPT = (
     "You are a helpful, knowledgeable assistant in a chat app. Answer the user's question directly "
@@ -445,7 +446,7 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
         disabled = [] if codex_mcp else codex_mcp_servers()
         if codex_mcp:
             prompt += MCP_RULE
-        name, base = "codex", codex_args(model, web, disabled, write=mode in WRITE_MODES)
+        name, base = "codex", codex_args(model, web, disabled, write=mode in WRITE_MODES or mode == "image")
         extra: list[str] = []  # read-only 샌드박스는 기본 인수에 포함
         for path in images:  # 이미지는 재시도 때도 빠지지 않도록 기본 인수에 넣는다
             base += ["--image", path]
@@ -506,7 +507,7 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
             blob = f"{exc.stderr}\n{exc.stdout}"
             if name == "codex" and disabled and "config.toml" in blob:
                 # MCP 끄기 설정이 Codex 설정과 맞지 않으면 끄기 없이 한 번 더 시도
-                base = codex_args(model, web, write=mode in WRITE_MODES) + [x for path in images for x in ("--image", path)]
+                base = codex_args(model, web, write=mode in WRITE_MODES or mode == "image") + [x for path in images for x in ("--image", path)]
                 if info is not None:
                     info["codex_mcp_not_disabled"] = True
                 out = run_cli(name, base + extra, prompt, timeout, cwd, info, cancel)

@@ -462,6 +462,27 @@ last = get("/api/conversation?id="+cp_)["items"][-1]
 ok(last["content"] and last.get("activity") and last["activity"][-1]["kind"]=="tool", "answer parsed from stream + activity saved")
 ev = post("/api/chat", {"question":"그냥 대화","conversation_id":cp_,"target":"claude"}, raw=True)
 ok(not [e for e in ev if e["type"]=="progress"] and get("/api/conversation?id="+cp_)["items"][-1]["content"], "plain chat stays non-streaming")
+# 🎨 이미지 모드: GPT 가 Codex 이미지 도구로 만들고, Council 이 저장 폴더·화면용으로 복사
+ci = post("/api/conversations")["id"]; outd = tmp/"imgout"; outd.mkdir()
+os.environ["CODEX_HOME"] = str(tmp/"nocodex"); open(os.environ["FAKE_LOG"],"w").close()
+ev = post("/api/chat", {"question":"노을 지는 바다","conversation_id":ci,"target":"gpt","mode":"image","workdir":str(outd),"image_ratio":"landscape","image_count":2}, raw=True)
+it = get("/api/conversation?id="+ci)["items"][-1]
+saved = sorted(outd.glob("council_*.png"))
+ok(len(saved)==2 and it.get("saved_files") and len(it["gen_images"])==2 and all(pathlib.Path(x).is_file() for x in it["gen_images"]), f"image saved to folder + gallery {saved} {it.get('saved_files')}")
+lg = open(os.environ["FAKE_LOG"]).read()
+ok("workspace-write" in lg, "codex called with write sandbox")
+rel = it["gen_images"][0].replace("\\","/").split("/attachments/"+ci+"/")[1]
+ok(urllib.request.urlopen(B+"/api/attachment?conversation_id="+ci+"&file="+urllib.parse.quote(rel)).status==200, "generated image served to UI")
+ev = post("/api/chat", {"question":"고양이 일러스트","conversation_id":ci,"target":"claude","mode":"image","workdir":str(outd)}, raw=True)
+its = get("/api/conversation?id="+ci)["items"]
+ok(its[-2]["model"]=="Claude" and its[-1]["model"]=="GPT" and its[-1].get("gen_images"), "claude writes prompt, GPT generates")
+r = post("/api/folder/open", {"conversation_id":ci,"index":len(its)-1}); ok(r["path"]==str(outd.resolve()) or r["path"]==str(outd), f"open folder returns saved dir {r}")
+ok(post("/api/folder/open", {"conversation_id":ci,"index":0})[0]==400, "folder open only for saved image dirs")
+ev = post("/api/chat", {"question":"빈 폴더 기본값","conversation_id":ci,"target":"gpt","mode":"image","workdir":""}, raw=True)
+ok("exports" in (get("/api/conversation?id="+ci)["items"][-1].get("save_dir") or ""), "empty folder -> exports/images/<date>")
+os.environ["FAKE_NO_IMAGE"]="1"
+ev = post("/api/chat", {"question":"실패","conversation_id":ci,"target":"gpt","mode":"image","workdir":str(outd)}, raw=True); del os.environ["FAKE_NO_IMAGE"]
+ok(any(e["type"]=="warning" and "이미지 파일" in e["text"] for e in ev), "no image -> warning")
 # 로그인 만료: 오류에 로그인 안내 + 왼쪽 아래 로그인 필요 표시
 ca = post("/api/conversations")["id"]
 ev = post("/api/chat", {"question":"AUTH_EXPIRED","conversation_id":ca,"target":"claude"}, raw=True)

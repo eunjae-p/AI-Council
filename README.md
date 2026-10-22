@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.17.5** (2026-10-21) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.18.0** (2026-10-22) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.18.0](CHANGELOG.md#v0180-2026-10-22) | 10-22 | **🎨 이미지 모드** — GPT가 실제 이미지를 생성해 지정 폴더에 PNG로 저장, 화면에 표시 |
 | [V0.17.5](CHANGELOG.md#v0175-2026-10-21) | 10-21 | 🛡 **개발 명령 한 번에 허용** 버튼, 승인 카드에 이미 허용된 명령은 표시 안 함 |
 | [V0.17.4](CHANGELOG.md#v0174-2026-10-21) | 10-21 | **🔔 답변 완료 알림**(데스크톱), 토론에서 승인 카드 한 장으로 모으기 |
 | [V0.17.3](CHANGELOG.md#v0173-2026-10-19) | 10-19 | 수정: MCP 도구 관리에 서버가 0개로 나오던 문제, **서버 전체 항상 허용**, GPT MCP 서버 표시 |
 | [V0.17.2](CHANGELOG.md#v0172-2026-10-19) | 10-19 | Claude가 쓰는 도구·명령(블렌더·Bash 등)을 **실시간으로 표시**, 답변에 작업 기록 저장 |
-| [V0.17.1](CHANGELOG.md#v0171-2026-10-19) | 10-19 | 수정: 로그인 만료(`OAuth session expired`) 시 원인·로그인 방법 안내, 왼쪽 아래 로그인하기 표시 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -143,6 +143,13 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 - **서버 실행**: 오래 켜 두는 서버는 백그라운드로 실행하도록 지시합니다. 끄는 방법은 답변에 안내됩니다.
 - ⚠ **운영 중인 서비스 폴더는 복사본에서** 작업하고 확인 후 반영하는 것을 권장합니다. 모든 명령을 묻지 않고 실행하는 모드는 쓰지 않습니다.
 
+### 🎨 이미지 모드
+- 입력창 위 **🎨 이미지** → 비율(1:1 · 가로 · 세로)·장수(1~4) → **저장 폴더** 입력(비우면 Council 폴더의 `exports\images\날짜`) → 만들 이미지를 설명하고 보내기.
+- **GPT**: Codex CLI의 이미지 생성 도구로 바로 생성. **Claude / 토론**: Claude가 이미지 프롬프트를 다듬고 → GPT가 생성 (Claude에는 이미지 생성 모델이 없음).
+- 결과는 저장 폴더에 `council_날짜_시각_1.png …`로 저장되고, 채팅 화면에도 표시됩니다 (**📁 폴더 열기**). 📎로 이미지를 첨부하면 참고 이미지로 씁니다.
+- ChatGPT **Plus 이상** 구독 필요 (구독 사용량, API 키 없음). 장당 30초~1분, 텍스트 질문보다 사용량이 큽니다.
+- 이미지가 안 만들어지면 경고가 뜹니다 → 왼쪽 아래에서 Codex CLI를 최신으로 업데이트한 뒤 다시 시도하세요.
+
 ### 토론 (Discussion) ⚠
 1. **1라운드 독립 의견** — GPT·Claude가 서로의 답을 보지 않고 동시에 답합니다.
 2. **2라운드 교차 검토** — 각자 상대 답을 읽고 동의·반박·누락·입장 변화를 씁니다.
@@ -235,6 +242,7 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 | `council_mcp.py` | MCP 도구 목록 확인, 항상 허용 목록 |
 | `council_commands.py` | 작업 모드 명령 허용 목록·승인 |
 | `council_edit.py` | 작업 모드 Git 저장점·변경 확인·확정/되돌리기 |
+| `council_image.py` | 🎨 이미지 생성 결과 저장 |
 | `council_i18n.py` | 서버 안내·오류 영어 번역 |
 | `council_versions.py` | CLI 버전 확인·버튼 업데이트·로그인 |
 | `council_update.py` | Council 자체 업데이트 (`Update.cmd` 가 화면 없이 실행) |
@@ -250,7 +258,7 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.17.5** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.18.0** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
@@ -272,6 +280,7 @@ It drives the official **Codex CLI (GPT)** and **Claude Code CLI (Claude)** sign
 - **Command allowlist + approval** — allowlisted commands (`mkdir`, `ls`, `git status` …) run right away; any other command is blocked and shown below the answer with **Allow once / Always allow / Don't allow**. Codex runs in its `workspace-write` sandbox (writes inside the folder only; internet allowed for installs).
 - **Optional Git checkpoint** — if the folder is a Git repository, review the changed files and diff afterwards, then **commit** or **revert** with one click.
 - **🌐 Web search** toggle — both models search the web and cite sources
+- **🎨 Image mode** — GPT generates real images (Codex image tool, ChatGPT Plus or higher) and saves PNGs to the folder you choose; shown in the chat too. With Claude/Discussion, Claude writes the prompt and GPT generates.
 - **🔌 Claude MCP / GPT MCP** — use connected tools such as Blender with either model. Claude: only tools you allow run automatically, others ask first. GPT: all tools registered in Codex are enabled when on.
 - **Collaboration** — Discussion + Work: both plan → the model you pick (**Run: Claude / Run: GPT**) executes → the other reviews the actual result read-only → the executor fixes.
 - **Attachments** — text/JSON, images, video (12 frames via ffmpeg); drag & drop or Ctrl+V. ComfyUI workflow JSON is pre-summarized (nodes, models, color-coded required inputs)

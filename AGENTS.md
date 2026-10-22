@@ -66,6 +66,7 @@
 | `council_mcp.py` | MCP 도구 목록·"항상 허용" 목록 (`data/mcp_*.json`). 모든 도구 자동 실행(bypassPermissions)은 쓰지 않음 |
 | `council_edit.py` | 작업 모드의 선택 기능: Git 저장점·변경 내용(diff)·확정(커밋)/되돌리기 |
 | `council_commands.py` | 작업 모드 명령 허용 목록(`data/cmd_settings.json`)·명령 → 허용 접두어 변환. Claude 는 Read·Edit·Write·Bash + acceptEdits + 허용 규칙, Codex 는 workspace-write + 인터넷 허용 (`danger-full-access`·승인 우회 옵션은 쓰지 않음) |
+| `council_image.py` | 🎨 이미지 모드: Codex 이미지 생성 결과(`~/.codex/generated_images`)를 찾아 저장 폴더·화면용으로 복사, 프롬프트 |
 | `council_i18n.py` | 서버 안내·오류 문구 영어 번역표(`PAIRS`), `X-Lang: en` 요청이면 응답 직전에 번역 (기록 원문은 그대로) |
 | `council_versions.py` | Codex/Claude CLI 버전·로그인 상태 |
 | `council_update.py` | Council 자체 업데이트 (GitHub → PC, 안전 검사, 재시작) · `Update.cmd` 가 화면 없이 실행 |
