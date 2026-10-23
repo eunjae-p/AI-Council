@@ -277,6 +277,8 @@ class ConversationStore:
             # 답변한 모델이 없으면(오류·중지만 있음) 질문한 대상으로 표시
             "models": meta.get("models_used") or meta.get("models_asked") or [],
             "modes": meta.get("modes_used") or [],
+            "continued_from": meta.get("continued_from"),  # 새 대화로 이어간 경우 이전 대화 ID
+            "continued_to": meta.get("continued_to"),
         }
 
     def detail(self, conversation_id: str) -> dict:

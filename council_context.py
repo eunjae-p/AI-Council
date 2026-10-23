@@ -85,10 +85,9 @@ def build_context(store: ConversationStore, conversation_id: str) -> tuple[str, 
     parts = []
     summary = (meta.get("summary") or "").strip()
     if summary:
-        parts.append(
-            f"## Long-term summary of earlier messages 1-{start} "
-            f"(written by {meta.get('summary_model') or 'a model'})\n{summary}"
-        )
+        title = (f"## Long-term summary of earlier messages 1-{start}" if start else
+                 "## Summary carried over from the previous conversation (this chat continues it)")
+        parts.append(f"{title} (written by {meta.get('summary_model') or 'a model'})\n{summary}")
     omitted = first - start
     if omitted > 0:
         parts.append(f"(Note: {omitted} older messages are not shown and not yet summarized.)")
@@ -136,6 +135,7 @@ def maybe_summarize(
     force: bool = False,
     runner=call_model,
     cancel=None,
+    everything: bool = False,
 ) -> dict:
     """필요하면 장기 요약을 갱신한다. 실패해도 예외를 던지지 않는다.
     반환: {"status": "skipped"|"updated"|"failed"|"cancelled", ...}"""
@@ -148,7 +148,7 @@ def maybe_summarize(
 
     # 최근 KEEP_RECENT_CHARS 분량은 원문으로 남긴다 (메시지 단위)
     _, keep_from = select_recent(items, start, KEEP_RECENT_CHARS)
-    end = max(start, keep_from)
+    end = len(items) if everything else max(start, keep_from)  # everything: 새 대화로 이어갈 때 전부 요약
     if force and end == start:
         end = len(items)
     if end <= start:

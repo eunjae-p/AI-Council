@@ -52,7 +52,7 @@ from council_mcp import McpStore, valid_tool
 import council_commands
 import council_image
 
-VERSION = "0.18.0"
+VERSION = "0.18.1"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -457,6 +457,22 @@ class Handler(BaseHTTPRequestHandler):
                 conversation_id = cid()
                 self.ensure_idle(conversation_id)
                 self.send_json({"ok": True, "backup": store.clear(conversation_id)})
+            elif path == "/api/conversation/continue":
+                # 긴 대화를 요약해 새 대화로 이어가기: 이전 대화 전체를 요약 → 새 대화가 그 요약을 맥락으로 시작
+                old = cid()
+                self.ensure_idle(old)
+                prefer = "gpt" if body.get("prefer") == "gpt" else "claude"
+                result = maybe_summarize(store, old, prefer, force=True, everything=True)
+                meta = store.get_meta(old)
+                if result.get("status") == "failed" and not meta.get("summary"):
+                    raise RuntimeError("대화를 요약하지 못했습니다. 잠시 후 다시 시도하세요.")
+                new = store.create()
+                title = (meta.get("title") or "새 대화")[:52] + " (이어서)"
+                store.update_meta(new["id"], summary=meta.get("summary", ""), summary_model=meta.get("summary_model", ""),
+                                  summary_updated_at=meta.get("summary_updated_at"), summarized_through=0,
+                                  continued_from=old, title=title, title_source="user")
+                store.update_meta(old, continued_to=new["id"])
+                self.send_json({"id": new["id"], "result": result})
             elif path == "/api/conversation/summarize":
                 conversation_id = cid()
                 self.ensure_idle(conversation_id)

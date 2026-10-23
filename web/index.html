@@ -209,6 +209,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 .write textarea{flex:1;resize:none;min-height:48px;max-height:40vh;padding:12px 14px;line-height:1.55}
 .status{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:8px;min-height:18px}
 .status .r{margin-left:auto;color:var(--dim)}
+.loadrow{display:flex;gap:6px;justify-content:center} .loadmore{color:var(--muted)}
 .toast{position:fixed;right:18px;top:68px;display:grid;gap:8px;z-index:20}
 .toast div{background:var(--btn);border:1px solid var(--line2);padding:9px 13px;border-radius:10px;font-size:13.5px;max-width:420px;box-shadow:0 10px 30px #0006}
 .toast div.err{border-color:var(--err-line);color:var(--err-text)}
@@ -248,6 +249,8 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
       <div class="acts">
         <button class="ghost small" id="renameBtn">✎ <span class="lbl" data-en="Rename">제목</span></button>
         <button class="ghost small" id="archiveBtn">⇩ <span class="lbl" data-en="Archive">보관</span></button>
+        <button class="ghost small" id="compactBtn" title="지금까지의 대화를 요약으로 압축해 모델에 보내는 맥락을 줄입니다 (원문은 그대로 보관)" data-en-title="Condense the conversation so far into a summary to shrink the context sent to models (originals are kept)">🗜 <span class="lbl" data-en="Compress">압축</span></button>
+        <button class="ghost small" id="continueBtn" title="대화 전체를 요약해 새 대화로 이어갑니다 — 긴 대화가 느릴 때" data-en-title="Summarize the whole chat and continue in a new chat — when a long chat gets slow">↪ <span class="lbl" data-en="Continue in new chat">새 대화로 이어가기</span></button>
         <button class="ghost small" id="exportBtn" title="이 대화 전체(모든 질문·답변·토론 과정)를 Markdown 파일로 내려받기" data-en-title="Download this whole chat (all questions, answers and debate rounds) as Markdown">⤓ <span class="lbl">Chat_md</span></button>
         <button class="ghost small danger" id="deleteBtn">🗑 <span class="lbl" data-en="Delete">삭제</span></button>
       </div>
@@ -319,7 +322,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.18.0'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.18.1'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -613,6 +616,7 @@ async function openMcpManager() {
 }
 async function copyText(t) { try { await navigator.clipboard.writeText(t); toast(T('복사했습니다', 'Copied')); } catch { toast(T('복사 실패: 브라우저 권한을 확인하세요', 'Copy failed: check browser permissions'), true); } }
 
+const RENDER_TURNS = 12;  // 처음에 그릴 최근 질문 묶음 수
 function renderThread() {
   const box = $('#msgs'); box.innerHTML = '';
   if (!S.items.length) {
@@ -631,8 +635,17 @@ function renderThread() {
   S.items.forEach(x => { if (x.role === 'user') flush(); else turn.push(x); }); flush();
   // 수정 결과 확정/되돌리기 기록 (ref → 기록)
   S.editDone = {}; S.items.forEach(x => { if (x.role === 'edit' && x.ref) S.editDone[x.ref] = x; });
+  // 화면에는 최근 질문 묶음만 그린다 (긴 대화 렉 방지). 이전 내용은 '더 보기'로
+  const starts = []; S.items.forEach((x, k) => { if (x.role === 'user') starts.push(k); });
+  const turns = S.renderTurns || RENDER_TURNS;
+  let i = starts.length > turns ? starts[starts.length - turns] : 0;
+  if (i > 0) {
+    const more = el('button', 'ghost small loadmore', T(`⬆ 이전 메시지 ${i}개 더 보기 (전체 ${S.items.length}개)`, `⬆ Show ${i} earlier messages (${S.items.length} total)`));
+    more.onclick = () => { const t = $('#thread'), h = t.scrollHeight; S.renderTurns = turns + RENDER_TURNS; renderThread(); t.scrollTop = t.scrollHeight - h; };
+    const all = el('button', 'ghost small loadmore', T('전체 보기', 'Show all')); all.onclick = () => { S.renderTurns = 1e9; renderThread(); };
+    const row = el('div', 'loadrow'); row.append(more, all); box.append(row);
+  }
   // 사용자 질문 하나 + 뒤따르는 답변들을 한 묶음으로 표시
-  let i = 0;
   while (i < S.items.length) {
     const item = S.items[i];
     if (item.role === 'user') { box.append(msgEl(item, i)); i++; }
@@ -711,11 +724,42 @@ function renderHeader() {
   if (!m) return;
   if (m.summary) {
     const d = el('details', 'notice');
-    d.append(el('summary', '', T(`장기 요약 · 앞의 메시지 ${m.summarized_through}개 압축 · ${m.summary_model || '-'} · ${fmt(m.summary_updated_at)}`, `Long-term summary · first ${m.summarized_through} messages condensed · ${m.summary_model || '-'} · ${fmt(m.summary_updated_at)}`)));
+    if (!m.summarized_through) d.append(el('summary', '', T(`이어받은 요약 · ${m.summary_model || '-'} · ${fmt(m.summary_updated_at)}`, `Carried-over summary · ${m.summary_model || '-'} · ${fmt(m.summary_updated_at)}`)));
+    else d.append(el('summary', '', T(`장기 요약 · 앞의 메시지 ${m.summarized_through}개 압축 · ${m.summary_model || '-'} · ${fmt(m.summary_updated_at)}`, `Long-term summary · first ${m.summarized_through} messages condensed · ${m.summary_model || '-'} · ${fmt(m.summary_updated_at)}`)));
     const b = el('div', 'body', m.summary); d.append(b); n.append(d);
   }
   if (m.summary_error) n.append(el('div', 'notice err', m.summary_error));
+  if (m.continued_from) { const d = el('div', 'notice'); const a = el('a', '', T('이전 대화 열기', 'Open previous chat')); a.href = '#c=' + m.continued_from;
+    d.append(T('↪ 이전 대화의 요약을 이어받은 대화입니다. ', '↪ This chat continues from a summary of a previous chat. '), a); n.append(d); }
+  if (m.continued_to) { const d = el('div', 'notice'); const a = el('a', '', T('이어진 새 대화 열기', 'Open the continued chat')); a.href = '#c=' + m.continued_to;
+    d.append(T('이 대화는 새 대화로 이어졌습니다. ', 'This chat was continued in a new chat. '), a); n.append(d); }
+  else if ((m.message_count || 0) >= LONG_CHAT) { const d = el('div', 'notice'), b = el('button', 'small', T('↪ 새 대화로 이어가기', '↪ Continue in new chat'));
+    b.onclick = () => continueChat(); d.append(T(`메시지가 ${m.message_count}개로 길어졌습니다. 느려지면 요약을 이어받아 새 대화로 계속하세요. `, `This chat has ${m.message_count} messages. If it gets slow, continue in a new chat that carries over a summary. `), b); n.append(d); }
 }
+const LONG_CHAT = 150;
+async function compactChat() {
+  if (!S.meta) return;
+  if (S.running === S.current) return toast(T('답변 생성 중에는 압축할 수 없습니다', 'Cannot compress while an answer is being generated'), true);
+  const m = modal(T('대화 압축 중…', 'Compressing…'), T('지금까지의 대화를 요약하는 중입니다 (1~3분). 최근 대화는 원문 그대로 남기고, 원문 기록은 지워지지 않습니다.', 'Summarizing the conversation so far (1–3 min). Recent messages stay verbatim; nothing is deleted.'), [{ label:T('기다리는 중…', 'Waiting…'), keep:true }]);
+  m.onclick = null; m.querySelector('.row button').disabled = true;
+  try { const r = await api('/api/conversation/summarize', { id:S.current });
+    m.remove(); const st = r.result && r.result.status;
+    toast(st === 'updated' ? T(`압축했습니다 · 앞의 메시지 ${r.meta.summarized_through}개를 요약으로`, `Compressed · first ${r.meta.summarized_through} messages summarized`) : st === 'skipped' ? T('압축할 내용이 아직 적습니다', 'Not enough to compress yet') : T('압축하지 못했습니다', 'Could not compress'), st === 'failed');
+    await openConversation(S.current);
+  } catch (e) { m.remove(); toast(e.message, true); }
+}
+async function continueChat() {
+  if (!S.meta) return;
+  if (S.running === S.current) return toast(T('답변 생성 중에는 이어갈 수 없습니다', 'Cannot continue while an answer is being generated'), true);
+  if (!confirm(T('대화 전체를 요약해 새 대화로 이어갈까요?\n새 대화는 이 요약을 기억한 채 시작하고, 이 대화는 그대로 남습니다. (요약 1~3분)', 'Summarize this whole chat and continue in a new chat?\nThe new chat starts with the summary; this chat is kept. (1–3 min)'))) return;
+  const m = modal(T('새 대화로 이어가는 중…', 'Continuing in a new chat…'), T('대화 전체를 요약하는 중입니다 (1~3분).', 'Summarizing the whole chat (1–3 min).'), [{ label:T('기다리는 중…', 'Waiting…'), keep:true }]);
+  m.onclick = null; m.querySelector('.row button').disabled = true;
+  try { const r = await api('/api/conversation/continue', { id:S.current }); m.remove();
+    await loadList(); await openConversation(r.id); toast(T('요약을 이어받은 새 대화를 시작했습니다', 'Started a new chat with the summary')); }
+  catch (e) { m.remove(); toast(e.message, true); }
+}
+$('#compactBtn').onclick = () => compactChat();
+$('#continueBtn').onclick = () => continueChat();
 
 // ---------- 목록 ----------
 async function loadList() {
@@ -797,7 +841,12 @@ function highlight(node, text, q) {
 async function openConversation(id, focusIndex) {
   try {
     const data = await api('/api/conversation?id=' + encodeURIComponent(id));
+    if (S.current !== id) S.renderTurns = RENDER_TURNS;  // 다른 대화를 열면 다시 최근 묶음만
     S.current = id; S.meta = data.meta; S.items = data.items;
+    if (focusIndex != null) {  // 검색으로 오래된 메시지로 이동할 때는 그 위치까지 그린다
+      const need = S.items.slice(focusIndex).filter(x => x.role === 'user').length + 1;
+      S.renderTurns = Math.max(S.renderTurns || RENDER_TURNS, need);
+    }
     store.set('councilConversation', id);
     if (location.hash !== '#c=' + id) history.replaceState(null, '', '#c=' + id);
     renderHeader(); renderThread(); renderList(); $('#app').classList.remove('nav');

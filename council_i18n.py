@@ -51,6 +51,8 @@ PAIRS: list[tuple[str, str]] = [
     ("작업 폴더를 찾을 수 없습니다: {x}", "Working folder not found: {x}"),
     ("토론 기록 폴더를 찾을 수 없습니다.", "Discussion log folder not found."),
     ("저장 폴더를 찾을 수 없습니다.", "Output folder not found."),
+    ("대화를 요약하지 못했습니다. 잠시 후 다시 시도하세요.", "Could not summarize the conversation. Please try again later."),
+    ("{x} (이어서)", "{x} (continued)"),
     # --- 진행 단계 (stage) ---
     ("대화 맥락을 준비하는 중", "Preparing conversation context"),
     ("영상에서 프레임을 뽑는 중", "Extracting frames from the video"),

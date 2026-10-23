@@ -483,6 +483,18 @@ ok("exports" in (get("/api/conversation?id="+ci)["items"][-1].get("save_dir") or
 os.environ["FAKE_NO_IMAGE"]="1"
 ev = post("/api/chat", {"question":"실패","conversation_id":ci,"target":"gpt","mode":"image","workdir":str(outd)}, raw=True); del os.environ["FAKE_NO_IMAGE"]
 ok(any(e["type"]=="warning" and "이미지 파일" in e["text"] for e in ev), "no image -> warning")
+# 긴 대화: 수동 압축 · 새 대화로 이어가기 (원문은 그대로, 새 대화는 요약을 맥락으로)
+cl = post("/api/conversations")["id"]
+for k in range(4): post("/api/chat", {"question":f"긴 대화 {k} " + "가"*50,"conversation_id":cl,"target":"claude"}, raw=True)
+n_before = len(get("/api/conversation?id="+cl)["items"])
+r = post("/api/conversation/summarize", {"id":cl}); ok(r["result"]["status"]=="updated" and r["meta"]["summary"], f"manual compress {r['result']}")
+ok(len(get("/api/conversation?id="+cl)["items"])==n_before, "compress keeps originals")
+r = post("/api/conversation/continue", {"id":cl}); nid = r["id"]
+nm = get("/api/conversation?id="+nid)["meta"]; om = get("/api/conversation?id="+cl)["meta"]
+ok(nm["summary"] and nm["continued_from"]==cl and om["continued_to"]==nid and "(이어서)" in nm["title"], "continue: new chat carries summary")
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"이어서 질문","conversation_id":nid,"target":"claude"}, raw=True)
+ok("Summary carried over from the previous conversation" in open(os.environ["FAKE_LOG"]).read(), "continued chat sends carried summary to model")
 # 로그인 만료: 오류에 로그인 안내 + 왼쪽 아래 로그인 필요 표시
 ca = post("/api/conversations")["id"]
 ev = post("/api/chat", {"question":"AUTH_EXPIRED","conversation_id":ca,"target":"claude"}, raw=True)
