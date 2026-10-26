@@ -8,6 +8,7 @@ def out(text):
     if _JSON:
         model = sys.argv[sys.argv.index("--model")+1] if "--model" in sys.argv else "claude-opus-5-5"
         res = {"type":"result","is_error":False,"result":text,"permission_denials":_DENY,
+               "session_id": (sys.argv[sys.argv.index("--resume")+1] if "--resume" in sys.argv else "sess-%d" % os.getpid()),
                "modelUsage":{"claude-haiku-4-5-20251001":{"outputTokens":30},model:{"outputTokens":12}}}
         if _STREAM:  # 진행 상황 줄 + 마지막 result 줄
             print(json.dumps({"type":"system","subtype":"init","mcp_servers":[{"name":"blender","status":"connected"}]}), flush=True)
@@ -39,6 +40,8 @@ if "EDIT_FILE" in p and "acceptEdits" in sys.argv and "Implement the agreed conc
     open("claude_new.txt","w").write("Claude가 만든 파일\n")
     if os.path.exists("app.txt"): open("app.txt","a").write("Claude 수정\n")
     out("파일을 수정했습니다: claude_new.txt, app.txt"); sys.exit(0)
+if "--resume" in sys.argv:
+    open("resumed.txt","w").write(sys.argv[sys.argv.index("--resume")+1]); out("이어서 진행 완료"); sys.exit(0)
 if "RUN_CMD:" in p and "Bash" in (sys.argv[sys.argv.index("--tools")+1] if "--tools" in sys.argv else ""):
     cmd = p.split("RUN_CMD:",1)[1].split("\n",1)[0].strip()
     allowed = sys.argv[sys.argv.index("--allowedTools")+1] if "--allowedTools" in sys.argv else ""

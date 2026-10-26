@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import re
 import socket
 import subprocess
 import sys
@@ -52,7 +53,7 @@ from council_mcp import McpStore, valid_tool
 import council_commands
 import council_image
 
-VERSION = "0.18.2"
+VERSION = "0.18.3"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -111,10 +112,18 @@ You can read, create and modify files under this folder and run shell commands t
 - Shell commands run without asking only if they start with a command the user pre-approved. Other commands are
   blocked and the user will be asked to approve them; do not try workarounds for a blocked command — finish what
   you can and list the exact commands you still need.
+- Run simple, separate commands. Avoid shell loops (for/while), $(...) substitutions and long && / ; chains:
+  every part of a command must be pre-approved, and loops can never be pre-approved. Prefer your file tools
+  (Read/Glob/Grep) over cat/ls/grep for reading files.
 - Work inside the working folder. Do not delete or overwrite files unless the user asked for it.
 - Long-running processes (dev servers, watchers): start them in the background so they keep running after you
   finish, and report how to open or stop them. Do not wait on them in the foreground.
 - End with a short summary: files created or changed, commands run, and anything left for the user to do.
+"""
+
+RESUME_NOTE = """The user approved what was blocked in your previous step{approved}.
+Continue the same task from where you stopped. Do not redo work you already finished; rerun only what was blocked
+(as simple, separate commands), then finish the task and give the summary.
 """
 
 READ_NOTE = """
@@ -575,6 +584,8 @@ class Handler(BaseHTTPRequestHandler):
             web = bool(body.get("web"))
             mcp = bool(body.get("mcp_claude", body.get("mcp")))  # Claude MCP (예전 이름: mcp)
             mcp_gpt = bool(body.get("mcp_gpt"))                     # GPT(Codex) MCP
+            resume = str(body.get("resume") or "")[:100]           # 승인 후 이어서 실행할 Claude 세션
+            self.resume = resume if (mode == "work" and target == "claude" and re.match(r"^[A-Za-z0-9-]{8,100}$", resume)) else ""
             executor = "gpt" if str(body.get("executor", "")).lower() == "gpt" else "claude"  # 토론+작업에서 실행할 모델
             allow_once = [t for t in body.get("allow_once") or [] if valid_tool(t)][:20] if mcp else []
             cmd_once = [c.strip() for c in body.get("allow_cmds_once") or []
@@ -704,7 +715,7 @@ class Handler(BaseHTTPRequestHandler):
             return prompt
 
         def ask(which: str, prompt: str, round_no: int | None = None, call_mode: str | None = None,
-                post=None) -> tuple[str, dict]:
+                post=None, resume: str | None = None) -> tuple[str, dict]:
             """모델 1회 호출 + 기록. 성공하면 (답변, 저장된 항목). 실패하면 CliFailure."""
             label, name, model = models[which]
             started = time.time()
@@ -723,7 +734,7 @@ class Handler(BaseHTTPRequestHandler):
                 answer = call_model(which, model, prompt, call_mode, workdir, timeout=timeout, info=run_info, cancel=token,
                                     images=images, image_dir=image_dir, web=web,
                                     mcp_allow=mcp_allow if which == "claude" else None, cmd_allow=cmd_allow,
-                                    codex_mcp=mcp_gpt and which == "gpt")
+                                    codex_mcp=mcp_gpt and which == "gpt", resume=resume if which == "claude" else None)
             except Cancelled:
                 raise
             except CliFailure as exc:
@@ -754,6 +765,8 @@ class Handler(BaseHTTPRequestHandler):
                                            if x not in (cmd_allow or [])] or
                                           council_commands.prefixes_for(str(d["input"].get("command", "")))}
                              for d in run_info.get("permission_denials", []) if d["tool"] == "Bash"][:10] or None,
+                claude_session=run_info.get("claude_session") if which == "claude" and call_mode in ("work",) else None,
+                resumed=True if resume else None,
                 **(post(answer) if post else {}),
             )
             return answer, item
@@ -840,7 +853,15 @@ class Handler(BaseHTTPRequestHandler):
             label = models[which][0]
             self.emit("stage", step=1, text=f"{label}가 답변하는 중" + (" (웹 검색 사용)" if web else ""))
             try:
-                answer, item = ask(which, base_prompt(which))
+                resume_id = getattr(self, "resume", "") if which == "claude" else ""
+                if resume_id:
+                    # 승인 후: 새로 처음부터 하지 않고 멈춘 Claude 세션을 이어서 실행
+                    approved = (cmd_once or []) + [t for t in (allow_once or [])]
+                    note = RESUME_NOTE.format(approved=(": " + ", ".join(approved)) if approved else "")
+                    self.emit("stage", step=1, text="승인한 내용으로 Claude가 이어서 작업하는 중")
+                    answer, item = ask(which, note, resume=resume_id)
+                else:
+                    answer, item = ask(which, base_prompt(which))
                 answers[label] = answer
                 self.emit("answer", item=item)
             except Cancelled:

@@ -66,6 +66,7 @@ PAIRS: list[tuple[str, str]] = [
     ("토론 내용을 최종 결론으로 정리하는 중", "Writing the final conclusion"),
     ("결론대로 Claude가 파일을 수정하는 중", "Claude is editing files according to the conclusion"),
     ("결론대로 {x}가 작업하는 중", "{x} is carrying out the conclusion"),
+    ("승인한 내용으로 Claude가 이어서 작업하는 중", "Claude is continuing with what you approved"),
     ("Claude가 이미지 프롬프트를 쓰는 중", "Claude is writing the image prompt"),
     ("GPT가 이미지를 생성하는 중 (장당 30초~1분)", "GPT is generating the image (30 s – 1 min each)"),
     ("이미지 파일이 만들어지지 않았습니다. GPT가 이미지 생성 도구를 쓰지 못했을 수 있습니다 (ChatGPT Plus 이상 구독, Codex CLI 최신 버전 필요). 왼쪽 아래에서 Codex를 업데이트한 뒤 다시 시도하세요.",

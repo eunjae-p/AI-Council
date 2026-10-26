@@ -150,11 +150,13 @@ def codex_args(model: str = "", web: bool = False, disable_mcp: list[str] | tupl
     return args
 
 
-def claude_args(model: str = "", stream: bool = False) -> list[str]:
+def claude_args(model: str = "", stream: bool = False, persist: bool = False) -> list[str]:
     # JSON 출력: 답변 본문(result)과 실제로 쓴 모델(modelUsage)을 함께 받는다
     # stream: 도구를 쓰는 실행은 한 줄씩(stream-json) 받아 진행 상황(어떤 도구·명령을 쓰는지)을 화면에 보여 준다
-    args = ["-p", "--no-session-persistence", "--output-format", "stream-json", "--verbose"] if stream else \
-        ["-p", "--no-session-persistence", "--output-format", "json"]
+    # persist: 작업 모드는 세션을 남겨, 승인 후 같은 세션을 이어서(--resume) 실행한다 (처음부터 다시 하지 않게)
+    keep = [] if persist else ["--no-session-persistence"]
+    args = ["-p", *keep, "--output-format", "stream-json", "--verbose"] if stream else \
+        ["-p", *keep, "--output-format", "json"]
     if model and model != ACCOUNT_DEFAULT:
         args += ["--model", model]
     return args
@@ -413,7 +415,8 @@ def check_workdir(workdir: str) -> Path:
 def call_model(which: str, model: str, prompt: str, mode: str = "chat", workdir: Path | None = None,
                timeout: int = TIMEOUT_SECONDS, info: dict | None = None, cancel: CancelToken | None = None,
                images: list[str] | None = None, image_dir: Path | None = None, web: bool = False,
-               mcp_allow: list[str] | None = None, cmd_allow: list[str] | None = None, codex_mcp: bool = False) -> str:
+               mcp_allow: list[str] | None = None, cmd_allow: list[str] | None = None, codex_mcp: bool = False,
+               resume: str | None = None) -> str:
     """which: gpt | claude.  mode: chat(도구 없음, 빈 폴더) | work(작업 폴더 읽기 전용).
     images: 모델에 보여줄 이미지 파일 경로 (GPT: --image, Claude: 파일 읽기 도구).
     web: 웹 검색 허용 (GPT: codex --search, Claude: WebSearch·WebFetch 도구).
@@ -421,11 +424,12 @@ def call_model(which: str, model: str, prompt: str, mode: str = "chat", workdir:
     mcp_allow: None 이면 MCP 끔. 목록이면 Claude 의 MCP 를 켜고 그 도구들만 승인 없이 실행 허용
                (나머지 MCP 도구는 CLI 가 막고, 막힌 호출은 info["permission_denials"] 로 돌려준다).
     cmd_allow: 작업 모드에서 묻지 않고 실행할 명령 접두어 (council_commands). 나머지 명령은 막히고 승인 요청.
-    codex_mcp: GPT(Codex) 에 등록된 MCP 서버(블렌더 등)를 켠다. 끄면 이번 실행에서 모두 끈다."""
+    codex_mcp: GPT(Codex) 에 등록된 MCP 서버(블렌더 등)를 켠다. 끄면 이번 실행에서 모두 끈다.
+    resume: Claude 작업 모드에서 승인 후 이어서 실행할 세션 ID (--resume). info["claude_session"] 에 새 세션 ID."""
     if web:
         try:
             return _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, True, mcp_allow,
-                               cmd_allow, codex_mcp)
+                               cmd_allow, codex_mcp, resume)
         except Cancelled:
             raise
         except CliFailure as exc:
@@ -434,11 +438,11 @@ def call_model(which: str, model: str, prompt: str, mode: str = "chat", workdir:
             if info is not None:
                 info["web_fallback"] = True
     return _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, False, mcp_allow,
-                       cmd_allow, codex_mcp)
+                       cmd_allow, codex_mcp, resume)
 
 
 def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, web,
-                mcp_allow=None, cmd_allow=None, codex_mcp=False) -> str:
+                mcp_allow=None, cmd_allow=None, codex_mcp=False, resume=None) -> str:
     from council_commands import rules as command_rules
     images = [str(p) for p in images or []]
     cwd = workdir if mode in FOLDER_MODES and workdir else chat_dir()
@@ -452,7 +456,8 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
             base += ["--image", path]
     else:
         disabled = []
-        name, base = "claude", claude_args(model)
+        persist = mode in WRITE_MODES
+        name, base = "claude", claude_args(model, persist=persist)
         if images:
             prompt += "\n\n## Image files to open with the Read tool (in this order)\n" + "\n".join(
                 f"{i}. {p}" for i, p in enumerate(images, start=1))
@@ -496,8 +501,10 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
                 extra += ["--system-prompt", system]
     if name == "claude" and info is not None and info.get("on_progress") and extra[:2] != ["--disallowedTools", "*"]:
         # 도구를 쓰는 실행: 한 줄씩 받아 어떤 도구·명령을 쓰는지 바로 보여 준다
-        base = claude_args(model, stream=True)
+        base = claude_args(model, stream=True, persist=mode in WRITE_MODES)
         info["on_line"] = lambda line, cb=info["on_progress"]: _claude_progress(line, cb)
+    if name == "claude" and resume and mode in WRITE_MODES:
+        base = base + ["--resume", resume]  # 승인 후: 멈춘 세션에서 이어서 (읽은 파일·실행 결과를 다시 하지 않음)
     try:
         try:
             out = run_cli(name, base + extra, prompt, timeout, cwd, info, cancel)
@@ -609,6 +616,8 @@ def _claude_result(stdout: str, info: dict | None) -> str:
             {"tool": str(d.get("tool_name", "")), "input": d.get("tool_input") if isinstance(d.get("tool_input"), dict) else {}}
             for d in denials if isinstance(d, dict)
             and (str(d.get("tool_name", "")).startswith("mcp__") or d.get("tool_name") == "Bash")]
+    if info is not None and data.get("session_id"):
+        info["claude_session"] = str(data["session_id"])
     usage = data.get("modelUsage") or {}
     if isinstance(usage, dict) and usage and info is not None:
         def score(item):

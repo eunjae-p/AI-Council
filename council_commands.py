@@ -4,7 +4,7 @@
 - 작업 모드에서 Claude 는 파일 읽기·만들기·고치기와 명령 실행(Bash)을 할 수 있다.
 - 명령은 **허용 목록에 있는 명령으로 시작할 때만** 묻지 않고 실행된다 (Claude Code --allowedTools "Bash(mkdir:*)").
 - 목록에 없는 명령은 CLI 가 실행을 거부하고(permission_denials), Council 이 화면에 명령과 함께
-  "이번만 허용 / 항상 허용 / 허용 안 함"을 보여 준다. 허용하면 같은 질문을 다시 실행한다.
+  "이번만 허용 / 항상 허용 / 허용 안 함"을 보여 준다. 허용하면 멈춘 Claude 세션을 이어서(--resume) 실행한다.
 - 허용 단위는 명령 앞부분(접두어)이다. 예: `npm install express` → `npm install`.
   접두어는 영문·숫자·공백·. _ - / 만 허용한다 (따옴표·&·| 등이 들어간 규칙은 만들지 않음).
 - 모든 명령을 묻지 않고 실행하는 모드(bypassPermissions)는 쓰지 않는다.
@@ -27,6 +27,18 @@ DEFAULT_PREFIXES = [
     "git status", "git diff", "git log", "git init", "git add",
     "python --version", "python3 --version", "node --version", "npm --version",
 ]
+# V0.18.3 에서 기본 목록에 더한 읽기 전용 명령 (기존 사용자 목록에도 한 번 자동으로 추가)
+DEFAULT_ADDED_V2 = [
+    "sha1sum", "sha256sum", "md5sum", "cut", "sort", "uniq", "grep", "diff", "stat", "file", "du", "df", "date",
+    "basename", "dirname", "realpath", "printf", "type", "test", "true",
+    "git show", "git branch", "git rev-parse", "git remote", "git ls-files",
+    "node --check", "node --version", "python -V", "py --version",
+]
+DEFAULT_PREFIXES = DEFAULT_PREFIXES + [p for p in DEFAULT_ADDED_V2 if p not in DEFAULT_PREFIXES]
+DEFAULTS_VERSION = 2
+# 셸 문법 단어 — 명령이 아니므로 허용 대상에서 뺀다 (do·then 을 허용하면 그 뒤 어떤 명령이든 통과하게 됨)
+SHELL_WORDS = {"for", "do", "done", "while", "until", "if", "then", "else", "elif", "fi", "case", "esac", "in", "{", "}",
+               "!", "function", "select", "time"}
 # 🛡 "개발 명령 한 번에 허용" 버튼: 코드 작성·실행·설치에 자주 쓰는 명령 (사용자가 누를 때만 추가)
 DEV_PRESET = ["node", "npm", "npx", "python", "python3", "py", "pip", "pip3", "uv", "git"]
 # 두 단어까지 접두어로 쓰는 명령 (npm install, git commit, pip install …)
@@ -46,7 +58,8 @@ def valid_prefix(prefix: object) -> bool:
 def prefixes_for(command: str) -> list[str]:
     """명령 문자열 → 허용할 접두어 목록 (&&, |, ; 로 이어진 명령은 각각)."""
     out: list[str] = []
-    for part in _SPLIT_RE.split(str(command or "")):
+    text = re.sub(r"\$\(|`|\)", ";", str(command or ""))  # $(…) 안의 명령도 각각 (a=$(sha1sum x | cut …))
+    for part in _SPLIT_RE.split(text):
         part = part.strip()
         if not part:
             continue
@@ -55,6 +68,14 @@ def prefixes_for(command: str) -> list[str]:
         except ValueError:
             words = part.split()
         while words and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", words[0]):  # FOO=1 cmd → cmd
+            words = words[1:]
+        if not words:
+            continue
+        if words[0] in ("for", "case", "select"):
+            continue  # for f in a b — 반복문 머리 (명령 아님)
+        while words and words[0] in SHELL_WORDS:
+            words = words[1:]  # do echo x → echo x (do·then 자체는 허용하지 않음)
+        while words and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", words[0]):
             words = words[1:]
         if not words:
             continue
@@ -94,6 +115,8 @@ class CommandStore:
     def allowed(self) -> list[str]:
         data = self._load()
         items = data.get("allowed") if isinstance(data.get("allowed"), list) else DEFAULT_PREFIXES
+        if isinstance(data.get("allowed"), list) and int(data.get("defaults_version") or 1) < DEFAULTS_VERSION:
+            items = items + [p for p in DEFAULT_ADDED_V2 if p not in items]  # 새 기본(읽기 전용) 명령을 한 번 추가
         return [p for p in items if valid_prefix(p)]
 
     def set_allowed(self, prefix: str, allow: bool) -> list[str]:
@@ -108,7 +131,8 @@ class CommandStore:
                 current = [p for p in current if p != prefix]
             self.path.parent.mkdir(parents=True, exist_ok=True)
             tmp = self.path.with_suffix(".json.tmp")
-            tmp.write_text(json.dumps({"allowed": current}, ensure_ascii=False, indent=2), encoding="utf-8")
+            tmp.write_text(json.dumps({"allowed": current, "defaults_version": DEFAULTS_VERSION}, ensure_ascii=False, indent=2),
+                           encoding="utf-8")
             os.replace(tmp, self.path)
             return current
 

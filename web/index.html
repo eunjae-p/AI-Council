@@ -322,7 +322,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.18.2'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.18.3'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -526,7 +526,12 @@ function mcpDenialCard(item, index) {
     if (S.running) return toast(T('답변 생성 중에는 다시 실행할 수 없습니다', 'Cannot rerun while an answer is being generated'), true);
     if (save) { try { for (const t of tools) await api('/api/mcp/allow', { tool:t, allowed:true }); } catch (e) { return toast(e.message, true); } }
     setMcp(true); if (q.target) setTarget(q.target); restoreMode(q);
-    S.allowOnce = save ? [] : tools; $('#q').value = q.content; send();
+    S.allowOnce = save ? [] : tools;
+    if (item.claude_session && item.model === 'Claude' && (q.target || 'claude') === 'claude' && ['work', 'edit'].includes(q.mode)) {
+      S.resume = item.claude_session; setTarget('claude');
+      $('#q').value = T(`↪ 승인한 도구로 이어서 진행 (${tools.map(toolLabel).join(', ')})`, `↪ Continue with the approved tools (${tools.map(toolLabel).join(', ')})`);
+    } else $('#q').value = q.content;
+    send();
   };
   once.onclick = () => rerun(false); always.onclick = () => { if (tools.some(t => toolKind(t) === 'action') && !confirm(T('실행·비용이 들 수 있는 도구를 항상 허용할까요?\n앞으로 Claude가 묻지 않고 이 도구를 실행할 수 있습니다.', 'Always allow tools that may take actions or cost credits?\nClaude will run them without asking from now on.'))) return; rerun(true); };
   no.onclick = () => { c.remove(); toast(T('실행하지 않았습니다', 'Not run')); };
@@ -554,7 +559,13 @@ function cmdDenialCard(item, index) {
     if (save) { try { for (const p of prefixes) await api('/api/commands/allow', { prefix:p, allowed:true }); } catch (e) { return toast(e.message, true); } }
     if (q.target) setTarget(q.target); restoreMode(q); if (q.mcp) setMcp(true); if (q.mcp_gpt) setMcpGpt(true); if (q.executor) setExecutor(q.executor);
     S.allowCmdsOnce = save ? [] : prefixes;
-    $('#q').value = q.content + T('\n\n(이전 실행에서 막힌 명령을 허용했습니다. 이미 만든 파일은 이어서 사용하세요.)', '\n\n(The previously blocked commands are now allowed. Continue from the files already created.)');
+    if (item.claude_session && item.model === 'Claude' && (q.target || 'claude') === 'claude') {
+      // 멈춘 Claude 세션을 이어서 실행 (처음부터 다시 하지 않음)
+      S.resume = item.claude_session; setTarget('claude');
+      $('#q').value = T(`↪ 승인한 명령으로 이어서 진행 (${prefixes.join(', ')})`, `↪ Continue with the approved commands (${prefixes.join(', ')})`);
+    } else {
+      $('#q').value = q.content + T('\n\n(이전 실행에서 막힌 명령을 허용했습니다. 이미 만든 파일은 이어서 사용하세요.)', '\n\n(The previously blocked commands are now allowed. Continue from the files already created.)');
+    }
     send();
   };
   once.onclick = () => rerun(false);
@@ -1126,13 +1137,14 @@ async function send() {
   const draft = question; q.value = ''; autoGrow();
   const allowOnceSent = S.allowOnce || []; S.allowOnce = []; S.skipGitCheck = false;
   const cmdsOnceSent = S.allowCmdsOnce || []; S.allowCmdsOnce = [];
+  const resumeSent = S.resume || ''; S.resume = '';
   const sentFiles = S.files.slice(); S.files = []; renderChips();
   if (sentFiles.length) { const t = pend.querySelector('.ptext'); if (t) t.textContent = T('첨부 파일을 보내는 중', 'Sending attachments'); }
   const here = () => S.current === convId;
   let gotUser = false, wasStopped = false;
   try {
     const res = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json', 'X-Lang':LANG},
-      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, web:!!S.web, mcp:!!S.mcp, mcp_claude:!!S.mcp, mcp_gpt:!!S.mcpGpt, executor:S.executor || 'claude', allow_once: allowOnceSent || [], allow_cmds_once: cmdsOnceSent, image_ratio:S.imgRatio || 'square', image_count:Number($('#imgCount').value) || 1, workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => f.upload ? ({ name:f.name, upload:f.upload }) : ({ name:f.name, content:f.content })) }) });
+      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, web:!!S.web, mcp:!!S.mcp, mcp_claude:!!S.mcp, mcp_gpt:!!S.mcpGpt, executor:S.executor || 'claude', allow_once: allowOnceSent || [], allow_cmds_once: cmdsOnceSent, resume: resumeSent, image_ratio:S.imgRatio || 'square', image_count:Number($('#imgCount').value) || 1, workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => f.upload ? ({ name:f.name, upload:f.upload }) : ({ name:f.name, content:f.content })) }) });
     if (!res.ok) { let m = T('요청 실패', 'Request failed'); try { m = (await res.json()).error || m; } catch {} throw new Error(m); }
     const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
     for (;;) {

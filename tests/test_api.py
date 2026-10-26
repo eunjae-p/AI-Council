@@ -424,6 +424,17 @@ cw = tmp/"cmdwork"; cw.mkdir(); c16 = post("/api/conversations")["id"]
 post("/api/chat", {"question":"RUN_CMD: npm install express","conversation_id":c16,"target":"claude","mode":"work","workdir":str(cw)}, raw=True)
 a = get("/api/conversation?id="+c16)["items"][-1]
 ok(a.get("cmd_denials") and a["cmd_denials"][0]["prefixes"]==["npm install"] and not (cw/"cmd_ran.txt").exists(), f"blocked command -> approval card {a.get('cmd_denials')}")
+# 승인 후 이어서: 같은 Claude 세션을 --resume 으로 (처음부터 다시 하지 않음)
+sid = a.get("claude_session"); ok(bool(sid), "work answer keeps claude session id")
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"↪ 승인한 명령으로 이어서 진행","conversation_id":c16,"target":"claude","mode":"work","workdir":str(cw),
+                   "allow_cmds_once":["npm install"], "resume":sid}, raw=True)
+lg = open(os.environ["FAKE_LOG"]).read(); last = get("/api/conversation?id="+c16)["items"][-1]
+ok("'--resume', '"+sid+"'" in lg and "Continue the same task" in lg and "Newest user question" not in lg and "Bash(npm install:*)" in lg, "resume: same session, short prompt, approval applied")
+ok(last.get("resumed") and (cw/"resumed.txt").read_text()==sid, "resumed answer recorded")
+import council_commands as _ccm, json as _js
+_mf = tmp/"oldcmd"; _mf.mkdir(); (_mf/"cmd_settings.json").write_text(_js.dumps({"allowed":["ls","npm install"]}), encoding="utf-8")
+_al = _ccm.CommandStore(_mf).allowed(); ok("npm install" in _al and "sha1sum" in _al and "grep" in _al, "existing allowlist gets new read-only defaults once")
 post("/api/chat", {"question":"RUN_CMD: npm install express","conversation_id":c16,"target":"claude","mode":"work","workdir":str(cw),
                    "allow_cmds_once":["npm install", "rm -rf /;x"]}, raw=True)
 ok((cw/"cmd_ran.txt").exists(), "allow once runs the command")
@@ -445,6 +456,9 @@ a2 = get("/api/conversation?id="+c16)["items"][-1]
 ok(a2.get("cmd_denials") and a2["cmd_denials"][0]["prefixes"]==["npm install"], f"already-allowed echo not listed {a2.get('cmd_denials')}")
 import council_commands as cc2
 ok(cc2.prefixes_for("cd app && FOO=1 npm run dev | tee log.txt")==["npm run","tee"], f"prefixes {cc2.prefixes_for('cd app && FOO=1 npm run dev | tee log.txt')}")
+pf = cc2.prefixes_for('for f in a b; do h=$(sha1sum "$f" | cut -c1-12); echo "$f"; done')
+ok(pf==["sha1sum","cut","echo"] and "do" not in pf and "for" not in pf, f"loop keywords skipped, inner commands kept {pf}")
+ok("sha1sum" in [x["prefix"] for x in post("/api/commands/reset", {})["allowed"]], "read-only utilities in defaults")
 # MCP 목록: 'claude mcp list' 로도 서버 확인 (시작 정보에 없는 서버 포함), 서버 전체 허용 규칙
 st = post("/api/mcp/refresh", {})
 keys = {x["key"]: x for x in st["servers"]}
