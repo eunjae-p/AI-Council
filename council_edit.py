@@ -28,7 +28,7 @@ def _git(workdir: Path, *args: str, check: bool = True, timeout: int = 60) -> st
     exe = shutil.which("git")
     if not exe:
         raise EditError("Git이 설치되어 있지 않습니다. 설치 도우미(Setup)를 다시 실행하세요.")
-    proc = subprocess.run([exe, "-C", str(workdir), *args], capture_output=True, timeout=timeout,
+    proc = subprocess.run([exe, "-c", "core.quotepath=false", "-C", str(workdir), *args], capture_output=True, timeout=timeout,
                           stdin=subprocess.DEVNULL, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     out = decode_output(proc.stdout)
     if check and proc.returncode != 0:

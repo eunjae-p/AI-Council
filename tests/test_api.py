@@ -364,7 +364,8 @@ ok(_c3.decode_output("'C:\\Program'은(는) 내부 또는 외부 명령".encode(
 # macOS 실행 파일
 import subprocess as _sp2, stat as _st
 st = get("/api/status"); ok(st["platform"] in ("windows","mac","linux") and st["setup"], "status reports platform/setup")
-for f in ("Setup-mac.command", "AI-Council.command", "Update-mac.command"):
+for f in ("Setup-mac.command", "AI-Council.command", "Update-mac.command",
+          "0_처음 설치 (Mac).command", "1_AI Council 실행 (Mac).command", "2_업데이트 (Mac).command"):
     fp = ROOT/f; ok(fp.exists() and fp.stat().st_mode & _st.S_IXUSR and b"\r\n" not in fp.read_bytes(), f"{f} exists, executable, LF")
     ok(_sp2.run(["bash","-n",str(fp)]).returncode == 0, f"{f} bash syntax")
 # ---- 수정 모드 ----

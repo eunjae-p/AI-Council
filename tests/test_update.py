@@ -30,6 +30,11 @@ ok((pc/"data"/"conversations"/"x.jsonl").read_text(encoding="utf-8") == "내 대
 try: u.apply("9.9.9"); ok(False, "should block")
 except u.UpdateError as e: ok("council_core.py" in str(e), "local edit blocks update: " + str(e).splitlines()[0])
 sh("git", "checkout", "--", "council_core.py", cwd=pc)
+# 한글 파일명: 직접 수정하면 실제 이름으로 알려 주고(\354… 로 깨지지 않음), 되돌리면 정상
+kf = pc/"1_AI Council 실행 (Windows).cmd"; orig = kf.read_bytes(); kf.write_bytes(orig + b"rem local\r\n")
+try: u.apply("9.9.9"); ok(False, "should block korean")
+except u.UpdateError as e: ok("1_AI Council 실행 (Windows).cmd" in str(e), "korean filename shown correctly: " + str(e).splitlines()[-1])
+kf.write_bytes(orig)
 # 오늘 PC 상황 재현: 파일은 최신인데 기록만 뒤처짐 (+CRLF 차이)
 (pc/"README.md").write_bytes(b"new readme".replace(b"\n", b"\r\n"))
 (dev/"NEWFILE.md").write_text("added", encoding="utf-8"); sh(*G, "add", "-A", cwd=dev); sh(*G, "commit", "-qm", "new file", cwd=dev); sh("git", "push", "-q", "origin", "main", cwd=dev)

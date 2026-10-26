@@ -35,7 +35,8 @@ def _git(*args: str, timeout: int = 60, check: bool = True) -> subprocess.Comple
     if not exe:
         raise UpdateError(f"Git이 설치되어 있지 않습니다. {SETUP_NAME}를 다시 실행하거나 https://git-scm.com 에서 설치하세요.")
     proc = subprocess.run(
-        [exe, "-C", str(ROOT), *args], capture_output=True, timeout=timeout, stdin=subprocess.DEVNULL,
+        # core.quotepath=false: 한글 파일명("1_AI Council 실행 (Windows).cmd" 등)을 \354… 로 바꾸지 않게
+        [exe, "-c", "core.quotepath=false", "-C", str(ROOT), *args], capture_output=True, timeout=timeout, stdin=subprocess.DEVNULL,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     if check and proc.returncode != 0:

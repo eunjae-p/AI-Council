@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.18.1** (2026-10-23) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.18.2** (2026-10-26) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.18.2](CHANGELOG.md#v0182-2026-10-26) | 10-26 | 폴더에 **한글 이름 실행 파일**: `0_처음 설치`, `1_AI Council 실행`, `2_업데이트` (Windows · Mac) |
 | [V0.18.1](CHANGELOG.md#v0181-2026-10-23) | 10-23 | 긴 대화 렉 줄이기: 최근 대화만 표시, **🗜 압축**, **↪ 새 대화로 이어가기** |
 | [V0.18.0](CHANGELOG.md#v0180-2026-10-22) | 10-22 | **🎨 이미지 모드** — GPT가 실제 이미지를 생성해 지정 폴더에 PNG로 저장, 화면에 표시 |
 | [V0.17.5](CHANGELOG.md#v0175-2026-10-21) | 10-21 | 🛡 **개발 명령 한 번에 허용** 버튼, 승인 카드에 이미 허용된 명령은 표시 안 함 |
 | [V0.17.4](CHANGELOG.md#v0174-2026-10-21) | 10-21 | **🔔 답변 완료 알림**(데스크톱), 토론에서 승인 카드 한 장으로 모으기 |
-| [V0.17.3](CHANGELOG.md#v0173-2026-10-19) | 10-19 | 수정: MCP 도구 관리에 서버가 0개로 나오던 문제, **서버 전체 항상 허용**, GPT MCP 서버 표시 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -50,6 +50,18 @@
 - **대화 관리** — 자동 제목, 보관·휴지통, 전체 검색, 긴 대화 자동 요약
 - **Markdown 내려받기** — 답변마다 **⤓ MD**(그 답변만), 오른쪽 위 **Chat_md**(대화 전체)
 
+## 📂 폴더에서 바로 찾는 실행 파일
+
+폴더를 열면 맨 위에 번호 순서대로 보입니다. Windows는 `(Windows).cmd`, Mac은 `(Mac).command` 를 더블클릭하세요.
+
+| 파일 | 하는 일 |
+|---|---|
+| **`0_처음 설치 (Windows).cmd`** / `(Mac).command` | 처음 한 번: 필요한 프로그램 설치, 로그인, 바탕화면 바로가기 |
+| **`1_AI Council 실행 (Windows).cmd`** / `(Mac).command` | AI Council 실행 (바탕화면 바로가기와 같음) |
+| **`2_업데이트 (Windows).cmd`** / `(Mac).command` | GitHub 최신 버전 받기 (화면의 업데이트 버튼과 같음) |
+
+기존 파일(`Setup.cmd`, `AI-Council_Web.cmd`, `Update.cmd` 등)도 그대로 동작합니다. 위 파일은 그 파일을 대신 실행해 주는 바로가기입니다.
+
 ## 📦 처음 설치하기 (팀원용)
 
 각자 자기 PC에서, 자기 구독 계정으로 씁니다. 대화 기록은 각자 PC에만 저장되고 공유되지 않습니다.
@@ -59,7 +71,7 @@
    ```powershell
    git clone https://github.com/eunjae-p/AI-Council.git
    ```
-2. 받은 폴더의 **`Setup.cmd`** 를 더블클릭합니다. 자동으로:
+2. 받은 폴더의 **`0_처음 설치 (Windows).cmd`** (= `Setup.cmd`) 를 더블클릭합니다. 자동으로:
    - Python, Node.js, Git, ffmpeg 설치 (없을 때만)
    - Codex CLI, Claude Code 설치
    - 로그인 안내 (브라우저에서 **자기 계정**으로 로그인)
@@ -75,7 +87,7 @@
    git clone https://github.com/eunjae-p/AI-Council.git
    ```
    `git` 이 없다는 창이 뜨면 **설치**를 누르고(Xcode 명령줄 도구), 끝나면 같은 명령을 다시 실행하세요.
-2. Finder에서 받은 폴더의 **`Setup-mac.command`** 를 더블클릭합니다. 자동으로:
+2. Finder에서 받은 폴더의 **`0_처음 설치 (Mac).command`** (= `Setup-mac.command`) 를 더블클릭합니다. 자동으로:
    - Homebrew(Mac 프로그램 설치 도구)가 없으면 공식 설치 프로그램 실행 — Mac 로그인 비밀번호를 물을 수 있습니다
    - Python 3.10 이상, Node.js, ffmpeg, Codex CLI, Claude Code 설치
    - 로그인 안내, 바탕화면에 **AI Council** 실행 아이콘 생성
@@ -102,7 +114,7 @@ Council에는 별도 로그인 화면이 없습니다. 그 PC의 Codex CLI와 Cl
 
 ## ▶ 실행 · 종료
 
-- **실행**: 바탕화면 **AI Council** (또는 `AI-Council_Web.cmd`). 창 없이 백그라운드로 켜지고 브라우저에서 `http://127.0.0.1:8765` 가 열립니다. 이 PC에서만 접속됩니다.
+- **실행**: 바탕화면 **AI Council** (또는 폴더의 **`1_AI Council 실행 (Windows).cmd`**). 창 없이 백그라운드로 켜지고 브라우저에서 `http://127.0.0.1:8765` 가 열립니다. 이 PC에서만 접속됩니다.
 - **종료**: 화면 왼쪽 아래 **앱 종료**. 브라우저 탭만 닫으면 서버는 계속 켜져 있고, 바로가기를 다시 누르면 화면만 다시 열립니다.
 - **문제 확인용 실행**: `AI-Council_Debug.cmd` (콘솔 창에 서버 메시지 표시). 백그라운드 기록은 `data/logs/server.log`.
 
@@ -111,7 +123,7 @@ Council에는 별도 로그인 화면이 없습니다. 그 PC의 Codex CLI와 Cl
 GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록은 그대로 유지됩니다.
 
 1. **화면에서**: 새 버전이 있으면 왼쪽 아래 Council 버전 아래에 노란 **⬆ 업데이트하기** → **지금 업데이트** (자동 재시작·새로고침)
-2. **화면 없이**: 폴더의 **`Update.cmd`** 더블클릭 → `Y`
+2. **화면 없이**: 폴더의 **`2_업데이트 (Windows).cmd`** (Mac: `2_업데이트 (Mac).command`) 더블클릭 → `Y`
 
 - 이 PC에서 직접 고친 파일이 있으면 덮어쓰지 않고 멈춥니다.
 - **GPT·Claude 프로그램(CLI) 업데이트**는 별개입니다. 새 버전이 있으면 왼쪽 아래 노란 **"⬆ 업데이트하기"** 를 누르면 자동으로 설치됩니다 (1~2분, Council 재시작 불필요).
@@ -252,6 +264,7 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 | `Setup.cmd` · `setup.ps1` | 처음 설치 도우미 (Windows) |
 | `Setup-mac.command` · `AI-Council.command` · `Update-mac.command` | Mac 설치 · 실행 · 업데이트 |
 | `AI-Council_Web.cmd` · `AI-Council_Debug.cmd` · `Update.cmd` | 실행 · 문제 확인용 실행 · 업데이트 |
+| `0_처음 설치` · `1_AI Council 실행` · `2_업데이트` (`.cmd` / `.command`) | 위 파일을 대신 실행하는 한글 이름 바로가기 |
 | `AI-Council_CLI.ps1` | CLI 연결 확인용 PowerShell 스크립트 |
 | `tests/` | 가짜 CLI(`fake_bin`)를 쓰는 테스트 |
 
@@ -261,7 +274,7 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.18.1** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.18.2** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
@@ -298,12 +311,12 @@ Clone with `git` (not ZIP) so the built-in updater works.
 
 **Windows**
 1. `git clone https://github.com/eunjae-p/AI-Council.git`
-2. Double-click **`Setup.cmd`**. It installs Python, Node.js, Git, ffmpeg (if missing), Codex CLI and Claude Code, walks you through sign-in, and creates an **AI Council** desktop shortcut.
+2. Double-click **`0_처음 설치 (Windows).cmd`** ("first-time setup", same as `Setup.cmd`). It installs Python, Node.js, Git, ffmpeg (if missing), Codex CLI and Claude Code, walks you through sign-in, and creates an **AI Council** desktop shortcut.
 3. Run **AI Council** from the desktop. If there is no red "Sign-in required" at the bottom left, you're ready.
 
 **Mac**
 1. Open Terminal and run `git clone https://github.com/eunjae-p/AI-Council.git` (accept the Xcode command-line tools prompt if asked).
-2. Double-click **`Setup-mac.command`** (installs Homebrew if needed, then Python 3.10+, Node.js, ffmpeg and both CLIs). If macOS blocks it, right-click → Open once.
+2. Double-click **`0_처음 설치 (Mac).command`** (same as `Setup-mac.command`) (installs Homebrew if needed, then Python 3.10+, Node.js, ffmpeg and both CLIs). If macOS blocks it, right-click → Open once.
 3. Double-click **AI Council** on the desktop.
 
 **Sign-in** (once per computer): click the red **"Sign in"** link at the bottom left, or run in a terminal:
@@ -315,8 +328,8 @@ Clone with `git` (not ZIP) so the built-in updater works.
 
 ## ▶ Run · update · stop
 
-- **Run**: desktop shortcut (or `AI-Council_Web.cmd` / `AI-Council.command`). The server starts in the background and opens `http://127.0.0.1:8765` — reachable from this computer only.
-- **Update**: when a new version exists, a yellow **⬆ Update** appears at the bottom left → **Update now**. Or run `Update.cmd` / `Update-mac.command`. Your conversations are kept.
+- **Run**: desktop shortcut (or `1_AI Council 실행 (Windows).cmd` / `(Mac).command` — "start"; same as `AI-Council_Web.cmd` / `AI-Council.command`). The server starts in the background and opens `http://127.0.0.1:8765` — reachable from this computer only.
+- **Update**: when a new version exists, a yellow **⬆ Update** appears at the bottom left → **Update now**. Or run `2_업데이트 (Windows).cmd` / `(Mac).command` ("update"; same as `Update.cmd` / `Update-mac.command`). Your conversations are kept.
 - **Stop**: **Quit app** at the bottom left. Closing the browser tab leaves the server running.
 
 ## 🧭 Using it

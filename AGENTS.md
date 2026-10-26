@@ -47,6 +47,7 @@
 - `git reset --hard`, 사용자 파일에 대한 `git checkout --` 등 되돌릴 수 없는 명령은 사용자 확인 없이 쓰지 않습니다.
 - 대화 원문 JSONL을 다시 쓰는 마이그레이션 금지 (추가만 함).
 - 작업 모드의 명령 실행은 **허용 목록(`council_commands.py`) + 화면 승인**으로만 합니다. `bypassPermissions`·모든 명령 자동 허용·`Bash(*)` 같은 전체 허용 규칙 금지. 허용 규칙 접두어에 따옴표·`&`·`|` 등 특수문자 금지 (Windows cmd 경유 실행).
+- `.cmd` 파일 **내용**은 영문(ASCII)만 씁니다 (cmd.exe 가 시스템 코드 페이지로 읽어 한글이 깨짐). 한글은 파일 이름에만.
 - `.cmd` / `.ps1` 은 CRLF 유지 (`.gitattributes`), `setup.ps1` 은 UTF-8 BOM 유지 (Windows PowerShell 5.1 한글).
 - Mac용 `.command` 는 LF 와 실행 권한(755) 유지. Windows 전용 처리(`os.name == "nt"`)를 추가하면 Mac(`IS_MAC`)·Linux 동작도 확인.
 
@@ -71,6 +72,7 @@
 | `council_versions.py` | Codex/Claude CLI 버전·로그인 상태 |
 | `council_update.py` | Council 자체 업데이트 (GitHub → PC, 안전 검사, 재시작) · `Update.cmd` 가 화면 없이 실행 |
 | `Setup.cmd`, `setup.ps1` | 처음 설치 도우미 (Windows) |
+| `0_처음 설치` · `1_AI Council 실행` · `2_업데이트` (`(Windows).cmd` / `(Mac).command`) | 한글 이름 바로가기: 기존 `Setup.cmd`·`AI-Council_Web.cmd`·`Update.cmd`(Mac 은 `*.command`)를 대신 실행. 기존 파일 이름은 바꾸지 않음 |
 | `Setup-mac.command`, `AI-Council.command`, `Update-mac.command` | Mac 설치 · 실행 · 업데이트 |
 | `tests/` | 가짜 CLI(`fake_bin`)를 쓰는 테스트 |
 
