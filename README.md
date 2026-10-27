@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.18.3** (2026-10-26) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.18.4** (2026-10-27) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.18.4](CHANGELOG.md#v0184-2026-10-27) | 10-27 | 왼쪽 아래 **↻ 계정 바꾸기** — 로그아웃 후 다른 GPT·Claude 계정으로 로그인 |
 | [V0.18.3](CHANGELOG.md#v0183-2026-10-26) | 10-26 | 승인 후 **멈춘 Claude 세션을 이어서 실행**(처음부터 다시 하지 않음), 읽기 전용 명령 기본 허용 확대 |
 | [V0.18.2](CHANGELOG.md#v0182-2026-10-26) | 10-26 | 폴더에 **한글 이름 실행 파일**: `0_처음 설치`, `1_AI Council 실행`, `2_업데이트` (Windows · Mac) |
 | [V0.18.1](CHANGELOG.md#v0181-2026-10-23) | 10-23 | 긴 대화 렉 줄이기: 최근 대화만 표시, **🗜 압축**, **↪ 새 대화로 이어가기** |
 | [V0.18.0](CHANGELOG.md#v0180-2026-10-22) | 10-22 | **🎨 이미지 모드** — GPT가 실제 이미지를 생성해 지정 폴더에 PNG로 저장, 화면에 표시 |
-| [V0.17.5](CHANGELOG.md#v0175-2026-10-21) | 10-21 | 🛡 **개발 명령 한 번에 허용** 버튼, 승인 카드에 이미 허용된 명령은 표시 안 함 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -111,6 +111,11 @@ Council에는 별도 로그인 화면이 없습니다. 그 PC의 Codex CLI와 Cl
 | Claude | `claude auth login` | Claude 계정 (Pro/Max 등, 무료 플랜 불가) |
 
 로그인 확인: `codex.cmd login status`, `claude auth status` → 그 뒤 Council 왼쪽 아래 **버전 다시 확인**.
+
+**계정 바꾸기** (같은 PC에서 다른 계정 사용): 왼쪽 아래 Codex·Claude 줄의 **↻ 계정 바꾸기** → 로그인 창에서 로그아웃 후 자동으로 다시 로그인이 시작됩니다.
+- 브라우저가 기존 계정으로 로그인돼 있으면 그 계정이 다시 연결될 수 있습니다 → 브라우저에서 먼저 로그아웃하거나, 로그인 창에 나온 주소를 시크릿 창에 붙여 넣으세요.
+- 터미널로 직접: `codex.cmd logout` → `codex.cmd login`, `claude auth logout` → `claude auth login`
+- 대화 기록·명령 허용 목록·MCP 등록은 PC에 저장돼 있어 그대로 남습니다.
 
 ## ▶ 실행 · 종료
 
@@ -275,7 +280,7 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.18.3** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.18.4** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
@@ -326,6 +331,8 @@ Clone with `git` (not ZIP) so the built-in updater works.
 |---|---|---|
 | GPT | `codex login` (Windows PowerShell: `codex.cmd login`) | ChatGPT (Plus / Pro …) |
 | Claude | `claude auth login` | Claude (Pro / Max; free plan not supported) |
+
+**Switch account** (another account on the same computer): click **↻ Switch account** next to Codex or Claude at the bottom left. A terminal window signs you out and starts sign-in again. If your browser is still signed in with the old account, sign out there first or paste the sign-in URL into a private window. Terminal: `codex logout` → `codex login`, `claude auth logout` → `claude auth login`. Chats, the command allowlist and MCP servers stay as they are.
 
 ## ▶ Run · update · stop
 

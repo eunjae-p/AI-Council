@@ -66,6 +66,16 @@ class CliState:
                 result[which] = {"model": "", "source": ""}
         return result
 
+    def forget_default(self, which: str) -> None:
+        """계정을 바꾸면 '기본 모델'이 달라질 수 있으므로 기억한 값을 지운다 (사용 횟수는 유지)."""
+        with _lock:
+            data = self._load()
+            if (data.get("default_seen") or {}).pop(which, None) is not None:
+                try:
+                    self._save(data)
+                except OSError:
+                    pass
+
     def usage(self) -> dict:
         usage = self._load().get("usage", {})
         today = time.strftime("%Y-%m-%d")

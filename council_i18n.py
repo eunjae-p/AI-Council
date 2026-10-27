@@ -175,6 +175,8 @@ PAIRS: list[tuple[str, str]] = [
     ("답변을 생성하는 중에는 업데이트할 수 없습니다. 완료되거나 중지한 뒤 다시 시도하세요.",
      "Cannot update while an answer is being generated. Wait or stop it, then try again."),
     ("이미 업데이트가 진행 중입니다. 잠시 기다려 주세요.", "An update is already running. Please wait."),
+    ("답변 생성 중에는 계정을 바꿀 수 없습니다. 끝나거나 중지한 뒤 다시 시도하세요.",
+     "Cannot switch accounts while an answer is being generated. Wait or stop it, then try again."),
     # --- Council 자체 업데이트 ---
     ("Git이 설치되어 있지 않습니다. {x}를 다시 실행하거나 https://git-scm.com 에서 설치하세요.",
      "Git is not installed. Run {x} again or install it from https://git-scm.com."),

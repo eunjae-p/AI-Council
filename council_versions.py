@@ -4,6 +4,7 @@
 - 최신 버전: npm 레지스트리 조회 (인터넷이 안 되면 건너뜀)
 - 업데이트: 화면의 버튼으로 이 PC에서 바로 실행 (update_cli). 터미널 명령을 몰라도 된다.
 - 로그인: 로그인 창(터미널)을 대신 열어 준다 (open_login). 브라우저 로그인은 사용자가 직접.
+- 계정 바꾸기: 같은 창에서 로그아웃 → 로그인 (open_login(switch=True)).
 """
 from __future__ import annotations
 
@@ -65,6 +66,7 @@ def installed_version(name: str) -> str:
 
 LOGIN_ARGS = {"codex": ["login", "status"], "claude": ["auth", "status"]}
 LOGIN_COMMANDS = {"codex": f"codex{_W} login", "claude": "claude auth login"}
+LOGOUT_COMMANDS = {"codex": f"codex{_W} logout", "claude": "claude auth logout"}
 
 
 # 실제 호출에서 로그인 만료가 확인된 CLI ('auth status' 는 만료된 토큰도 로그인됨으로 보고할 수 있음)
@@ -196,38 +198,54 @@ def update_cli(name: str) -> dict:
 
 # ---------- 로그인 창 열기 ----------
 LOGIN_RUN = {"codex": ["login"], "claude": ["auth", "login"]}
+LOGOUT_RUN = {"codex": ["logout"], "claude": ["auth", "logout"]}
+SWITCH_TIP = "다른 계정으로 로그인하려면 브라우저에서 기존 계정을 먼저 로그아웃하거나, 아래 주소를 시크릿 창에 붙여 넣으세요 / " \
+             "To use another account, sign out of the old one in your browser first, or paste the URL below into a private window."
 
 
-def open_login(name: str) -> dict:
-    """Windows: 로그인 명령이 실행된 터미널 창을 새로 연다 (브라우저 로그인이 이어서 열림).
+def _clear_login_cache() -> None:
+    with _lock:
+        for key in [k for k in _cache if k.startswith("login:")]:
+            _cache.pop(key, None)
+
+
+def open_login(name: str, switch: bool = False) -> dict:
+    """Windows/Mac: 로그인 명령이 실행된 터미널 창을 새로 연다 (브라우저 로그인이 이어서 열림).
+    switch=True(계정 바꾸기): 같은 창에서 먼저 로그아웃한 뒤 로그인한다.
     그 외 OS: 열 수 없으므로 명령만 돌려준다."""
     if name not in PACKAGES:
         raise ValueError("알 수 없는 CLI 입니다.")
     clear_expired(name)  # 로그인 창을 열었으면 다음 확인은 실제 상태로
+    _clear_login_cache()
+    command = f"{LOGOUT_COMMANDS[name]} && {LOGIN_COMMANDS[name]}" if switch else LOGIN_COMMANDS[name]
+    title = "계정 바꾸기 / Switch account" if switch else "로그인 / Sign in"
     if IS_MAC:
         # Mac: 터미널 앱을 열어 로그인 명령을 실행 (브라우저 로그인이 이어서 열림)
-        exe = resolve_command(name)[-1]
-        cmd = f"clear; echo '{NAMES[name]} 로그인 / Sign in — 브라우저가 열리면 로그인하세요 / Sign in when the browser opens.'; " \
-              f"{shlex.quote(exe)} {' '.join(LOGIN_RUN[name])}; echo; echo '끝났으면 이 창을 닫고 AI Council 로 돌아가세요 / When done, close this window and return to AI Council.'"
+        exe = shlex.quote(resolve_command(name)[-1])
+        pre = f"{exe} {' '.join(LOGOUT_RUN[name])}; echo; echo '{SWITCH_TIP}'; echo; " if switch else ""
+        cmd = f"clear; echo '{NAMES[name]} {title} — 브라우저가 열리면 로그인하세요 / Sign in when the browser opens.'; " \
+              f"{pre}{exe} {' '.join(LOGIN_RUN[name])}; echo; echo '끝났으면 이 창을 닫고 AI Council 로 돌아가세요 / When done, close this window and return to AI Council.'"
         script = f'tell application "Terminal" to do script "{cmd.replace(chr(92), chr(92) * 2).replace(chr(34), chr(92) + chr(34))}"'
         subprocess.Popen(["osascript", "-e", script, "-e", 'tell application "Terminal" to activate'])
-        return {"opened": True, "command": LOGIN_COMMANDS[name]}
+        return {"opened": True, "command": command, "switch": switch}
     if os.name != "nt":
-        return {"opened": False, "command": LOGIN_COMMANDS[name]}
+        return {"opened": False, "command": command, "switch": switch}
     import tempfile
     exe = resolve_command(name)[-1]
     lines = [
-        "@echo off", "chcp 65001 >nul", f"title {NAMES[name]} 로그인 / Sign in",
-        f"echo {NAMES[name]} 로그인 / Sign in — 브라우저가 열리면 로그인하세요 / Sign in when the browser opens.", "echo.",
+        "@echo off", "chcp 65001 >nul", f"title {NAMES[name]} {title}",
+        f"echo {NAMES[name]} {title} — 브라우저가 열리면 로그인하세요 / Sign in when the browser opens.", "echo.",
+    ]
+    if switch:
+        lines += [f'call "{exe}" {" ".join(LOGOUT_RUN[name])}', "echo.", f"echo {SWITCH_TIP}", "echo."]
+    lines += [
         f'call "{exe}" {" ".join(LOGIN_RUN[name])}', "echo.",
         "echo 로그인이 끝났으면 이 창을 닫고 AI Council 화면으로 돌아가세요 / When done, close this window and return to AI Council.", "pause",
     ]
-    bat = os.path.join(tempfile.gettempdir(), f"ai-council-login-{name}.cmd")
+    bat = os.path.join(tempfile.gettempdir(), f"ai-council-{'switch' if switch else 'login'}-{name}.cmd")
     with open(bat, "w", encoding="utf-8", newline="\r\n") as fh:
         fh.write("\n".join(lines) + "\n")
     subprocess.Popen([os.environ.get("COMSPEC", "cmd.exe"), "/d", "/c", bat],
                      creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0x10))
-    with _lock:
-        for key in [k for k in _cache if k.startswith("login:")]:
-            _cache.pop(key, None)
-    return {"opened": True, "command": LOGIN_COMMANDS[name]}
+    _clear_login_cache()
+    return {"opened": True, "command": command, "switch": switch}

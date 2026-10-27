@@ -322,7 +322,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.18.3'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.18.4'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -1215,6 +1215,12 @@ async function loadVersions(force) {
       g.onclick = () => startLogin(k, x);
       box.append(g); outdated.push(k + '-login');
     }
+    if (x.installed && x.logged_in) {
+      const sw = el('span', 'upd', T('↻ 계정 바꾸기', '↻ Switch account')); sw.style.cssText = 'display:inline;margin-left:6px;color:var(--muted);font-size:11px';
+      sw.title = T(`${names[k]}에서 로그아웃하고 다른 ${k === 'codex' ? 'ChatGPT' : 'Claude'} 계정으로 다시 로그인합니다`, `Sign out of ${names[k]} and sign in with another ${k === 'codex' ? 'ChatGPT' : 'Claude'} account`);
+      sw.onclick = () => confirmSwitch(k);
+      line.append(sw);
+    }
     if (!x.installed) { const m = el('span', 'upd', T(`CLI 없음 · ${S.setup || 'Setup.cmd'} 실행`, `CLI missing · run ${S.setup || 'Setup.cmd'}`)); m.style.color = 'var(--danger)'; box.append(m); }
     if (x.outdated) {
       outdated.push(k);
@@ -1272,21 +1278,36 @@ async function runCliUpdate(keys, v) {
   modal(fail.length ? T('일부 업데이트 실패', 'Some updates failed') : T('업데이트 완료', 'Update complete'), box, buttons);
   loadVersions(true);
 }
-async function startLogin(k, x) {
-  let r; try { r = await api('/api/cli/login', { name:k }); } catch (e) { toast(T('로그인 창을 열지 못했습니다: ', 'Could not open the sign-in window: ') + e.message, true); return; }
+function confirmSwitch(k) {
+  if (S.running) { toast(T('답변 생성 중에는 계정을 바꿀 수 없습니다. 끝나거나 중지한 뒤 다시 시도하세요', 'Cannot switch accounts while an answer is being generated. Wait or stop it first'), true); return; }
+  const acct = k === 'codex' ? 'ChatGPT' : 'Claude', site = k === 'codex' ? 'chatgpt.com' : 'claude.ai';
+  modal(T(`${CLI_NAMES[k]} 계정 바꾸기`, `Switch ${CLI_NAMES[k]} account`),
+    T(`지금 계정에서 로그아웃한 뒤, 로그인 창을 열어 다른 ${acct} 계정으로 로그인합니다.\n\n` +
+      `• 브라우저에 ${site} 가 기존 계정으로 로그인돼 있으면 그 계정이 다시 연결될 수 있습니다.\n  먼저 브라우저에서 로그아웃하거나, 로그인 창에 나온 주소를 시크릿 창에 붙여 넣으세요.\n` +
+      `• 대화 기록·명령 허용 목록·등록한 MCP 는 PC 에 저장돼 있어 그대로 남습니다.\n` +
+      `• 새 계정의 요금제에 따라 쓸 수 있는 모델과 사용량이 달라질 수 있습니다.`,
+      `This signs you out of the current account, then opens a sign-in window for another ${acct} account.\n\n` +
+      `• If your browser is still signed in to ${site} with the old account, that account may be linked again.\n  Sign out in the browser first, or paste the URL shown in the sign-in window into a private window.\n` +
+      `• Chats, the command allowlist and registered MCP servers are stored on this PC and stay as they are.\n` +
+      `• Available models and usage limits may differ with the new account's plan.`),
+    [{ label:T('취소', 'Cancel') }, { label:T('로그아웃하고 다시 로그인', 'Sign out and sign in again'), primary:true, onClick: () => startLogin(k, null, true) }]);
+}
+async function startLogin(k, x, sw) {
+  let r; try { r = await api('/api/cli/login', sw ? { name:k, switch:true } : { name:k }); } catch (e) { toast(T('로그인 창을 열지 못했습니다: ', 'Could not open the sign-in window: ') + e.message, true); return; }
   if (!r.opened) {
     try { await navigator.clipboard.writeText(r.command); } catch {}
     modal(`${CLI_NAMES[k]} ${T('로그인', 'sign-in')}`, T(`이 PC에서는 로그인 창을 자동으로 열 수 없습니다.\n터미널에서 아래 명령을 실행하세요 (복사됨):\n\n`, `Council cannot open a sign-in window on this computer.\nRun this command in a terminal (copied):\n\n`) + r.command); return;
   }
-  const m = modal(`${CLI_NAMES[k]} ${T('로그인', 'sign-in')}`, T(`검은 로그인 창을 열었습니다.\n\n1. 잠시 후 브라우저가 열리면 ${k === 'codex' ? 'ChatGPT' : 'Claude'} 계정으로 로그인하세요.\n2. 로그인이 끝나면 검은 창은 닫아도 됩니다.\n\n로그인이 확인되면 이 안내는 자동으로 닫힙니다…`, `A sign-in terminal window was opened.\n\n1. When the browser opens, sign in with your ${k === 'codex' ? 'ChatGPT' : 'Claude'} account.\n2. After signing in you can close the terminal window.\n\nThis message closes automatically once sign-in is confirmed…`),
+  const m = modal(`${CLI_NAMES[k]} ${sw ? T('계정 바꾸기', 'account switch') : T('로그인', 'sign-in')}`, T(`검은 ${sw ? '로그아웃 → 로그인' : '로그인'} 창을 열었습니다.\n\n1. 잠시 후 브라우저가 열리면 ${k === 'codex' ? 'ChatGPT' : 'Claude'} 계정으로 로그인하세요.\n2. 로그인이 끝나면 검은 창은 닫아도 됩니다.\n\n로그인이 확인되면 이 안내는 자동으로 닫힙니다…`, `A ${sw ? 'sign-out → sign-in' : 'sign-in'} terminal window was opened.\n\n1. When the browser opens, sign in with your ${k === 'codex' ? 'ChatGPT' : 'Claude'} account.\n2. After signing in you can close the terminal window.\n\nThis message closes automatically once sign-in is confirmed…`),
     [{ label:T('닫기', 'Close') }]);
   const t0 = Date.now();
+  let out = !sw;  // 계정 바꾸기: 로그아웃이 확인된 뒤의 로그인만 '완료'로 본다
   const poll = async () => {
     if (!m.isConnected) return;
-    try { const v = await api('/api/versions?refresh=1'); if (v[k] && v[k].logged_in) { m.remove(); toast(T(`${CLI_NAMES[k]} 로그인 완료`, `${CLI_NAMES[k]} signed in`)); loadVersions(true); return; } } catch {}
+    try { const v = await api('/api/versions?refresh=1'); if (v[k] && v[k].logged_in === false) out = true; if (v[k] && v[k].logged_in && out) { m.remove(); toast(sw ? T(`${CLI_NAMES[k]} 계정을 바꿨습니다`, `${CLI_NAMES[k]} account switched`) : T(`${CLI_NAMES[k]} 로그인 완료`, `${CLI_NAMES[k]} signed in`)); loadVersions(true); return; } } catch {}
     if (Date.now() - t0 < 300000) setTimeout(poll, 4000);
   };
-  setTimeout(poll, 5000);
+  setTimeout(poll, sw ? 3000 : 5000);
 }
 
 // ---------- 첨부 (텍스트·JSON / 이미지·영상) ----------

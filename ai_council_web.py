@@ -53,7 +53,7 @@ from council_mcp import McpStore, valid_tool
 import council_commands
 import council_image
 
-VERSION = "0.18.3"
+VERSION = "0.18.4"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -438,7 +438,15 @@ class Handler(BaseHTTPRequestHandler):
                 name = str(body.get("name", ""))
                 if name not in ("codex", "claude"):
                     raise ValueError("알 수 없는 CLI 입니다.")
-                self.send_json(council_versions.open_login(name))
+                switch = bool(body.get("switch"))
+                if switch:
+                    with _busy_lock:
+                        if _busy:
+                            raise RuntimeError("답변 생성 중에는 계정을 바꿀 수 없습니다. 끝나거나 중지한 뒤 다시 시도하세요.")
+                result = council_versions.open_login(name, switch=switch)
+                if switch:
+                    cli_state.forget_default("gpt" if name == "codex" else "claude")
+                self.send_json(result)
             elif path == "/api/chat/stop":
                 with _busy_lock:
                     tok = _tokens.get(cid())

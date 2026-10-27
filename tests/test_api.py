@@ -276,6 +276,14 @@ w._busy.add("x"); r = post("/api/cli/update", {"name":"codex"}); w._busy.discard
 w._cli_updating.add("codex"); r = post("/api/chat", {"question":"q","conversation_id":c1,"target":"gpt"}); w._cli_updating.discard("codex")
 ok(r[0]==409 and "업데이트" in r[1]["error"], "chat blocked while updating")
 r = post("/api/cli/login", {"name":"codex"}); ok(r["opened"] is False and "login" in r["command"], "login returns command off Windows")
+_st = tmp/"data"/"cli_state.json"; _old = _st.read_text(encoding="utf-8") if _st.exists() else None
+_st.write_text(json.dumps({"default_seen": {"gpt": {"model": "old-acct-model", "time": 1}, "claude": {"model": "keep", "time": 1}}, "usage": {}}), encoding="utf-8")
+r = post("/api/cli/login", {"name":"codex", "switch": True})
+ok(r["opened"] is False and r["switch"] is True and "logout" in r["command"] and r["command"].index("logout") < r["command"].rindex("login"), "switch account returns logout then login")
+_sd = json.loads(_st.read_text(encoding="utf-8"))["default_seen"]
+ok("gpt" not in _sd and _sd.get("claude", {}).get("model") == "keep", "switch account forgets only that CLI's remembered default model")
+r = post("/api/cli/login", {"name":"claude", "switch": True}); ok("claude auth logout" in r["command"], "claude switch uses auth logout")
+if _old is not None: _st.write_text(_old, encoding="utf-8")
 # 계정 기본 모델 표시 · 사용 횟수
 os.environ["CODEX_HOME"] = str(tmp/"nocodex"); os.environ["CLAUDE_CONFIG_DIR"] = str(tmp/"noclaude")
 c12 = post("/api/conversations")["id"]
