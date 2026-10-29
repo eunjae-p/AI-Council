@@ -237,6 +237,46 @@ try: urllib.request.urlopen(B+f"/api/attachment?conversation_id={c10}&file="+url
 except urllib.error.HTTPError as e: ok(e.code==404, "path traversal blocked")
 r = upload(c10, media_dir/"shot.png", "evil.exe"); ok(isinstance(r, tuple) and r[0]==400, "reject non-media upload")
 r = post("/api/chat", {"question":"x","conversation_id":c10,"attachments":[{"name":"a","upload":"../x.png"}]}); ok(r[0]==400, "reject bad upload id")
+# ---- ZIP ----
+import zipfile as _zf, council_archive as _ca
+zpath = media_dir/"project.zip"
+with _zf.ZipFile(zpath, "w", _zf.ZIP_DEFLATED) as z:
+    z.writestr("proj/README.md", "# 프로젝트 설명 ZIPREADME")
+    z.writestr("proj/src/main.py", "print('ZIPMAIN')")
+    z.writestr("proj/data/blob.bin", b"\x00\x01binary")
+    z.write(media_dir/"shot.png", "proj/assets/shot.png")
+    z.writestr("__MACOSX/proj/._main.py", "junk")
+    z.writestr("proj/.DS_Store", "junk")
+    z.writestr("../escape.txt", "ESCAPED")
+    z.writestr("proj/node_modules/x/index.js", "NODEMOD")
+    link = _zf.ZipInfo("proj/link"); link.external_attr = (0o120777 << 16); z.writestr(link, "/etc/passwd")
+zup = upload(c10, zpath, "내 프로젝트.zip"); ok(zup.get("kind")=="zip", f"zip upload {zup}")
+open(os.environ["FAKE_LOG"],"w").close()
+ev = post("/api/chat", {"question":"압축 파일 분석해줘","conversation_id":c10,"target":"claude","attachments":[{"name":"내 프로젝트.zip","upload":zup["id"]}]}, raw=True)
+types=[e["type"] for e in ev]; log = open(os.environ["FAKE_LOG"]).read()
+ok(types.count("answer")==1 and "ZIP 파일을 푸는 중" in json.dumps(ev, ensure_ascii=False), f"zip chat {types}")
+ok("ZIPREADME" in log and "ZIPMAIN" in log and "proj/src/main.py" in log and "ZIP archive" in log, "zip text contents and file list sent to model")
+ok("ESCAPED" not in log and "NODEMOD" not in log and "junk" not in log, "zip junk / escaping entries not sent")
+ok("Image files to open with the Read tool" in log and "shot.png" in log, "zip images passed as images")
+zatt = get("/api/conversation?id="+c10)["items"][-2]["attachments"][0]
+zdir = pathlib.Path(zatt["folder"])
+ok(zatt["kind"]=="zip" and zatt["count"]==4 and (zdir/"proj"/"src"/"main.py").is_file(), f"zip recorded {zatt.get('count')}")
+ok(not (zdir.parent/"escape.txt").exists() and not (zdir/"escape.txt").exists() and not (zdir/"proj"/"link").exists() and not (zdir/"__MACOSX").exists(), "zip slip / symlink / __MACOSX blocked")
+ok("폴더 밖을 가리키는 경로 1개" in zatt["summary"] and "바로가기(링크) 1개" in zatt["summary"], "skipped entries listed")
+_info = _zf.ZipInfo("x"); _info.filename = "한글 폴더/파일.txt".encode("cp949").decode("cp437"); _info.flag_bits = 0
+ok(_ca._entry_name(_info) == "한글 폴더/파일.txt", "cp949 zip names decoded")
+open(os.environ["FAKE_LOG"],"w").close()
+bad = media_dir/"broken.zip"; bad.write_bytes(b"not a zip at all")
+bup = upload(c10, bad)
+ev = post("/api/chat", {"question":"풀어줘","conversation_id":c10,"target":"claude","attachments":[{"name":"broken.zip","upload":bup["id"]}]}, raw=True)
+types=[e["type"] for e in ev]
+ok("error" in types and types.count("answer")==0 and open(os.environ["FAKE_LOG"]).read()=="", f"broken zip: no model call {types}")
+ok(get("/api/conversation?id="+c10)["items"][-1]["content"].startswith("ZIP 파일을 풀지 못해"), "broken zip error recorded")
+open(os.environ["FAKE_LOG"],"w").close()
+wdz = pathlib.Path(tempfile.mkdtemp(dir=str(tmp)))
+post("/api/chat", {"question":"이 ZIP 내용을 작업 폴더에 정리해줘","conversation_id":c10,"target":"claude","mode":"work","workdir":str(wdz),"attachments":[{"name":"내 프로젝트.zip","upload":zup["id"]}]}, raw=True)
+log = open(os.environ["FAKE_LOG"]).read()
+ok("'--add-dir'" in log and str(w.store.data_dir/"attachments"/c10) in log, "work mode can read extracted zip folder")
 
 # ---- ffmpeg 없음 ----
 import council_media as _cm

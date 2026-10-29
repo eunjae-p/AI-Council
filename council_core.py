@@ -477,7 +477,7 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
             extra = ["--disallowedTools", "*", "--strict-mcp-config", "--system-prompt", CHAT_SYSTEM_PROMPT]
         else:
             extra = ["--tools", ",".join(builtin)]  # 기본 도구는 읽기·웹 검색만 (빈 문자열이면 없음)
-            if mode in FOLDER_MODES and images and image_dir:
+            if mode in FOLDER_MODES and image_dir:  # 첨부 이미지·풀린 ZIP 폴더 읽기
                 extra += ["--add-dir", str(image_dir)]
             approved = (WEB_TOOLS.split(",") if web else []) + [t for t in (mcp_allow or []) if t.startswith("mcp__")]
             if mode in WRITE_MODES:

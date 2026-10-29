@@ -4,6 +4,7 @@
   ComfyUI 워크플로우 JSON이면 council_workflow 로 요약을 만든다.
 - 이미지·영상: /api/upload 로 먼저 원본을 올려 두고(save_upload), 채팅 요청에는 저장된 파일 이름만 보낸다.
   영상은 council_media 로 프레임을 뽑아 이미지로 전달한다.
+- ZIP: 이미지·영상처럼 /api/upload 로 올린 뒤 council_archive 로 안전하게 풀어 파일 목록·텍스트 내용·이미지를 전달한다.
 - 모델 프롬프트에는 "요약 + 원본(길면 잘라서)"을, 대화 기록에는 요약만 남겨 다음 질문에서도 참고하게 한다.
 """
 from __future__ import annotations
@@ -12,6 +13,7 @@ import re
 import time
 from pathlib import Path
 
+import council_archive as archive
 import council_media as media
 from council_workflow import summarize_text
 
@@ -35,19 +37,24 @@ def attach_dir(data_dir: Path, conversation_id: str) -> Path:
     return Path(data_dir) / "attachments" / conversation_id
 
 
+def upload_kind(name: str) -> str:
+    """미리 올리는 첨부의 종류: image | video | zip | ''"""
+    return "zip" if archive.is_zip_name(name) else media.kind_of(name)
+
+
 def save_upload(data_dir: Path, conversation_id: str, name: str, stream, length: int) -> dict:
-    """이미지·영상 원본을 받아 저장한다. 반환: {id, name, size, kind}"""
+    """이미지·영상·ZIP 원본을 받아 저장한다. 반환: {id, name, size, kind}"""
     name = safe_name(name).replace(",", "_")  # codex --image 는 쉼표를 구분자로 씀
-    kind = media.kind_of(name)
+    kind = upload_kind(name)
     if not kind:
-        raise ValueError(f"{name}: 이미지(png·jpg·webp·gif·bmp) 또는 영상(mp4·mov·mkv·avi·webm 등)만 올릴 수 있습니다.")
+        raise ValueError(f"{name}: 이미지(png·jpg·webp·gif·bmp), 영상(mp4·mov·mkv·avi·webm 등), ZIP 만 올릴 수 있습니다.")
     if kind == "video" and not media.ffmpeg_available():
         raise ValueError(media.FFMPEG_MISSING)
-    limit = media.MAX_IMAGE_BYTES if kind == "image" else media.MAX_VIDEO_BYTES
+    limit = {"image": media.MAX_IMAGE_BYTES, "video": media.MAX_VIDEO_BYTES, "zip": archive.MAX_ZIP_BYTES}[kind]
     if length <= 0:
         raise ValueError("빈 파일입니다.")
     if length > limit:
-        raise ValueError(f"{name}: 파일이 너무 큽니다 (이미지 최대 20MB, 영상 최대 2GB).")
+        raise ValueError(f"{name}: 파일이 너무 큽니다 (이미지 최대 20MB, 영상 최대 2GB, ZIP 최대 500MB).")
     folder = attach_dir(data_dir, conversation_id)
     folder.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%d-%H%M%S")
@@ -82,14 +89,14 @@ def validate(raw, data_dir: Path | None = None, conversation_id: str = "") -> li
     for item in raw:
         if not isinstance(item, dict):
             raise ValueError("첨부 형식이 올바르지 않습니다.")
-        if item.get("upload"):  # 미리 올린 이미지·영상
+        if item.get("upload"):  # 미리 올린 이미지·영상·ZIP
             stored = str(item["upload"])
             if data_dir is None or stored != Path(stored).name or stored.startswith("."):
                 raise ValueError("첨부 파일 정보가 올바르지 않습니다.")
             path = attach_dir(data_dir, conversation_id) / stored
             if not path.is_file():
                 raise ValueError(f"{item.get('name', stored)}: 업로드된 파일을 찾을 수 없습니다. 다시 첨부해 주세요.")
-            kind = media.kind_of(stored)
+            kind = upload_kind(stored)
             if not kind:
                 raise ValueError(f"{stored}: 지원하지 않는 형식입니다.")
             files.append({"name": safe_name(item.get("name") or stored), "upload": str(path), "kind": kind})
@@ -99,7 +106,7 @@ def validate(raw, data_dir: Path | None = None, conversation_id: str = "") -> li
         if not isinstance(content, str):
             raise ValueError(f"{name}: 텍스트 파일만 첨부할 수 있습니다.")
         if Path(name).suffix.lower() not in TEXT_EXT:
-            raise ValueError(f"{name}: 지원하지 않는 형식입니다. (JSON·텍스트·이미지·영상만 가능)")
+            raise ValueError(f"{name}: 지원하지 않는 형식입니다. (JSON·텍스트·이미지·영상·ZIP 만 가능)")
         if len(content) > MAX_FILE_CHARS:
             raise ValueError(f"{name}: 파일이 너무 큽니다 (최대 약 2MB).")
         files.append({"name": name, "content": content})
@@ -119,6 +126,17 @@ def process(files: list[dict], data_dir: Path, conversation_id: str) -> list[dic
             if f["kind"] == "image":
                 item["images"] = [str(path)]
                 item["summary"] = media.image_summary(f["name"], path)
+            elif f["kind"] == "zip":
+                try:
+                    res = archive.analyze(f["name"], path, summarize_text)
+                    item.update(summary=res["summary"], content=res["content"], images=res["images"],
+                                folder=res["folder"], count=res["count"])
+                except archive.ArchiveError as exc:
+                    item["error"] = str(exc)
+                    item["summary"] = f"ZIP {f['name']}: 풀기 실패 — {exc}"
+                except Exception as exc:  # 예상 못 한 오류도 질문은 멈추지 않게
+                    item["error"] = f"{type(exc).__name__}: {exc}"
+                    item["summary"] = f"ZIP {f['name']}: 풀기 실패 — {item['error']}"
             else:
                 try:
                     meta, frames = media.extract_frames(path, path.with_name(path.name + "_frames"))
@@ -164,7 +182,7 @@ def prompt_block(items: list[dict], resent: bool = False) -> str:
     head = ("## Images from an earlier message in this conversation (re-attached so you can see them again)"
             if resent else "## Attached files (the user attached these to the newest question)")
     parts = [head]
-    text_items = [it for it in items if it["kind"] not in ("image", "video")]
+    text_items = [it for it in items if it["kind"] not in ("image", "video") and it.get("content")]
     budget = RAW_PROMPT_BUDGET
     per_file = max(budget // max(len(text_items), 1), 5_000)
     n_image = 0
@@ -183,6 +201,28 @@ def prompt_block(items: list[dict], resent: bool = False) -> str:
                              "flicker, continuity). Audio is not available.")
             if it.get("error"):
                 parts.append(f"(frames could not be extracted: {it['error']})")
+            continue
+        if it["kind"] == "zip":
+            parts.append(f"### ZIP archive: {it['name']} ({it['size']:,} bytes)")
+            if it.get("error"):
+                parts.append(f"(the archive could not be extracted: {it['error']})")
+                continue
+            parts.append("Council extracted it safely. Summary and file list (generated by code):\n" + it["summary"])
+            if it.get("folder"):
+                parts.append(f"The extracted files are in this folder: {it['folder']}\n"
+                             "If your tools allow reading files there, you may open other files from it when needed. "
+                             "To use these files in the work folder, copy them; never modify the extracted folder itself.")
+            if it.get("images"):
+                first = n_image + 1
+                n_image += len(it["images"])
+                parts.append(f"{len(it['images'])} image(s) from the archive are attached as image inputs #{first}-#{n_image}, "
+                             "in file-list order.")
+            raw = it.get("content") or ""
+            if raw:
+                limit = min(per_file, budget)
+                body = raw if len(raw) <= limit else raw[:limit] + f"\n… (truncated: first {limit:,} of {len(raw):,} chars)"
+                parts.append(f"#### Text/code file contents\n```\n{body}\n```")
+                budget -= min(len(raw), limit)
             continue
         parts.append(f"### File: {it['name']} ({it['size']:,} chars, {it['kind']})")
         if it["summary"]:
@@ -214,6 +254,9 @@ def history_records(items: list[dict]) -> list[dict]:
             rec["frames"] = it["frames"]
         if it.get("error"):
             rec["error"] = it["error"]
+        if it.get("folder"):
+            rec["folder"] = it["folder"]
+            rec["count"] = it.get("count", 0)
         records.append(rec)
     return records
 

@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.18.4** (2026-10-27) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.18.5** (2026-10-29) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,10 +11,10 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.18.5](CHANGELOG.md#v0185-2026-10-29) | 10-29 | 📎 **ZIP 첨부** — 안전하게 풀어서 파일 목록·코드 내용·이미지를 모델에 전달 |
 | [V0.18.4](CHANGELOG.md#v0184-2026-10-27) | 10-27 | 왼쪽 아래 **↻ 계정 바꾸기** — 로그아웃 후 다른 GPT·Claude 계정으로 로그인 |
 | [V0.18.3](CHANGELOG.md#v0183-2026-10-26) | 10-26 | 승인 후 **멈춘 Claude 세션을 이어서 실행**(처음부터 다시 하지 않음), 읽기 전용 명령 기본 허용 확대 |
 | [V0.18.2](CHANGELOG.md#v0182-2026-10-26) | 10-26 | 폴더에 **한글 이름 실행 파일**: `0_처음 설치`, `1_AI Council 실행`, `2_업데이트` (Windows · Mac) |
-| [V0.18.1](CHANGELOG.md#v0181-2026-10-23) | 10-23 | 긴 대화 렉 줄이기: 최근 대화만 표시, **🗜 압축**, **↪ 새 대화로 이어가기** |
 | [V0.18.0](CHANGELOG.md#v0180-2026-10-22) | 10-22 | **🎨 이미지 모드** — GPT가 실제 이미지를 생성해 지정 폴더에 PNG로 저장, 화면에 표시 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
@@ -198,6 +198,9 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 | 텍스트·JSON | json, txt, md, py 등 · 2MB, 최대 5개 | ComfyUI 워크플로우는 코드가 노드·**색상 등급**·모델·노드 팩·서브그래프를 먼저 요약 |
 | 이미지 | png, jpg, webp, gif, bmp · 20MB | 모델이 직접 봅니다 |
 | 영상 | mp4, mov, mkv, webm 등 · 2GB | ffmpeg로 프레임 12장 + 길이·해상도·fps 정보 (소리는 분석 안 함) |
+| ZIP | zip · 500MB | 안전하게 풀어서 **파일 목록 + 텍스트·코드 내용**(README 먼저, 약 8만 자까지) + 안의 이미지 최대 8장 전달. 워크플로우 JSON은 요약. 작업 모드에서는 풀린 폴더를 직접 열어 볼 수 있음 |
+
+ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로, 바로가기(링크), 암호 걸린 파일은 풀지 않습니다. Windows에서 만든 ZIP의 한글 파일 이름도 깨지지 않습니다.
 
 워크플로우 색상 등급: 빨강 = MUST, 노랑·주황 = SHOULD (판정 제외: MarkdownNote, Note, Label (rgthree), SetNode, GetNode).
 
@@ -257,7 +260,7 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 | `council_debate.py` | 토론 모드 프롬프트·행동 지침·중립 정리, 토론 기록 폴더 |
 | `council_context.py` | 맥락 구성, 긴 대화 자동 요약 |
 | `council_store.py` | 대화 저장·휴지통·검색·Markdown 내보내기 |
-| `council_attach.py` / `council_media.py` | 첨부 처리 / 이미지·영상(ffmpeg) |
+| `council_attach.py` / `council_media.py` / `council_archive.py` | 첨부 처리 / 이미지·영상(ffmpeg) / ZIP 풀기 |
 | `council_workflow.py` | ComfyUI 워크플로우 JSON 요약 |
 | `council_state.py` | 사용 횟수, 계정 기본 모델 기억 |
 | `council_mcp.py` | MCP 도구 목록 확인, 항상 허용 목록 |
@@ -280,7 +283,7 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.18.4** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.18.5** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
@@ -305,7 +308,7 @@ It drives the official **Codex CLI (GPT)** and **Claude Code CLI (Claude)** sign
 - **🎨 Image mode** — GPT generates real images (Codex image tool, ChatGPT Plus or higher) and saves PNGs to the folder you choose; shown in the chat too. With Claude/Discussion, Claude writes the prompt and GPT generates.
 - **🔌 Claude MCP / GPT MCP** — use connected tools such as Blender with either model. Claude: only tools you allow run automatically, others ask first. GPT: all tools registered in Codex are enabled when on.
 - **Collaboration** — Discussion + Work: both plan → the model you pick (**Run: Claude / Run: GPT**) executes → the other reviews the actual result read-only → the executor fixes.
-- **Attachments** — text/JSON, images, video (12 frames via ffmpeg); drag & drop or Ctrl+V. ComfyUI workflow JSON is pre-summarized (nodes, models, color-coded required inputs)
+- **Attachments** — text/JSON, images, video (12 frames via ffmpeg), ZIP (safely extracted: file list, text/code contents, up to 8 images; in work mode the extracted folder can be opened); drag & drop or Ctrl+V. ComfyUI workflow JSON is pre-summarized (nodes, models, color-coded required inputs)
 - **Conversation management** — auto titles, archive/trash, full-text search, long-conversation summaries, Markdown export per answer or per chat
 - **English / 한국어** — switch with the `EN` / `한국어` button; installer and update windows follow your OS language
 - **One-click updates** — for AI Council itself (from GitHub) and for both CLIs; dark / light / system theme; Windows and Mac

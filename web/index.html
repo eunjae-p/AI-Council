@@ -309,8 +309,8 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
         <div class="chips" id="chips"></div>
         <div class="attnote" id="attachNote" hidden></div>
         <div class="write">
-          <button class="ghost" id="attachBtn" title="파일 첨부 (JSON·이미지·영상 · 끌어다 놓기·Ctrl+V 가능)" data-en-title="Attach files (JSON, images, video · drag & drop or Ctrl+V)">📎</button>
-          <input type="file" id="fileInput" multiple hidden accept=".json,.txt,.md,.py,.yaml,.yml,.csv,.tsv,.toml,.ini,.cfg,.log,.js,.ts,.html,.css,.xml,.ps1,.bat,.cmd,.sh,image/*,video/*,.mov,.mkv">
+          <button class="ghost" id="attachBtn" title="파일 첨부 (JSON·이미지·영상·ZIP · 끌어다 놓기·Ctrl+V 가능)" data-en-title="Attach files (JSON, images, video, ZIP · drag & drop or Ctrl+V)">📎</button>
+          <input type="file" id="fileInput" multiple hidden accept=".json,.txt,.md,.py,.yaml,.yml,.csv,.tsv,.toml,.ini,.cfg,.log,.js,.ts,.html,.css,.xml,.ps1,.bat,.cmd,.sh,image/*,video/*,.mov,.mkv,.zip,application/zip">
           <textarea id="q" rows="2" placeholder="질문을 입력하세요 · 📎·끌어다 놓기·Ctrl+V로 JSON·이미지·영상 첨부 (Enter 보내기 · Shift+Enter 줄바꿈)"></textarea>
           <button class="primary" id="send" data-en="Send">보내기</button>
         </div>
@@ -322,7 +322,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.18.4'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.18.5'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -486,6 +486,14 @@ function msgEl(item, index) {
           strip.append(wrap); });
         a.append(strip);
         if (att.kind === 'video' && att.summary) { const d = el('details'); d.append(el('summary', '', T('영상 정보', 'Video info')), el('pre', '', att.summary)); a.append(d); }
+        return;
+      }
+      if (att.kind === 'zip') {
+        const head = `📦 ${att.name} · ${fmtSize(att.size || 0)}` + (att.error ? T(' · 풀기 실패', ' · could not extract') : T(` · 파일 ${(att.count || 0).toLocaleString()}개`, ` · ${(att.count || 0).toLocaleString()} files`));
+        const d = el('details'); d.append(el('summary', '', head), el('pre', '', att.error || att.summary || '')); a.append(d);
+        if ((att.images || []).length) { const strip = el('div', 'media');
+          att.images.forEach(p => { const u = attUrl(att, p); if (!u) return; const wrap = el('div'), im = el('img'); im.src = u; im.loading = 'lazy'; im.title = T('크게 보기', 'View larger'); im.onclick = () => window.open(u, '_blank'); wrap.append(im); strip.append(wrap); });
+          a.append(strip); }
         return;
       }
       const label = `📎 ${att.name} · ${(att.size || 0).toLocaleString()}${T('자', ' chars')}` + (att.kind === 'workflow' ? T(' · 워크플로우 요약됨', ' · workflow summarized') : '');
@@ -1311,7 +1319,8 @@ async function startLogin(k, x, sw) {
 }
 
 // ---------- 첨부 (텍스트·JSON / 이미지·영상) ----------
-const MAX_FILES = 5, MAX_FILE_BYTES = 2 * 1024 * 1024, MAX_IMAGE_BYTES = 20 * 1024 * 1024, MAX_VIDEO_BYTES = 2 * 1024 * 1024 * 1024;
+const MAX_FILES = 5, MAX_FILE_BYTES = 2 * 1024 * 1024, MAX_IMAGE_BYTES = 20 * 1024 * 1024, MAX_VIDEO_BYTES = 2 * 1024 * 1024 * 1024, MAX_ZIP_BYTES = 500 * 1024 * 1024;
+const ZIP_EXT = /\.zip$/i;
 const OK_EXT = /\.(json|txt|md|py|ya?ml|csv|tsv|toml|ini|cfg|log|js|ts|html|css|xml|ps1|bat|cmd|sh)$/i;
 const IMG_EXT = /\.(png|jpe?g|webp|gif|bmp)$/i, VID_EXT = /\.(mp4|mov|mkv|avi|webm|m4v|mpe?g|wmv)$/i;
 const fmtSize = n => n >= 1048576 ? (n / 1048576).toFixed(1) + 'MB' : Math.max(1, Math.round(n / 1024)) + 'KB';
@@ -1320,7 +1329,7 @@ function renderChips() {
   S.files.forEach((f, i) => {
     const c = el('span', 'chip2');
     if (f.thumb) { const im = el('img', 'thumb'); im.src = f.thumb; c.append(im); }
-    c.append(el('span', '', (f.kind === 'video' ? '🎬 ' : f.kind === 'image' ? '🖼 ' : '📎 ') + f.name),
+    c.append(el('span', '', (f.kind === 'video' ? '🎬 ' : f.kind === 'image' ? '🖼 ' : f.kind === 'zip' ? '📦 ' : '📎 ') + f.name),
       el('span', 'k', f.uploading ? T(`업로드 ${f.progress || 0}%`, `uploading ${f.progress || 0}%`) : f.failed ? T('실패', 'failed') : fmtSize(f.size)));
     const x = el('button', 'x', '×'); x.title = T('첨부 취소', 'Remove attachment');
     x.onclick = () => { if (f.xhr) f.xhr.abort(); S.files.splice(i, 1); renderChips(); };
@@ -1352,6 +1361,13 @@ async function addFiles(list) {
   for (const file of files) {
     if (S.files.length >= MAX_FILES) { toast(T(`첨부는 ${MAX_FILES}개까지 가능합니다`, `Up to ${MAX_FILES} attachments`), true); break; }
     const name = file.name || `${T('붙여넣은_이미지', 'pasted_image')}_${Date.now()}.png`;
+    if (ZIP_EXT.test(name)) {
+      if (file.size > MAX_ZIP_BYTES) { toast(`${name}: ` + T('ZIP은 500MB 이하만 첨부할 수 있습니다', 'ZIP files must be 500MB or smaller'), true); continue; }
+      if (!S.current) await newConversation();
+      const f = { name, size:file.size, kind:'zip', conv:S.current };
+      S.files.push(f); renderChips(); uploadMedia(f, file);
+      continue;
+    }
     if (IMG_EXT.test(name) || VID_EXT.test(name) || (!file.name && /^image\//.test(file.type))) {
       const kind = VID_EXT.test(name) ? 'video' : 'image';
       if (kind === 'video' && S.ffmpeg === false) { modal(T('영상을 분석할 수 없습니다', 'Cannot analyze video'), T(`이 PC에 ffmpeg가 없습니다.\n\nCouncil 폴더의 ${S.setup || 'Setup.cmd'}를 실행해 ffmpeg를 설치한 뒤 Council을 다시 시작하세요.\n(이미지·텍스트 첨부는 지금도 가능합니다. 영상 대신 캡처 이미지를 붙여넣어도 됩니다.)`, `ffmpeg is not installed on this computer.\n\nRun ${S.setup || 'Setup.cmd'} in the Council folder to install it, then restart Council.\n(Images and text work now. You can paste screenshots instead of a video.)`)); continue; }
@@ -1363,7 +1379,7 @@ async function addFiles(list) {
       uploadMedia(f, named);
       continue;
     }
-    if (!OK_EXT.test(name)) { toast(`${name}: ` + T('JSON·텍스트·이미지·영상 파일만 첨부할 수 있습니다', 'only JSON, text, image and video files can be attached'), true); continue; }
+    if (!OK_EXT.test(name)) { toast(`${name}: ` + T('JSON·텍스트·이미지·영상·ZIP 파일만 첨부할 수 있습니다', 'only JSON, text, image, video and ZIP files can be attached'), true); continue; }
     if (file.size > MAX_FILE_BYTES) { toast(`${name}: ` + T('2MB 이하만 첨부할 수 있습니다', 'must be 2MB or smaller'), true); continue; }
     try { S.files.push({ name, size:file.size, kind:'text', content: await file.text() }); }
     catch { toast(`${name}: ` + T('파일을 읽지 못했습니다', 'could not read the file'), true); }

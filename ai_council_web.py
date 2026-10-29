@@ -53,7 +53,7 @@ from council_mcp import McpStore, valid_tool
 import council_commands
 import council_image
 
-VERSION = "0.18.4"
+VERSION = "0.18.5"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -651,7 +651,9 @@ class Handler(BaseHTTPRequestHandler):
         previous = store.load_messages(conversation_id)
         if files:
             has_video = any(f.get("kind") == "video" for f in files)
-            self.emit("stage", step=0, text="영상에서 프레임을 뽑는 중" if has_video else "첨부 파일을 분석하는 중")
+            has_zip = any(f.get("kind") == "zip" for f in files)
+            self.emit("stage", step=0, text="영상에서 프레임을 뽑는 중" if has_video else
+                      "ZIP 파일을 푸는 중" if has_zip else "첨부 파일을 분석하는 중")
             attached = council_attach.process(files, store.data_dir, conversation_id)
         attach_block = council_attach.prompt_block(attached)
         images = council_attach.images_for(attached)
@@ -660,11 +662,14 @@ class Handler(BaseHTTPRequestHandler):
             if resent:
                 images = council_attach.images_for(resent)
                 attach_block += council_attach.prompt_block(resent, resent=True)
-        image_dir = council_attach.attach_dir(store.data_dir, conversation_id) if images else None
+        has_archive = any(it.get("folder") for it in attached)  # 풀린 ZIP 폴더도 읽을 수 있게 (작업 모드)
+        image_dir = council_attach.attach_dir(store.data_dir, conversation_id) if (images or has_archive) else None
         failed_media = [it for it in attached if it.get("error")]
         if failed_media:
             # 영상을 못 읽었는데 모델을 부르면 사용량만 쓰고 "못 봤다"는 답만 온다 → 여기서 멈춘다
-            text = "영상 분석을 준비하지 못해 모델에 보내지 않았습니다.\n\n" + "\n".join(
+            lead = ("ZIP 파일을 풀지 못해 모델에 보내지 않았습니다." if all(it["kind"] == "zip" for it in failed_media)
+                    else "영상 분석을 준비하지 못해 모델에 보내지 않았습니다.")
+            text = lead + "\n\n" + "\n".join(
                 f"- {it['name']}: {it['error']}" for it in failed_media)
             user_item = store.append_message(conversation_id, "user", question, "사용자", target=target,
                                              mode=mode, workdir=str(workdir) if workdir else None,
