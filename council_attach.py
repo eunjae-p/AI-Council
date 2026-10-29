@@ -20,6 +20,7 @@ from council_workflow import summarize_text
 MAX_FILES = 5
 MAX_FILE_CHARS = 2_000_000
 RAW_PROMPT_BUDGET = 90_000      # 한 번의 프롬프트에 넣을 원본 최대 글자 수 (전체 첨부 합계)
+SAVER_PROMPT_BUDGET = 30_000    # 💰 절약 모드
 HISTORY_SUMMARY_CHARS = 4_000   # 대화 기록에 남길 요약 길이
 TEXT_EXT = {
     ".json", ".txt", ".md", ".py", ".yaml", ".yml", ".csv", ".tsv", ".toml", ".ini", ".cfg",
@@ -176,14 +177,14 @@ def images_for(items: list[dict]) -> list[str]:
     return paths[: media.MAX_IMAGES_PER_CALL]
 
 
-def prompt_block(items: list[dict], resent: bool = False) -> str:
+def prompt_block(items: list[dict], resent: bool = False, budget: int | None = None) -> str:
     if not items:
         return ""
     head = ("## Images from an earlier message in this conversation (re-attached so you can see them again)"
             if resent else "## Attached files (the user attached these to the newest question)")
     parts = [head]
     text_items = [it for it in items if it["kind"] not in ("image", "video") and it.get("content")]
-    budget = RAW_PROMPT_BUDGET
+    budget = budget or RAW_PROMPT_BUDGET
     per_file = max(budget // max(len(text_items), 1), 5_000)
     n_image = 0
     for it in items:
@@ -261,11 +262,21 @@ def history_records(items: list[dict]) -> list[dict]:
     return records
 
 
-def recent_media(messages: list[dict], window: int = 10) -> list[dict]:
-    """최근 메시지 중 가장 마지막으로 이미지·영상이 첨부된 사용자 메시지의 첨부 기록 (다시 보여주기용)."""
+MEDIA_WORDS = re.compile(r"이미지|사진|그림|영상|동영상|비디오|프레임|화면|캡처|캡쳐|스샷|스크린샷|썸네일|첨부|장면|컷|색감|구도|"
+                         r"image|photo|picture|video|frame|screenshot|thumbnail|attach|scene|shot", re.IGNORECASE)
+
+
+def recent_media(messages: list[dict], question: str | None = None, window: int = 10) -> list[dict]:
+    """최근 메시지 중 가장 마지막으로 이미지·영상이 첨부된 사용자 메시지의 첨부 기록 (다시 보여주기용).
+    이미지는 한 장에 토큰을 많이 쓰므로(영상은 프레임 12장), 바로 다음 질문이거나 질문이 이미지·영상을 가리킬 때만 다시 보낸다.
+    question=None 이면 조건 없이 (예전 동작)."""
+    user_seen = 0
     for item in reversed(messages[-window:]):
         if item.get("role") != "user":
             continue
+        user_seen += 1
+        if question is not None and user_seen > 1 and not MEDIA_WORDS.search(question):
+            return []
         media_items = [a for a in item.get("attachments") or [] if a.get("kind") in ("image", "video")
                        and any(Path(p).is_file() for p in a.get("images") or [])]
         if media_items:

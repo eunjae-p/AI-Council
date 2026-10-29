@@ -9,7 +9,8 @@ def out(text):
         model = sys.argv[sys.argv.index("--model")+1] if "--model" in sys.argv else "claude-opus-5-5"
         res = {"type":"result","is_error":False,"result":text,"permission_denials":_DENY,
                "session_id": (sys.argv[sys.argv.index("--resume")+1] if "--resume" in sys.argv else "sess-%d" % os.getpid()),
-               "modelUsage":{"claude-haiku-4-5-20251001":{"outputTokens":30},model:{"outputTokens":12}}}
+               "modelUsage":{"claude-haiku-4-5-20251001":{"outputTokens":30},model:{"outputTokens":12}},
+               "usage":{"input_tokens":100,"cache_creation_input_tokens":2000,"cache_read_input_tokens":5000,"output_tokens":42}}
         if _STREAM:  # 진행 상황 줄 + 마지막 result 줄
             print(json.dumps({"type":"system","subtype":"init","mcp_servers":[{"name":"blender","status":"connected"}]}), flush=True)
             print(json.dumps({"type":"assistant","message":{"content":[{"type":"text","text":"작업을 시작합니다"},

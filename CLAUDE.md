@@ -57,7 +57,7 @@
 | `ai_council_web.py` | 로컬 웹 서버(127.0.0.1:8765)와 API, `VERSION` |
 | `web/index.html` | 채팅 UI, `UI_VERSION` |
 | `council_core.py` | CLI 호출·타임아웃·중지(CancelToken)·오류 안내, 대화/작업 모드 (내부 read = 토론 계획 단계 읽기 전용) |
-| `council_context.py` | 메시지 단위 맥락 구성, 장기 요약 |
+| `council_context.py` | 메시지 단위 맥락 구성, 장기 요약, 토큰 절약(맥락 창 시작 고정 = 프롬프트 캐시, 지난 토론은 결론만) |
 | `council_store.py` | 대화 저장·메타·휴지통·검색·Markdown 내보내기 |
 | `council_attach.py` | 첨부 파일 검사·보관·업로드·프롬프트 구성 |
 | `council_archive.py` | ZIP 첨부: 안전하게 풀기(경로 탈출·링크·암호·용량 폭탄 차단, cp949 한글 이름), 파일 목록·텍스트 내용·이미지 추출 |

@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.18.5** (2026-10-29) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.19.0** (2026-10-29) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.19.0](CHANGELOG.md#v0190-2026-10-29) | 10-29 | **💰 토큰 절약** — 캐시가 맞게 맥락 고정, 지난 토론은 결론만, 🪙 토큰 표시, 💰 절약 모드 |
 | [V0.18.5](CHANGELOG.md#v0185-2026-10-29) | 10-29 | 📎 **ZIP 첨부** — 안전하게 풀어서 파일 목록·코드 내용·이미지를 모델에 전달 |
 | [V0.18.4](CHANGELOG.md#v0184-2026-10-27) | 10-27 | 왼쪽 아래 **↻ 계정 바꾸기** — 로그아웃 후 다른 GPT·Claude 계정으로 로그인 |
 | [V0.18.3](CHANGELOG.md#v0183-2026-10-26) | 10-26 | 승인 후 **멈춘 Claude 세션을 이어서 실행**(처음부터 다시 하지 않음), 읽기 전용 명령 기본 허용 확대 |
 | [V0.18.2](CHANGELOG.md#v0182-2026-10-26) | 10-26 | 폴더에 **한글 이름 실행 파일**: `0_처음 설치`, `1_AI Council 실행`, `2_업데이트` (Windows · Mac) |
-| [V0.18.0](CHANGELOG.md#v0180-2026-10-22) | 10-22 | **🎨 이미지 모드** — GPT가 실제 이미지를 생성해 지정 폴더에 PNG로 저장, 화면에 표시 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -177,7 +177,26 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 - **중립 정리**: 결론을 정리하는 Claude는 두 답변을 이름을 가린 채(모델 A/B, 무작위) 받아 자기 답을 편들지 못합니다.
 - 화면에는 결론이 먼저, **토론 과정 보기** 를 펼치면 라운드별 답변이 보입니다. **📁 토론 기록 폴더 열기** 로 PC에 저장된 기록을 엽니다.
 - **읽는 법**: 두 모델이 합의했다고 정답은 아닙니다. **"의견이 갈린 점"과 "확인이 필요한 항목"** 을 먼저 확인하세요.
-- 사용량이 단독의 약 5배입니다. 간단한 질문·워크플로우 분석·프롬프트 작성은 단독 모델이 효율적입니다.
+- 사용량이 단독의 약 5배입니다 (💰 절약 모드에서는 3번 호출). 간단한 질문·워크플로우 분석·프롬프트 작성은 단독 모델이 효율적입니다.
+
+### 💰 토큰(사용량) 절약
+구독 한도는 결국 **토큰**으로 줄어듭니다. 질문 하나마다 Council 이 보내는 것 = 대화 맥락 + 첨부 + 지시문이고, CLI 는 여기에 자기 시스템 프롬프트·도구 설명(MCP 를 켜면 그 도구 설명까지)을 붙입니다.
+출력(답변·생각) 토큰이 입력보다 몇 배 비싸고, **앞부분이 직전 호출과 같은 입력은 캐시에서 읽어 훨씬 싸게** 계산됩니다.
+
+자동으로 하는 것 (항상)
+- **맥락 앞부분 고정**: 최근 대화 창의 시작을 고정해 두고 넘칠 때만 옮깁니다 → 매 질문마다 프롬프트 앞부분이 같아 캐시가 맞습니다.
+- **지난 토론은 결론만**: 두 모델의 1라운드 답변은 가장 최근 토론에서만 맥락에 넣습니다 (교차 검토는 원래 제외).
+- **결론 정리는 짧은 맥락**: 토론 결론 단계는 최근 대화 약 6천 자만 봅니다 (두 모델 답이 이미 맥락을 반영).
+- **이미지 재전송 줄이기**: 이미지·영상(프레임 12장)은 바로 다음 질문이거나 질문에 "이미지·영상·화면·프레임…"이 있을 때만 다시 보냅니다.
+- **🪙 토큰 표시**: 답변마다 이번 호출 토큰(마우스를 올리면 새 입력 / 캐시 읽기 / 출력), 왼쪽 아래에 오늘 GPT·Claude 토큰 합계.
+
+**💰 절약 켬** (입력창 위, 필요할 때만)
+- 토론: 교차 검토(2라운드) 생략 → 5번 → **3번 호출**
+- 최근 대화 맥락 약 1만 자, 첨부 원문 3만 자까지
+- 답변을 간결하게 요청 (출력 토큰 절약)
+- GPT 대화: 생각(추론) 강도 `low` — 작업 모드는 그대로
+
+더 아끼는 습관: 간단한 질문은 토론 대신 단독 · MCP 는 쓸 때만 켜기(켜 두면 매번 도구 설명이 붙음) · 주제가 바뀌면 **↪ 새 대화로 이어가기**.
 
 ### 🌐 웹 검색
 - 입력창 위 **웹 검색 켬/끔**. 켜면 GPT(Codex `--search`)·Claude(WebSearch·WebFetch)가 웹을 검색하고 출처를 밝힙니다.
@@ -209,7 +228,7 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 - **화면 언어**: 왼쪽 위 `EN` / `한국어` 버튼. 처음에는 브라우저 언어를 따릅니다(한국어가 아니면 영어). 대화 기록 원문은 바뀌지 않고, Council 안내·오류 문구만 바뀝니다. 설치·업데이트 창은 Windows/Mac 언어를 따릅니다.
 - **화면 테마**: 왼쪽 위 `AI Council` 옆 🌙/☀️/🖥️ 버튼으로 다크·라이트·시스템 설정 따르기를 바꿉니다.
 - **모델 표시**: 계정 기본값을 써도 실제 모델 이름이 보입니다 (예: `GPT-6.1 Sol (계정 기본)`).
-- **왼쪽 아래**: CLI 버전·업데이트·로그인 상태, 오늘 사용 횟수, **남은 사용량 보기** (공식 사용량 페이지).
+- **왼쪽 아래**: CLI 버전·업데이트·로그인 상태·↻ 계정 바꾸기, 오늘 사용 횟수·🪙 토큰, **남은 사용량 보기** (공식 사용량 페이지).
 - **대화 목록 아이콘**: 💬 대화 모드 · 🔧 작업 모드 · `GPT`/`Claude` 배지 = 그 대화에서 답한 모델.
 - **긴 대화**: 화면에는 최근 질문 12묶음만 그리고, 위의 **⬆ 이전 메시지 더 보기 / 전체 보기**로 더 불러옵니다 (렉 방지).
   - **🗜 압축**: 지금까지의 대화를 바로 요약으로 압축 (최근 대화는 원문 유지, 원문 기록은 지우지 않음). 모델에 보내는 맥락은 원래도 자동으로 압축됩니다(장기 요약).
@@ -283,7 +302,7 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.18.5** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.19.0** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
@@ -298,7 +317,7 @@ It drives the official **Codex CLI (GPT)** and **Claude Code CLI (Claude)** sign
 |---|---|---|
 | **GPT** | Quick questions, prompt writing | 1 |
 | **Claude** | Quick questions, file/workflow analysis | 1 |
-| **Discussion** ⚠ | Design reviews and decisions with no single right answer | 5 (≈5× usage) |
+| **Discussion** ⚠ | Design reviews and decisions with no single right answer | 5 (≈5× usage; 3 in 💰 Saver mode) |
 
 - **Discussion mode** — round 1: both models answer independently · round 2: each critiques the other · final: a **blind, neutral synthesis** (the summarizer sees the answers only as "Model A / Model B", randomly assigned) split into *Conclusion / Agreed / Disagreed / Needs verification*. Every round is saved as Markdown in a local folder.
 - **Two modes** — 💬 Chat (no file access) · 🛠 **Work** (like Claude Code / Codex: read, create and edit files, make folders, write code, run commands in the folder you choose)
@@ -309,6 +328,7 @@ It drives the official **Codex CLI (GPT)** and **Claude Code CLI (Claude)** sign
 - **🔌 Claude MCP / GPT MCP** — use connected tools such as Blender with either model. Claude: only tools you allow run automatically, others ask first. GPT: all tools registered in Codex are enabled when on.
 - **Collaboration** — Discussion + Work: both plan → the model you pick (**Run: Claude / Run: GPT**) executes → the other reviews the actual result read-only → the executor fixes.
 - **Attachments** — text/JSON, images, video (12 frames via ffmpeg), ZIP (safely extracted: file list, text/code contents, up to 8 images; in work mode the extracted folder can be opened); drag & drop or Ctrl+V. ComfyUI workflow JSON is pre-summarized (nodes, models, color-coded required inputs)
+- **💰 Token saving** — always on: the start of the recent-context window stays fixed so each prompt begins like the previous one and hits the CLIs' prompt cache (cached input counts much cheaper); older discussions keep only the conclusion; the final summary uses a short context; images are re-sent only when the question is about them. Every answer shows 🪙 tokens (new input / cached input / output), with daily totals at the bottom left. Optional **💰 Saver** toggle: skips the discussion cross review (5 → 3 calls), shorter context and attachment excerpts, concise answers, low reasoning effort for GPT in chat.
 - **Conversation management** — auto titles, archive/trash, full-text search, long-conversation summaries, Markdown export per answer or per chat
 - **English / 한국어** — switch with the `EN` / `한국어` button; installer and update windows follow your OS language
 - **One-click updates** — for AI Council itself (from GitHub) and for both CLIs; dark / light / system theme; Windows and Mac
@@ -348,7 +368,7 @@ Clone with `git` (not ZIP) so the built-in updater works.
 - **Mode**: 💬 Chat (no file access) · 🛠 Work (reads, creates and edits files and runs commands in the working folder)
 - **Target**: GPT · Claude · Discussion (both debate → neutral conclusion; *Show debate rounds* expands each round)
 - **Work mode**: blocked commands show a 🛡 card — **Allow once and run again** / **Always allow and run again**. Manage the allowlist with **🛡** next to the folder. In a Git repository you can review changes and **✅ Commit** or **↩ Revert**; with uncommitted changes you choose **Create checkpoint and start** or **Continue without**.
-- **Web search on/off**, **Claude MCP / GPT MCP on/off** (⚙ manages Claude's always-allowed tools), **Run: Claude / Run: GPT** in Discussion + Work, **Models ▾** to pin model versions
+- **💰 Saver on/off** (fewer tokens: see Features), **Web search on/off**, **Claude MCP / GPT MCP on/off** (⚙ manages Claude's always-allowed tools), **Run: Claude / Run: GPT** in Discussion + Work, **Models ▾** to pin model versions
 - **⤓ MD** downloads one answer; **Chat_md** downloads the whole chat; **■ Stop** (or Esc) stops generating
 - **Long chats**: only the latest 12 turns are drawn (⬆ show earlier / show all); **🗜 Compress** summarizes the chat now; **↪ Continue in new chat** starts a new chat that carries over a summary.
 - **🔔 Notifications**: desktop notification when an answer is ready (or needs approval) while you're in another window; toggle with 🔔/🔕 at the top left.

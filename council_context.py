@@ -7,6 +7,12 @@
 - 요약되지 않은 원문이 SUMMARY_TRIGGER_CHARS를 넘을 때만 요약을 갱신한다.
 - 최근 KEEP_RECENT_CHARS 분량은 요약하지 않고 원문으로 남긴다.
 - 요약 실패 시 meta에 오류만 기록하고 원문은 건드리지 않으며 채팅은 계속된다.
+
+토큰 절약 (V0.19.0)
+- 최근 원문 창의 시작 위치를 meta.context_from 에 기억해 두고, 창이 예산을 넘을 때만 앞으로 옮긴다.
+  매 질문마다 프롬프트 앞부분이 그대로 같아져서 CLI(Claude·Codex)의 프롬프트 캐시가 맞는다
+  (캐시에서 읽은 입력은 새 입력보다 훨씬 싸게 계산됨). 옮길 때는 예산의 60%까지만 채워 다음 몇 번은 다시 고정된다.
+- 지난 토론은 결론(Council)만 맥락에 넣고, 두 모델의 1라운드 답변은 가장 최근 토론에서만 넣는다.
 """
 from __future__ import annotations
 
@@ -16,6 +22,9 @@ from council_core import SUMMARY_TIMEOUT_SECONDS, Cancelled, CliFailure, call_mo
 from council_store import ConversationStore, now, speaker
 
 RECENT_BUDGET_CHARS = 24000      # 프롬프트에 넣을 최근 원문 최대치
+SAVER_BUDGET_CHARS = 10000       # 💰 절약 모드의 최근 원문 최대치
+COMPACT_BUDGET_CHARS = 6000      # 토론 결론 정리처럼 맥락이 조금만 필요한 호출
+STICKY_REFILL = 0.6              # 창을 옮길 때 채우는 비율 (남는 40% 만큼은 다음 질문들에서 앞부분이 고정됨)
 SUMMARY_TRIGGER_CHARS = 30000    # 요약 안 된 원문이 이보다 길면 요약 갱신
 KEEP_RECENT_CHARS = 12000        # 요약 시 원문으로 남길 최근 분량
 SUMMARY_MAX_CHARS = 6000         # 요약문 목표 최대 길이
@@ -25,11 +34,22 @@ PROMPT_LABELS = {"user": "사용자", "GPT": "GPT", "Claude": "Claude", "Council
 
 
 def mark_skipped(items: list[dict]) -> list[dict]:
-    """모든 모델이 실패한 질문과 오류 기록은 모델 컨텍스트에서 뺀다 (원문 파일에는 그대로 남음)."""
+    """모든 모델이 실패한 질문과 오류 기록은 모델 컨텍스트에서 뺀다 (원문 파일에는 그대로 남음).
+    결론이 난 지난 토론의 1라운드 답변도 뺀다 (결론에 반영됨 · 가장 최근 토론은 그대로 둠)."""
     failed = {i.get("failed_message_id") for i in items if i.get("role") == "error"}
     for item in items:
         if item.get("role") == "error" or (item.get("role") == "user" and item.get("id") in failed):
             item["_skip"] = True
+    starts = [i for i, it in enumerate(items) if it.get("role") == "user"]
+    concluded = []
+    for n, a in enumerate(starts):
+        b = starts[n + 1] if n + 1 < len(starts) else len(items)
+        if any(it.get("model") == "Council" for it in items[a:b]):
+            concluded.append((a, b))
+    for a, b in concluded[:-1]:
+        for it in items[a:b]:
+            if it.get("role") == "assistant" and it.get("round") == 1 and it.get("model") in ("GPT", "Claude"):
+                it["_skip"] = True
     return items
 
 
@@ -77,11 +97,23 @@ def unsummarized_chars(items: list[dict], start: int) -> int:
     return sum(len(b) + 2 for b in (message_block(i) for i in items[start:]) if b)
 
 
-def build_context(store: ConversationStore, conversation_id: str) -> tuple[str, dict]:
+def build_context(store: ConversationStore, conversation_id: str, budget: int = RECENT_BUDGET_CHARS,
+                  sticky: bool = True) -> tuple[str, dict]:
+    """sticky: 창 시작 위치를 고정해 프롬프트 앞부분이 매번 같게 (캐시). False 면 뒤에서부터 budget 만큼."""
     meta = store.get_meta(conversation_id)
     items = mark_skipped(store.load_messages(conversation_id))
     start = min(int(meta.get("summarized_through") or 0), len(items))
-    blocks, first = select_recent(items, start, RECENT_BUDGET_CHARS)
+    prev = min(max(int(meta.get("context_from") or 0), start), len(items))
+    if sticky and unsummarized_chars(items, prev) <= budget:
+        blocks, first = [b for b in (message_block(i) for i in items[prev:]) if b], prev
+    elif sticky:
+        blocks, first = select_recent(items, start, int(budget * STICKY_REFILL))
+        if not blocks or first >= len(items) or len(blocks[0]) + 2 > budget * STICKY_REFILL:
+            blocks, first = select_recent(items, start, budget)  # 큰 메시지 하나: 예산 전체로
+        if first != int(meta.get("context_from") or 0):
+            store.update_meta(conversation_id, context_from=first)
+    else:
+        blocks, first = select_recent(items, start, budget)
     parts = []
     summary = (meta.get("summary") or "").strip()
     if summary:

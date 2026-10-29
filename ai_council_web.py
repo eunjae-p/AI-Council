@@ -19,7 +19,7 @@ from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from council_context import build_context, maybe_summarize
+from council_context import COMPACT_BUDGET_CHARS, RECENT_BUDGET_CHARS, SAVER_BUDGET_CHARS, build_context, maybe_summarize
 from council_core import (
     is_auth_error,
     TIMEOUT_SECONDS,
@@ -29,6 +29,7 @@ from council_core import (
     FOLDER_MODES,
     ACCOUNT_DEFAULT,
     actual_model,
+    token_usage,
     call_model,
     check_workdir,
     codex_default_model,
@@ -53,7 +54,7 @@ from council_mcp import McpStore, valid_tool
 import council_commands
 import council_image
 
-VERSION = "0.18.5"
+VERSION = "0.19.0"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -119,6 +120,12 @@ You can read, create and modify files under this folder and run shell commands t
 - Long-running processes (dev servers, watchers): start them in the background so they keep running after you
   finish, and report how to open or stop them. Do not wait on them in the foreground.
 - End with a short summary: files created or changed, commands run, and anything left for the user to do.
+"""
+
+SAVER_NOTE = """
+## Token saver mode
+The user turned on token saver mode. Answer concisely: lead with the answer, skip preambles and restating the
+question, avoid repeating earlier messages, and keep it short unless the task truly needs detail.
 """
 
 RESUME_NOTE = """The user approved what was blocked in your previous step{approved}.
@@ -590,6 +597,7 @@ class Handler(BaseHTTPRequestHandler):
                                "count": max(1, min(council_image.MAX_COUNT, int(body.get("image_count") or 1)))}
             files = council_attach.validate(body.get("attachments"), store.data_dir, conversation_id)
             web = bool(body.get("web"))
+            self.saver = bool(body.get("saver"))  # 💰 절약 모드
             mcp = bool(body.get("mcp_claude", body.get("mcp")))  # Claude MCP (예전 이름: mcp)
             mcp_gpt = bool(body.get("mcp_gpt"))                     # GPT(Codex) MCP
             resume = str(body.get("resume") or "")[:100]           # 승인 후 이어서 실행할 Claude 세션
@@ -646,7 +654,8 @@ class Handler(BaseHTTPRequestHandler):
             self.emit("warning", text="장기 요약 갱신에 실패했습니다. 원문은 그대로이며 최근 대화만으로 답변합니다.\n" + result["error"][:800])
 
         # 2) 컨텍스트는 질문 저장 전에 만든다 (질문은 별도 섹션으로 전달)
-        context, info = build_context(store, conversation_id)
+        saver = getattr(self, "saver", False)
+        context, info = build_context(store, conversation_id, SAVER_BUDGET_CHARS if saver else RECENT_BUDGET_CHARS)
         attached = []
         previous = store.load_messages(conversation_id)
         if files:
@@ -655,10 +664,10 @@ class Handler(BaseHTTPRequestHandler):
             self.emit("stage", step=0, text="영상에서 프레임을 뽑는 중" if has_video else
                       "ZIP 파일을 푸는 중" if has_zip else "첨부 파일을 분석하는 중")
             attached = council_attach.process(files, store.data_dir, conversation_id)
-        attach_block = council_attach.prompt_block(attached)
+        attach_block = council_attach.prompt_block(attached, budget=council_attach.SAVER_PROMPT_BUDGET if saver else None)
         images = council_attach.images_for(attached)
         if not images:  # 새 이미지가 없으면 최근에 첨부한 이미지·영상 프레임을 다시 보여준다
-            resent = council_attach.recent_media(previous)
+            resent = council_attach.recent_media(previous, question)
             if resent:
                 images = council_attach.images_for(resent)
                 attach_block += council_attach.prompt_block(resent, resent=True)
@@ -725,6 +734,8 @@ class Handler(BaseHTTPRequestHandler):
                 prompt += debate.WEB_ON_NOTE
             elif discussion:
                 prompt += debate.WEB_OFF_NOTE
+            if saver and mode != "work":
+                prompt += SAVER_NOTE
             return prompt
 
         def ask(which: str, prompt: str, round_no: int | None = None, call_mode: str | None = None,
@@ -742,6 +753,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.emit("progress", model=label, item=entry)
 
             run_info: dict = {"on_progress": on_progress}
+            if saver:
+                run_info["codex_effort"] = "low"  # 대화 모드에서만 적용 (council_core)
             call_mode = call_mode or mode
             try:
                 answer = call_model(which, model, prompt, call_mode, workdir, timeout=timeout, info=run_info, cancel=token,
@@ -756,7 +769,8 @@ class Handler(BaseHTTPRequestHandler):
                 raise
             council_versions.clear_expired(name)
             real = actual_model(which, run_info)
-            cli_state.record(which, model, real)
+            tokens = token_usage(which, run_info)
+            cli_state.record(which, model, real, tokens.get("total", 0))
             if run_info.get("web_fallback"):
                 self.emit("warning", text=f"{label} CLI가 웹 검색을 지원하지 않아 검색 없이 답했습니다. "
                                           "왼쪽 아래에서 CLI를 업데이트하세요.")
@@ -764,7 +778,7 @@ class Handler(BaseHTTPRequestHandler):
             item = store.append_message(
                 conversation_id, "assistant", answer, label,
                 cli_model=real or model_label(name, model) or (f"기본값 {selected}" if selected else ""),
-                elapsed=round(time.time() - started, 1), mode=call_mode, round=round_no,
+                elapsed=round(time.time() - started, 1), mode=call_mode, round=round_no, tokens=tokens or None,
                 web=(web and not run_info.get("web_fallback")) or None,
                 mcp=(mcp if which == "claude" else mcp_gpt) or None,
                 activity=[a for a in activity if a["kind"] != "text" or len(activity) < 60] or None,
@@ -897,8 +911,8 @@ class Handler(BaseHTTPRequestHandler):
                 answers[models[w][0]] = a
             stopped = token.cancelled
             second: dict[str, str] = {}
-            if len(first) == 2 and not token.cancelled:
-                # 2라운드: 상대의 1라운드 답을 읽고 교차 검토
+            if len(first) == 2 and not token.cancelled and not saver:
+                # 2라운드: 상대의 1라운드 답을 읽고 교차 검토 (💰 절약 모드에서는 건너뜀)
                 self.emit("stage", step=2, text="2라운드 · 서로의 답변을 읽고 교차 검토하는 중")
                 jobs = {}
                 for w, other in (("gpt", "claude"), ("claude", "gpt")):
@@ -911,18 +925,23 @@ class Handler(BaseHTTPRequestHandler):
                 self.emit("stage", step=3, text="토론 내용을 최종 결론으로 정리하는 중")
                 try:
                     synth_info: dict = {}
+                    # 정리 단계는 두 모델의 답만 비교하면 되므로 맥락은 짧게 (1·2라운드에서 이미 전체 맥락을 봄)
+                    synth_context = build_context(store, conversation_id, COMPACT_BUDGET_CHARS, sticky=False)[0]
                     synth_prompt, mapping = debate.blind_synth_prompt(
-                        random.SystemRandom(), context=context, question=question, gpt1=first["gpt"], claude1=first["claude"],
-                        gpt2=second.get("gpt", "(교차 검토 실패 — 없음)"), claude2=second.get("claude", "(교차 검토 실패 — 없음)"),
+                        random.SystemRandom(), context=synth_context, question=question, gpt1=first["gpt"], claude1=first["claude"],
+                        gpt2=second.get("gpt", "(skipped: token saver mode)" if saver else "(교차 검토 실패 — 없음)"),
+                        claude2=second.get("claude", "(skipped: token saver mode)" if saver else "(교차 검토 실패 — 없음)"),
                         attachments="\n\n".join(f"### {a['name']}\n{a['summary']}" for a in attached if a["summary"])
                         or ("Attached: " + ", ".join(a["name"] for a in attached) if attached else "(none)"))
                     final = debate.unblind(call_model("claude", claude_model, synth_prompt, "chat", timeout=timeout,
                                                       cancel=token, info=synth_info), mapping)
-                    cli_state.record("claude", claude_model, actual_model("claude", synth_info))
+                    synth_tokens = token_usage("claude", synth_info)
+                    cli_state.record("claude", claude_model, actual_model("claude", synth_info), synth_tokens.get("total", 0))
                     item = store.append_message(
                         conversation_id, "assistant", final, "Council",
                         cli_model="중립 정리(이름 가림) · Claude" + (f" · {claude_model}" if model_label("claude", claude_model) else ""),
                         debate_dir=str(folder.relative_to(store.data_dir)) if folder else None,
+                        tokens=synth_tokens or None,
                     )
                     answers["Council"] = final
                     debate.write_log(folder, "결론.md", "Council 최종 결론", final)

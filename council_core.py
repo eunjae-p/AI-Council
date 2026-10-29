@@ -451,6 +451,9 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
         if codex_mcp:
             prompt += MCP_RULE
         name, base = "codex", codex_args(model, web, disabled, write=mode in WRITE_MODES or mode == "image")
+        effort = (info or {}).get("codex_effort")
+        if effort in ("minimal", "low", "medium", "high") and mode == "chat":
+            base = ["-c", f"model_reasoning_effort={effort}"] + base  # 💰 절약 모드: 대화에서만 생각(추론) 강도 낮춤
         extra: list[str] = []  # read-only 샌드박스는 기본 인수에 포함
         for path in images:  # 이미지는 재시도 때도 빠지지 않도록 기본 인수에 넣는다
             base += ["--image", path]
@@ -618,6 +621,8 @@ def _claude_result(stdout: str, info: dict | None) -> str:
             and (str(d.get("tool_name", "")).startswith("mcp__") or d.get("tool_name") == "Bash")]
     if info is not None and data.get("session_id"):
         info["claude_session"] = str(data["session_id"])
+    if info is not None:
+        info["tokens"] = claude_tokens(data)
     usage = data.get("modelUsage") or {}
     if isinstance(usage, dict) and usage and info is not None:
         def score(item):
@@ -626,6 +631,48 @@ def _claude_result(stdout: str, info: dict | None) -> str:
             return ("haiku" not in name.lower(), out)  # 보조로 쓰인 작은 모델보다 본 답변 모델 우선
         info["claude_model"] = max(usage.items(), key=score)[0]
     return text
+
+
+# ---------- 토큰 사용량 ----------
+def _int(v) -> int:
+    try:
+        return max(int(v or 0), 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def claude_tokens(data: dict) -> dict:
+    """claude JSON 결과의 usage → {input, cache_read, cache_write, output, total}. 없으면 {}.
+    cache_read: 이전 호출과 앞부분이 같아 캐시에서 읽은 입력 (일반 입력보다 훨씬 싸게 계산됨)."""
+    u = data.get("usage") if isinstance(data.get("usage"), dict) else None
+    if u is None:  # 옛 형식: 모델별 modelUsage 합계
+        mu = data.get("modelUsage") if isinstance(data.get("modelUsage"), dict) else {}
+        if not mu:
+            return {}
+        u = {"input_tokens": sum(_int((v or {}).get("inputTokens")) for v in mu.values() if isinstance(v, dict)),
+             "cache_read_input_tokens": sum(_int((v or {}).get("cacheReadInputTokens")) for v in mu.values() if isinstance(v, dict)),
+             "cache_creation_input_tokens": sum(_int((v or {}).get("cacheCreationInputTokens")) for v in mu.values() if isinstance(v, dict)),
+             "output_tokens": sum(_int((v or {}).get("outputTokens")) for v in mu.values() if isinstance(v, dict))}
+    t = {"input": _int(u.get("input_tokens")), "cache_read": _int(u.get("cache_read_input_tokens")),
+         "cache_write": _int(u.get("cache_creation_input_tokens")), "output": _int(u.get("output_tokens"))}
+    t["total"] = sum(t.values())
+    return t if t["total"] else {}
+
+
+_CODEX_TOKENS = re.compile(r"tokens used[\s:]*([\d][\d,]*)", re.IGNORECASE)
+
+
+def token_usage(which: str, info: dict | None) -> dict:
+    """이번 호출의 토큰 사용량. Claude: JSON usage, Codex: 끝에 찍는 'tokens used N'. 모르면 {}."""
+    if not info:
+        return {}
+    if which == "claude":
+        return dict(info.get("tokens") or {})
+    hits = _CODEX_TOKENS.findall(info.get("stderr", "") or "")
+    if not hits:
+        return {}
+    total = _int(hits[-1].replace(",", ""))
+    return {"total": total} if total else {}
 
 
 # ---------- 실제 사용 모델 확인 ----------

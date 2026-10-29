@@ -36,14 +36,16 @@ class CliState:
         tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(tmp, self.path)
 
-    def record(self, which: str, selected: str, actual: str) -> None:
-        """모델 호출 1회 기록. which: gpt | claude"""
+    def record(self, which: str, selected: str, actual: str, tokens: int = 0) -> None:
+        """모델 호출 1회 기록. which: gpt | claude · tokens: 이번 호출의 토큰 수 (CLI 가 알려 준 경우)"""
         today = time.strftime("%Y-%m-%d")
         with _lock:
             data = self._load()
             usage = data.setdefault("usage", {})
             day = usage.setdefault(today, {})
             day[which] = int(day.get(which, 0)) + 1
+            if tokens:
+                day[which + "_tokens"] = int(day.get(which + "_tokens", 0)) + int(tokens)
             for old in sorted(usage)[:-KEEP_DAYS]:
                 usage.pop(old, None)
             if actual and (not selected or selected == ACCOUNT_DEFAULT):
@@ -84,4 +86,6 @@ class CliState:
         return {
             "today": {k: int(usage.get(today, {}).get(k, 0)) for k in ("gpt", "claude")},
             "week": {k: sum(int(usage[d].get(k, 0)) for d in week) for k in ("gpt", "claude")},
+            "tokens_today": {k: int(usage.get(today, {}).get(k + "_tokens", 0)) for k in ("gpt", "claude")},
+            "tokens_week": {k: sum(int(usage[d].get(k + "_tokens", 0)) for d in week) for k in ("gpt", "claude")},
         }

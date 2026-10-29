@@ -105,7 +105,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--gpt);box-shadow:0 0 0
 .msg.user{align-self:flex-end;max-width:min(80%,760px);background:var(--user);border-color:var(--user-line);border-radius:18px 18px 4px 18px}
 .msg .head{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);margin-bottom:8px;flex-wrap:wrap}
 .msg .who{font-weight:800;letter-spacing:.03em}
-.msg .head .sp{flex:1}
+.msg .head .sp{flex:1} .msg .head .tok{cursor:help}
 .msg.gpt{border-left:3px solid var(--gpt)} .msg.gpt .who{color:var(--gpt)}
 .msg.claude{border-left:3px solid var(--claude)} .msg.claude .who{color:var(--claude)}
 .msg.council{border:1px solid var(--council-line);background:linear-gradient(160deg,var(--council-grad),var(--panel) 60%)} .msg.council .who{color:var(--council)}
@@ -265,8 +265,9 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
             <button data-m="chat" class="on" data-en="💬 Chat">💬 대화</button><button data-m="work" class="tip" data-tip="🛠 작업 모드 — Claude Code·Codex처럼 작업 폴더에서 직접 일합니다.&#10;· 파일 읽기·만들기·고치기, 폴더 만들기, 코드 작성, 명령 실행(설치·서버 실행 등)&#10;· 명령은 허용 목록(🛡)에 있는 것만 바로 실행되고, 나머지는 답변 아래에서 허용 여부를 묻습니다.&#10;· GPT(Codex)는 샌드박스 안에서 작업 폴더에만 쓰고, 인터넷(설치 등)은 허용됩니다.&#10;· 폴더가 Git 저장소면 끝난 뒤 바뀐 파일을 보여 주고 확정·되돌리기를 고를 수 있습니다.&#10;· 블렌더 등 연결된 도구는 🔌 Claude MCP / GPT MCP를 켜세요. 토론으로 보내면 한 모델이 실행하고 다른 모델이 검토합니다. 운영 중인 서비스는 복사본 폴더에서 쓰는 것을 권장합니다." data-en-tip="🛠 Work mode — works directly in the folder, like Claude Code / Codex.&#10;· Read, create and edit files, make folders, write code, run commands (installs, servers…)&#10;· Only commands on the allowlist (🛡) run right away; others ask for approval below the answer.&#10;· GPT (Codex) writes only inside the folder in a sandbox; internet (installs etc.) is allowed.&#10;· If the folder is a Git repository, you can review the changed files afterwards and commit or revert.&#10;· For Blender and other connected tools, turn on 🔌 Claude MCP / GPT MCP. With Discussion, one model executes and the other reviews. For live services, use a copy of the folder." data-en="🛠 Work">🛠 작업</button><button data-m="image" class="tip" data-tip="🎨 이미지 — GPT가 이미지 생성 모델(Codex 이미지 도구)로 실제 이미지를 만들어 저장 폴더에 PNG로 저장합니다.&#10;· 대상 GPT: 바로 생성 / Claude·토론: Claude가 프롬프트를 다듬고 GPT가 생성&#10;· 📎 이미지를 첨부하면 참고 이미지로 씁니다&#10;· ChatGPT Plus 이상 구독 필요, 장당 30초~1분, 텍스트 질문보다 사용량이 큽니다" data-en-tip="🎨 Image — GPT creates real images with its image model (Codex image tool) and saves them as PNG in the output folder.&#10;· Target GPT: generates directly / Claude or Discussion: Claude refines the prompt, GPT generates&#10;· Attach images with 📎 to use them as references&#10;· Needs ChatGPT Plus or higher; 30 s – 1 min per image; uses more quota than text" data-en="🎨 Image">🎨 이미지</button>
           </div>
           <div class="seg" id="target">
-            <button data-v="gpt">GPT</button><button data-v="claude">Claude</button><button data-v="both" class="on tip" data-tip="⚠ 사용량 주의 — 토론은 GPT·Claude를 총 5번 호출합니다 (1차 의견 2 + 교차 검토 2 + 결론 1).&#10;단독 질문보다 구독 사용량이 약 5배, 시간도 더 걸립니다. 웹 검색까지 켜면 더 늘어납니다.&#10;간단한 질문·워크플로우 분석·프롬프트 작성은 GPT나 Claude 단독을, 판단이 필요한 주제에만 토론을 쓰세요." data-en-tip="⚠ Heavy usage — Discussion calls GPT/Claude 5 times in total (2 opinions + 2 cross reviews + 1 conclusion).&#10;About 5× the subscription usage of a single question, and slower. Web search adds more.&#10;Use GPT or Claude alone for simple questions, workflow analysis or prompt writing; use Discussion for judgment calls."><span data-en="Discussion">토론 (Discussion)</span> <span class="warn-ico">!</span></button>
+            <button data-v="gpt">GPT</button><button data-v="claude">Claude</button><button data-v="both" class="on tip" data-tip="⚠ 사용량 주의 — 토론은 GPT·Claude를 총 5번 호출합니다 (1차 의견 2 + 교차 검토 2 + 결론 1).&#10;단독 질문보다 구독 사용량이 약 5배, 시간도 더 걸립니다. 웹 검색까지 켜면 더 늘어납니다. 💰 절약 모드에서는 3번.&#10;간단한 질문·워크플로우 분석·프롬프트 작성은 GPT나 Claude 단독을, 판단이 필요한 주제에만 토론을 쓰세요." data-en-tip="⚠ Heavy usage — Discussion calls GPT/Claude 5 times in total (2 opinions + 2 cross reviews + 1 conclusion).&#10;About 5× the subscription usage of a single question, and slower. Web search adds more. 3 calls in 💰 Saver mode.&#10;Use GPT or Claude alone for simple questions, workflow analysis or prompt writing; use Discussion for judgment calls."><span data-en="Discussion">토론 (Discussion)</span> <span class="warn-ico">!</span></button>
           </div>
+          <button class="webtog tip" id="saverToggle" data-tip="💰 절약 모드 — 구독 사용량(토큰)을 덜 씁니다.&#10;· 토론: 교차 검토(2라운드)를 건너뛰어 5번 → 3번 호출&#10;· 최근 대화는 짧게(약 1만 자), 첨부 원문도 짧게 넣음&#10;· 답변을 간결하게 요청 (출력 토큰이 가장 비쌈)&#10;· GPT 대화: 생각(추론) 강도 낮춤 — 작업 모드는 그대로&#10;복잡한 판단·긴 분석이 필요하면 끄세요." data-en-tip="💰 Saver mode — uses less of your subscription (tokens).&#10;· Discussion: skips the cross review (round 2), 5 → 3 calls&#10;· Shorter recent context (~10k chars) and shorter attachment excerpts&#10;· Asks for concise answers (output tokens cost the most)&#10;· GPT chat: lower reasoning effort — work mode unchanged&#10;Turn it off for complex judgment or long analysis.">💰 절약 끔</button>
           <button class="webtog" id="webToggle" title="켜면 GPT·Claude가 웹을 검색해 근거를 확인합니다 (시간·사용량 증가)" data-en-title="When on, GPT/Claude search the web to check facts (slower, more usage)">🌐 웹 검색 끔</button>
           <span class="mcpgrp"><button class="webtog tip" id="mcpToggle" data-tip="🔌 Claude MCP — Claude 계정·Claude Code에 연결된 도구(예: Blender, Higgsfield, Notion)를 씁니다.&#10;'항상 허용'한 도구만 바로 실행되고, 나머지는 실행 전에 답변 아래에서 허용 여부를 묻습니다. ⚙에서 도구를 관리하세요." data-en-tip="🔌 Claude MCP — use tools connected to your Claude account / Claude Code (e.g. Blender, Higgsfield, Notion).&#10;Only tools you marked 'Always allow' run right away; others ask for approval below the answer. Manage tools with ⚙.">🔌 Claude MCP 끔</button><button class="webtog tip" id="mcpGptToggle" data-tip="🔌 GPT MCP — GPT(Codex)에 등록된 도구(Codex 데스크톱 앱에서 연결한 Blender 등, ~/.codex/config.toml)를 씁니다.&#10;Codex는 도구별 허용을 고를 수 없어, 켜면 Codex에 연결된 도구가 모두 켜집니다." data-en-tip="🔌 GPT MCP — use tools registered in GPT (Codex) (e.g. Blender connected in the Codex desktop app, ~/.codex/config.toml).&#10;Codex cannot allow tools one by one, so turning this on enables all of Codex's connected tools.">🔌 GPT MCP 끔</button><button class="webtog gear" id="mcpManage" title="MCP 도구 관리" data-en-title="Manage MCP tools">⚙</button></span>
           <button class="ghost small" id="modelToggle" data-en="Models ▾">모델 설정 ▾</button>
@@ -322,7 +323,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.18.5'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.19.0'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -451,6 +452,14 @@ function msgEl(item, index) {
   else if (['work', 'edit', 'read'].includes(item.mode)) head.append(el('span', 'badge', (item.mode === 'read' ? T('🛠 작업 · 읽기 전용', '🛠 Work · read-only') : T('🛠 작업', '🛠 Work')) + (item.workdir ? ' · ' + item.workdir : '')));
   if (item.cli_model) head.append(el('span', '', item.cli_model));
   if (item.elapsed) head.append(el('span', '', `${item.elapsed}s`));
+  if (item.tokens && item.tokens.total) {
+    const t = item.tokens, tk = el('span', 'tok', `🪙 ${fmtTok(t.total)}`);
+    tk.title = t.output != null
+      ? T(`이번 답변 토큰 ${t.total.toLocaleString()}\n· 새 입력 ${(t.input + (t.cache_write || 0)).toLocaleString()}\n· 캐시에서 읽은 입력 ${(t.cache_read || 0).toLocaleString()} (앞부분이 이전 호출과 같아 훨씬 싸게 계산)\n· 출력 ${t.output.toLocaleString()} (생각 포함, 가장 비쌈)`,
+          `Tokens for this answer: ${t.total.toLocaleString()}\n· new input ${(t.input + (t.cache_write || 0)).toLocaleString()}\n· input read from cache ${(t.cache_read || 0).toLocaleString()} (same start as an earlier call, counted much cheaper)\n· output ${t.output.toLocaleString()} (incl. thinking, most expensive)`)
+      : T(`이번 답변 토큰 ${t.total.toLocaleString()} (Codex 가 알려 준 합계, 캐시 포함)`, `Tokens for this answer: ${t.total.toLocaleString()} (total reported by Codex, incl. cache)`);
+    head.append(tk);
+  }
   head.append(el('span', 'sp'), el('span', '', fmt(item.time)));
   if (w !== 'user') {
     const c = el('button', 'ghost small', T('복사', 'Copy')); c.onclick = () => copyText(item.content); head.append(c);
@@ -984,13 +993,17 @@ function updateModelInfo() {
 async function refreshStatusInfo() {
   try { const s = await api('/api/status'); S.defaults = s.default_models; S.usage = s.usage; updateModelInfo(); renderUsage(); } catch {}
 }
+const fmtTok = n => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1000 ? (n / 1000).toFixed(n >= 1e4 ? 0 : 1) + 'k' : String(n || 0);
 const USAGE_PAGES = { gpt: 'https://chatgpt.com/codex/settings/usage', claude: 'https://claude.ai/settings/usage' };
 function renderUsage() {
   const box = $('#cli'); if (!box || !S.usage) return;
   let line = $('#usageLine'); if (!line) { line = el('div'); line.id = 'usageLine'; line.className = 'usage'; }
   const u = S.usage; line.innerHTML = '';
   line.append(el('span', '', T(`오늘 사용 GPT ${u.today.gpt}회 · Claude ${u.today.claude}회`, `Today: GPT ${u.today.gpt} · Claude ${u.today.claude} calls`)));
-  line.title = T(`Council에서 모델을 부른 횟수 (최근 7일: GPT ${u.week.gpt}회 · Claude ${u.week.claude}회)`, `Model calls from Council (last 7 days: GPT ${u.week.gpt} · Claude ${u.week.claude})`);
+  const tt = u.tokens_today || {}, tw = u.tokens_week || {};
+  if (tt.gpt || tt.claude) line.append(el('span', '', ` · 🪙 GPT ${fmtTok(tt.gpt)} · Claude ${fmtTok(tt.claude)}`));
+  line.title = T(`Council에서 모델을 부른 횟수 (최근 7일: GPT ${u.week.gpt}회 · Claude ${u.week.claude}회)\n오늘 토큰: GPT ${(tt.gpt || 0).toLocaleString()} · Claude ${(tt.claude || 0).toLocaleString()} / 최근 7일: GPT ${(tw.gpt || 0).toLocaleString()} · Claude ${(tw.claude || 0).toLocaleString()}\n(캐시에서 읽은 입력 포함 — 실제 사용량 한도에는 더 적게 반영됩니다)`,
+    `Model calls from Council (last 7 days: GPT ${u.week.gpt} · Claude ${u.week.claude})\nTokens today: GPT ${(tt.gpt || 0).toLocaleString()} · Claude ${(tt.claude || 0).toLocaleString()} / last 7 days: GPT ${(tw.gpt || 0).toLocaleString()} · Claude ${(tw.claude || 0).toLocaleString()}\n(includes input read from cache, which counts less against your limits)`);
   const link = el('span', 'upd', T('남은 사용량 보기', 'Check remaining usage')); link.style.color = 'var(--muted)';
   link.onclick = () => {
     const body = el('div');
@@ -1005,6 +1018,8 @@ function renderUsage() {
 document.querySelectorAll('#target button').forEach(b => b.onclick = () => setTarget(b.dataset.v));
 function setWeb(on) { S.web = !!on; store.set('councilWeb', S.web ? '1' : ''); const b = $('#webToggle'); b.classList.toggle('on', S.web); b.textContent = S.web ? T('🌐 웹 검색 켬', '🌐 Web search on') : T('🌐 웹 검색 끔', '🌐 Web search off'); }
 $('#webToggle').onclick = () => setWeb(!S.web);
+function setSaver(on) { S.saver = !!on; store.set('councilSaver', S.saver ? '1' : ''); const b = $('#saverToggle'); b.classList.toggle('on', S.saver); b.textContent = S.saver ? T('💰 절약 켬', '💰 Saver on') : T('💰 절약 끔', '💰 Saver off'); }
+$('#saverToggle').onclick = () => setSaver(!S.saver);
 // ---------- 화면 테마 (다크 / 라이트 / 시스템 설정 따르기) ----------
 const THEMES = { dark:{ icon:'🌙', label:T('다크 모드', 'Dark mode') }, light:{ icon:'☀️', label:T('라이트 모드', 'Light mode') }, system:{ icon:'🖥️', label:T('시스템 설정 따르기', 'Follow system') } };
 const sysLight = matchMedia('(prefers-color-scheme: light)');
@@ -1152,7 +1167,7 @@ async function send() {
   let gotUser = false, wasStopped = false;
   try {
     const res = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json', 'X-Lang':LANG},
-      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, web:!!S.web, mcp:!!S.mcp, mcp_claude:!!S.mcp, mcp_gpt:!!S.mcpGpt, executor:S.executor || 'claude', allow_once: allowOnceSent || [], allow_cmds_once: cmdsOnceSent, resume: resumeSent, image_ratio:S.imgRatio || 'square', image_count:Number($('#imgCount').value) || 1, workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => f.upload ? ({ name:f.name, upload:f.upload }) : ({ name:f.name, content:f.content })) }) });
+      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, web:!!S.web, saver:!!S.saver, mcp:!!S.mcp, mcp_claude:!!S.mcp, mcp_gpt:!!S.mcpGpt, executor:S.executor || 'claude', allow_once: allowOnceSent || [], allow_cmds_once: cmdsOnceSent, resume: resumeSent, image_ratio:S.imgRatio || 'square', image_count:Number($('#imgCount').value) || 1, workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => f.upload ? ({ name:f.name, upload:f.upload }) : ({ name:f.name, content:f.content })) }) });
     if (!res.ok) { let m = T('요청 실패', 'Request failed'); try { m = (await res.json()).error || m; } catch {} throw new Error(m); }
     const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
     for (;;) {
@@ -1482,6 +1497,7 @@ window.addEventListener('hashchange', () => { const id = (location.hash.match(/^
   setMode('chat'); // 기본값은 항상 대화 모드
   applyTheme(store.get('councilTheme') || 'dark');
   setWeb(store.get('councilWeb') === '1');
+  setSaver(store.get('councilSaver') === '1');
   setMcp(store.get('councilMcp') === '1'); setMcpGpt(store.get('councilMcpGpt') === '1'); setExecutor(store.get('councilExecutor') || 'claude');
   setTarget(['gpt','claude','both'].includes(store.get('councilTarget')) ? store.get('councilTarget') : 'both');
   api('/api/status').then(s => { $('#ver').textContent = 'V' + s.version;

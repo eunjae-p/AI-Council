@@ -26,3 +26,4 @@ if os.environ.get("FAKE_LOG"):
 model = sys.argv[sys.argv.index("--model")+1] if "--model" in sys.argv else "gpt-6.1-sol"
 sys.stderr.write("OpenAI Codex\n--------\nmodel: " + model + "\nprovider: openai\n")
 print("GPT 답변: 받은 프롬프트 길이 %d" % len(p))
+sys.stderr.write("tokens used\n12,345\n")
