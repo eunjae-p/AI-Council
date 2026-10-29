@@ -54,14 +54,15 @@ from council_mcp import McpStore, valid_tool
 import council_commands
 import council_image
 
-VERSION = "0.19.1"
+VERSION = "0.19.2"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
 MAX_BODY = 12_000_000
 ATTACH_TIMEOUT = 300  # 첨부·작업 모드는 분석량이 많아 제한 시간을 늘림
 WEB_TIMEOUT = 480     # 웹 검색을 켜면 검색·페이지 읽기 시간이 더 걸림
-WORK_TIMEOUT = 900    # 작업 모드는 파일 작성·명령 실행이 이어져 더 오래 걸림
+WORK_TIMEOUT = 900    # 작업 모드: 이 시간(초) 동안 진행 상황이 전혀 없을 때만 멈춤 (진행 중이면 계속)
+WORK_HARD_LIMIT = 3600  # 작업 모드: 진행 중이어도 넘지 않는 전체 상한. 넘으면 멈추고 '이어서 진행' 가능
 _emit_lock = threading.Lock()  # 토론 모드는 두 모델이 동시에 결과를 보냄
 
 store = ConversationStore()
@@ -117,6 +118,10 @@ You can read, create and modify files under this folder and run shell commands t
   every part of a command must be pre-approved, and loops can never be pre-approved. Prefer your file tools
   (Read/Glob/Grep) over cat/ls/grep for reading files.
 - Work inside the working folder. Do not delete or overwrite files unless the user asked for it.
+- Create or change files with your Write/Edit tools, never with heredocs (cat <<EOF), echo/printf redirection or
+  inline scripts (python -c, node -e): those are hard to approve and often fail in the shell. To run a script,
+  write it to a file first, then run the file.
+- Keep each step small and check progress as you go; avoid re-reading large files you already read.
 - Long-running processes (dev servers, watchers): start them in the background so they keep running after you
   finish, and report how to open or stop them. Do not wait on them in the foreground.
 - End with a short summary: files created or changed, commands run, and anything left for the user to do.
@@ -126,6 +131,10 @@ SAVER_NOTE = """
 ## Token saver mode
 The user turned on token saver mode. Answer concisely: lead with the answer, skip preambles and restating the
 question, avoid repeating earlier messages, and keep it short unless the task truly needs detail.
+"""
+
+RESUME_TIMEOUT_NOTE = """Your previous run was stopped by the time limit before you finished. Continue the same task from where
+you stopped: do not redo finished work (check briefly only if unsure), work in small steps, then give the summary.
 """
 
 RESUME_NOTE = """The task was paused because a step was blocked. The user has now approved it{approved}.
@@ -602,6 +611,7 @@ class Handler(BaseHTTPRequestHandler):
             mcp_gpt = bool(body.get("mcp_gpt"))                     # GPT(Codex) MCP
             resume = str(body.get("resume") or "")[:100]           # 승인 후 이어서 실행할 Claude 세션
             self.resume = resume if (mode == "work" and target == "claude" and re.match(r"^[A-Za-z0-9-]{8,100}$", resume)) else ""
+            self.resume_reason = "timeout" if body.get("resume_reason") == "timeout" else ""
             executor = "gpt" if str(body.get("executor", "")).lower() == "gpt" else "claude"  # 토론+작업에서 실행할 모델
             allow_once = [t for t in body.get("allow_once") or [] if valid_tool(t)][:20] if mcp else []
             cmd_once = [c.strip() for c in body.get("allow_cmds_once") or []
@@ -755,6 +765,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.emit("progress", model=label, item=entry)
 
             run_info: dict = {"on_progress": on_progress}
+            if (call_mode or mode) in ("work", "edit"):
+                run_info["hard_limit"] = WORK_HARD_LIMIT
             if saver:
                 run_info["codex_effort"] = "low"  # 대화 모드에서만 적용 (council_core)
             call_mode = call_mode or mode
@@ -796,7 +808,7 @@ class Handler(BaseHTTPRequestHandler):
                              for d in run_info.get("permission_denials", []) if d["tool"] == "Bash"][:10] or None,
                 claude_session=run_info.get("claude_session") if which == "claude" and call_mode in ("work",) else None,
                 resumed=True if resume else None,
-                paused=True if run_info.get("paused") else None,  # 승인이 필요해 그 자리에서 멈춤
+                paused=run_info.get("paused") or None,  # True: 승인이 필요해 멈춤 · "timeout": 시간 제한으로 멈춤 (둘 다 이어서 진행 가능)
                 **(post(answer) if post else {}),
             )
             return answer, item
@@ -887,7 +899,8 @@ class Handler(BaseHTTPRequestHandler):
                 if resume_id:
                     # 승인 후: 새로 처음부터 하지 않고 멈춘 Claude 세션을 이어서 실행
                     approved = (cmd_once or []) + [t for t in (allow_once or [])]
-                    note = RESUME_NOTE.format(approved=(": " + ", ".join(approved)) if approved else "")
+                    note = (RESUME_NOTE.format(approved=": " + ", ".join(approved)) if approved or getattr(self, "resume_reason", "") != "timeout"
+                            else RESUME_TIMEOUT_NOTE)
                     self.emit("stage", step=1, text="승인한 내용으로 Claude가 이어서 작업하는 중")
                     answer, item = ask(which, note, resume=resume_id)
                 else:

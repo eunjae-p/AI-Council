@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -231,15 +232,21 @@ class CancelToken:
                 self._processes.discard(process)
 
 
-def _communicate_lines(process: subprocess.Popen[bytes], prompt: str, timeout: int, on_line) -> tuple[bytes, bytes]:
-    """communicate() 와 같지만 stdout 을 한 줄씩 읽으며 on_line(줄) 을 부른다 (진행 상황 표시용)."""
+def _communicate_lines(process: subprocess.Popen[bytes], prompt: str, timeout: int, on_line,
+                       hard_limit: int | None = None) -> tuple[bytes, bytes]:
+    """communicate() 와 같지만 stdout 을 한 줄씩 읽으며 on_line(줄) 을 부른다 (진행 상황 표시용).
+    timeout 은 '출력이 없는 시간' 기준이다: 진행 상황이 계속 들어오면 기다리고, timeout 초 동안 아무 출력이 없을 때만 멈춘다.
+    hard_limit: 출력이 있어도 넘지 않는 전체 상한 (초)."""
     import threading as _th
     out_chunks: list[bytes] = []
     err_chunks: list[bytes] = []
+    started = last = time.time()
 
     def read_out() -> None:
+        nonlocal last
         assert process.stdout is not None
         for raw in process.stdout:
+            last = time.time()
             out_chunks.append(raw)
             try:
                 on_line(raw.decode("utf-8", "replace"))
@@ -259,12 +266,17 @@ def _communicate_lines(process: subprocess.Popen[bytes], prompt: str, timeout: i
         process.stdin.close()
     except (BrokenPipeError, OSError):
         pass
-    try:
-        process.wait(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        for t in readers:
-            t.join(0.2)
-        raise subprocess.TimeoutExpired(process.args, timeout, b"".join(out_chunks), b"".join(err_chunks))
+    limit = hard_limit or 0
+    while True:
+        try:
+            process.wait(timeout=2)
+            break
+        except subprocess.TimeoutExpired:
+            now_ = time.time()
+            if now_ - last > timeout or (limit and now_ - started > limit):
+                for t in readers:
+                    t.join(0.2)
+                raise subprocess.TimeoutExpired(process.args, int(now_ - started), b"".join(out_chunks), b"".join(err_chunks))
     for t in readers:
         t.join(10)
     return b"".join(out_chunks), b"".join(err_chunks)
@@ -297,7 +309,7 @@ def run_cli(name: str, arguments: list[str], prompt: str, timeout: int = TIMEOUT
     on_line = (info or {}).get("on_line")
     try:
         if on_line:
-            stdout_bytes, stderr_bytes = _communicate_lines(process, prompt, timeout, on_line)
+            stdout_bytes, stderr_bytes = _communicate_lines(process, prompt, timeout, on_line, (info or {}).get("hard_limit"))
         else:
             stdout_bytes, stderr_bytes = process.communicate(input=prompt.encode("utf-8"), timeout=timeout)
     except subprocess.TimeoutExpired as exc:
@@ -308,9 +320,11 @@ def run_cli(name: str, arguments: list[str], prompt: str, timeout: int = TIMEOUT
             stdout_bytes, stderr_bytes = b"", b""
         stdout_bytes = stdout_bytes or (exc.output or b"")
         stderr_bytes = stderr_bytes or (exc.stderr or b"")
+        if info is not None:
+            info["timed_out"] = True
         raise CliFailure(
             name,
-            f"{timeout}초 제한 시간을 초과했습니다.",
+            (f"{timeout}초 동안 진행이 없어 멈췄습니다." if on_line else f"{timeout}초 제한 시간을 초과했습니다."),
             stdout_bytes.decode("utf-8", errors="replace").strip(),
             stderr_bytes.decode("utf-8", errors="replace").strip(),
         )
@@ -510,6 +524,7 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
         if mode in WRITE_MODES:
             # 작업 모드: 허용 목록에 없는 명령·MCP 도구가 막히면 그 자리에서 멈춘다 (건너뛰고 다음 작업을 하지 않게)
             watch = PermissionWatch(info)
+            info["_watch"] = watch
             info["on_line"] = lambda line, cb=info["on_progress"], w=watch: (w.feed(line), _claude_progress(line, cb))
         else:
             info["on_line"] = lambda line, cb=info["on_progress"]: _claude_progress(line, cb)
@@ -538,6 +553,14 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
     except CliFailure as exc:
         if name == "claude" and info is not None and info.get("permission_stop"):
             return info["permission_stop"].paused_text()  # 승인이 필요해 Council 이 멈춘 경우: 오류가 아님
+        watch = (info or {}).get("_watch")
+        if name == "claude" and info is not None and info.get("timed_out") and watch is not None and watch.session:
+            # 시간 제한: 지금까지 한 작업(세션)을 버리지 않고 '이어서 진행' 할 수 있게 멈춤으로 처리
+            text = watch.paused_text()
+            info["paused"] = "timeout"
+            return text
+        if name == "claude" and not isinstance(exc, Cancelled) and _claude_json(exc.stdout) is None and '"type"' in (exc.stdout or ""):
+            exc.stdout = _stream_texts(exc.stdout) or "(Claude 진행 기록만 있고 답변 본문은 없습니다)"  # 원본 JSON 대신 Claude 가 쓴 설명만
         if name == "claude" and not isinstance(exc, Cancelled):
             parsed = _claude_json(exc.stdout)
             if parsed:  # JSON 오류 응답이면 사람이 읽을 본문만 남긴다
@@ -587,6 +610,24 @@ def _tool_summary(name: str, data: dict) -> str:
 
 
 # Claude Code 가 막힌 도구에 돌려주는 문구 (셸의 일반 "Permission denied" 와는 구분: 반드시 'to use' 등이 함께 있음)
+def _stream_texts(stdout: str, keep: int = 3) -> str:
+    """stream-json 출력에서 Claude 가 쓴 설명 글만 꺼낸다 (오류 화면에 원본 JSON 을 보이지 않게)."""
+    texts = []
+    for line in (stdout or "").splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            msg = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(msg, dict) and msg.get("type") == "assistant":
+            for b in (msg.get("message") or {}).get("content") or []:
+                if isinstance(b, dict) and b.get("type") == "text" and str(b.get("text", "")).strip():
+                    texts.append(str(b["text"]).strip())
+    return "\n\n".join(texts[-keep:])[:3000]
+
+
 _PERMISSION_TEXT = re.compile(r"requested permissions? to use|haven'?t granted it yet|requires? (your )?approval|"
                               r"permission to use \S+ (has been|was) denied", re.IGNORECASE)
 PAUSE_DELAY = 0.5  # 거절 결과를 받은 뒤 세션 기록이 저장될 시간을 조금 두고 멈춘다
@@ -670,6 +711,14 @@ def _claude_progress(line: str, callback) -> None:
         servers = [s.get("name", "") + ("" if s.get("status") in (None, "connected") else f"({s.get('status')})")
                    for s in msg.get("mcp_servers") or [] if isinstance(s, dict)]
         callback({"kind": "init", "text": "MCP: " + (", ".join(servers) if servers else "-")})
+        return
+    if msg.get("type") == "user":  # 도구 실행 오류·거절은 작업 기록에 짧게 남긴다 (원인 확인용)
+        for block in (msg.get("message") or {}).get("content") or []:
+            if isinstance(block, dict) and block.get("type") == "tool_result" and block.get("is_error"):
+                body = block.get("content")
+                text = body if isinstance(body, str) else " ".join(str(b.get("text", "")) for b in body or [] if isinstance(b, dict))
+                text = " ".join(str(text).split())
+                callback({"kind": "error", "text": "⚠ " + (text[:200] + ("…" if len(text) > 200 else ""))})
         return
     if msg.get("type") != "assistant":
         return

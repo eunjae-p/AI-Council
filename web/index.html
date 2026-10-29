@@ -178,6 +178,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 .editcard .estate{margin-top:8px;font-weight:600} .estate.commit{color:var(--council)} .estate.revert{color:var(--muted)}
 .mcpdeny{margin:8px 0 2px;border:1px solid var(--warn-line);background:var(--warn-bg);border-radius:10px;padding:10px 12px;font-size:13px}
 .mcplist label.fresh{background:var(--warn-bg)}
+.act.error .ax{color:var(--warn-text)}
 .paused{margin:2px 0 8px;padding:7px 10px;border-radius:8px;background:var(--warn-bg);color:var(--warn-text);font-size:13px}
 .mcpdeny b{color:var(--warn-text)} .mcpdeny .t{margin:6px 0 2px;font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
 .mcpdeny pre{white-space:pre-wrap;margin:2px 0 6px;color:var(--muted);font-size:12px;max-height:120px;overflow:auto}
@@ -325,7 +326,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.19.1'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.19.2'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -469,7 +470,19 @@ function msgEl(item, index) {
   }
   const body = el('div', 'content'); renderText(body, item.content === '…' ? '' : item.content);
   box.append(head);
-  if (item.paused) box.append(el('div', 'paused', T('⏸ 승인이 필요한 단계에서 멈췄습니다. 아래에서 허용하면 이 지점부터 이어서 진행합니다 (다음 작업으로 건너뛰지 않음).', '⏸ Paused at a step that needs approval. Allow it below to continue from this exact point (nothing after it was run).')));
+  if (item.paused === 'timeout') {
+    const pz = el('div', 'paused', T('⏱ 시간 제한(최대 60분 또는 15분 동안 진행 없음)으로 멈췄습니다. 지금까지 한 작업은 그대로 있고, 이어서 진행하면 이 지점부터 계속합니다 (1시간 안에 누르면 이전 기록을 캐시에서 읽어 토큰이 적게 듭니다).',
+      '⏱ Stopped by the time limit (60 min max, or 15 min with no progress). Work done so far is kept; Continue picks up from here (within about an hour the earlier history is read from cache, so it costs fewer tokens).'));
+    let q = null; for (let i = (index ?? S.items.length) - 1; i >= 0; i--) if (S.items[i] && S.items[i].role === 'user') { q = S.items[i]; break; }
+    if (q && canResume(item, q)) {
+      const go = el('button', 'small', T('↪ 이어서 진행', '↪ Continue'));
+      go.onclick = () => { if (S.running) return toast(T('답변 생성 중에는 실행할 수 없습니다', 'Cannot run while an answer is being generated'), true);
+        restoreMode(q); if (q.mcp) setMcp(true); S.resume = item.claude_session; S.resumeReason = 'timeout'; setTarget('claude');
+        $('#q').value = T('↪ 시간 제한으로 멈춘 작업 이어서 진행', '↪ Continue the task stopped by the time limit'); send(); };
+      pz.append(' ', go);
+    }
+    box.append(pz);
+  } else if (item.paused) box.append(el('div', 'paused', T('⏸ 승인이 필요한 단계에서 멈췄습니다. 아래에서 허용하면 이 지점부터 이어서 진행합니다 (다음 작업으로 건너뛰지 않음).', '⏸ Paused at a step that needs approval. Allow it below to continue from this exact point (nothing after it was run).')));
   box.append(body);
   if (item.activity && item.activity.length) {
     const d = el('details', 'actlog'); d.append(el('summary', '', T(`작업 기록 보기 (${item.activity.filter(a => a.kind === 'tool').length}개 도구·명령)`, `Show activity (${item.activity.filter(a => a.kind === 'tool').length} tool calls/commands)`)));
@@ -1180,14 +1193,14 @@ async function send() {
   const draft = question; q.value = ''; autoGrow();
   const allowOnceSent = S.allowOnce || []; S.allowOnce = []; S.skipGitCheck = false;
   const cmdsOnceSent = S.allowCmdsOnce || []; S.allowCmdsOnce = [];
-  const resumeSent = S.resume || ''; S.resume = '';
+  const resumeSent = S.resume || '', resumeReason = S.resumeReason || ''; S.resume = ''; S.resumeReason = '';
   const sentFiles = S.files.slice(); S.files = []; renderChips();
   if (sentFiles.length) { const t = pend.querySelector('.ptext'); if (t) t.textContent = T('첨부 파일을 보내는 중', 'Sending attachments'); }
   const here = () => S.current === convId;
   let gotUser = false, wasStopped = false;
   try {
     const res = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json', 'X-Lang':LANG},
-      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, web:!!S.web, saver:!!S.saver, mcp:!!S.mcp, mcp_claude:!!S.mcp, mcp_gpt:!!S.mcpGpt, executor:S.executor || 'claude', allow_once: allowOnceSent || [], allow_cmds_once: cmdsOnceSent, resume: resumeSent, image_ratio:S.imgRatio || 'square', image_count:Number($('#imgCount').value) || 1, workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => f.upload ? ({ name:f.name, upload:f.upload }) : ({ name:f.name, content:f.content })) }) });
+      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, web:!!S.web, saver:!!S.saver, mcp:!!S.mcp, mcp_claude:!!S.mcp, mcp_gpt:!!S.mcpGpt, executor:S.executor || 'claude', allow_once: allowOnceSent || [], allow_cmds_once: cmdsOnceSent, resume: resumeSent, resume_reason: resumeReason, image_ratio:S.imgRatio || 'square', image_count:Number($('#imgCount').value) || 1, workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => f.upload ? ({ name:f.name, upload:f.upload }) : ({ name:f.name, content:f.content })) }) });
     if (!res.ok) { let m = T('요청 실패', 'Request failed'); try { m = (await res.json()).error || m; } catch {} throw new Error(m); }
     const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
     for (;;) {

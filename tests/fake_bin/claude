@@ -55,6 +55,18 @@ def blocked(tool, data):
         time.sleep(3)
         open("skipped_ahead.txt","w").write("다음 단계까지 진행함")
     _DENY.append({"tool_name":tool,"tool_use_id":"tu1","tool_input":data})
+if ("PROGRESS_LOOP" in p or "SILENT_HANG" in p) and _STREAM and "--resume" not in sys.argv:
+    sid = "sess-%d" % os.getpid()
+    print(json.dumps({"type":"system","subtype":"init","session_id":sid,"mcp_servers":[]}), flush=True)
+    if "SILENT_HANG" in p: time.sleep(20)
+    for k in range(20):  # 진행 상황을 계속 보냄
+        print(json.dumps({"type":"assistant","session_id":sid,"message":{"content":[{"type":"text","text":"진행 %d" % k}]}}, ensure_ascii=False), flush=True)
+        time.sleep(0.8)
+    out("오래 걸린 작업 완료"); sys.exit(0)
+if "HEREDOC_FAIL" in p and _STREAM:
+    sid = "sess-%d" % os.getpid()
+    print(json.dumps({"type":"user","session_id":sid,"message":{"content":[{"type":"tool_result","tool_use_id":"x","is_error":True,"content":"bash: syntax error near unexpected token"}]}}), flush=True)
+    out("heredoc 대신 파일로"); sys.exit(0)
 if "RUN_CMD:" in p and "Bash" in (sys.argv[sys.argv.index("--tools")+1] if "--tools" in sys.argv else ""):
     cmd = p.split("RUN_CMD:",1)[1].split("\n",1)[0].strip()
     allowed = sys.argv[sys.argv.index("--allowedTools")+1] if "--allowedTools" in sys.argv else ""

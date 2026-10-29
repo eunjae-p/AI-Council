@@ -496,6 +496,31 @@ r3 = next((i for i in its if i.get("round")==3), {})
 ok(r3.get("paused") and 4 not in rounds and 5 not in rounds and r3.get("claude_session"), f"discussion: paused executor skips review/fix {rounds}")
 html_ = (pathlib.Path(w.__file__).parent/"web"/"index.html").read_text(encoding="utf-8")
 ok("const canResume" in html_ and "[3, 5].includes(item.round)" in html_, "approval in discussion+work resumes the executor session (no full rerun)")
+# 시간 제한: 진행 중이면 기다리고(출력 없는 시간 기준), 상한을 넘으면 세션을 남긴 채 '이어서 진행'
+_old_t = (w.ATTACH_TIMEOUT, w.WORK_TIMEOUT, w.WORK_HARD_LIMIT)
+w.ATTACH_TIMEOUT, w.WORK_TIMEOUT, w.WORK_HARD_LIMIT = 3, 3, 60
+ct2 = post("/api/conversations")["id"]
+post("/api/chat", {"question":"PROGRESS_LOOP 작업","conversation_id":ct2,"target":"claude","mode":"work","workdir":str(cw)}, raw=True)
+a = get("/api/conversation?id="+ct2)["items"][-1]
+ok(a["role"]=="assistant" and "오래 걸린 작업 완료" in a["content"] and a["elapsed"] > 10, f"progress keeps the run alive past the idle limit ({a.get('elapsed')}s)")
+w.WORK_HARD_LIMIT = 5
+post("/api/chat", {"question":"PROGRESS_LOOP 작업 2","conversation_id":ct2,"target":"claude","mode":"work","workdir":str(cw)}, raw=True)
+a = get("/api/conversation?id="+ct2)["items"][-1]
+ok(a.get("paused")=="timeout" and a.get("claude_session","").startswith("sess-") and a["elapsed"] < 12 and "진행" in a["content"], f"hard limit -> paused with session, not an error ({a.get('paused')}, {a.get('elapsed')}s)")
+w.WORK_HARD_LIMIT = 60
+post("/api/chat", {"question":"SILENT_HANG 작업","conversation_id":ct2,"target":"claude","mode":"work","workdir":str(cw)}, raw=True)
+a = get("/api/conversation?id="+ct2)["items"][-1]
+ok(a.get("paused")=="timeout" and a["elapsed"] < 10, f"no output for the idle limit -> paused ({a.get('elapsed')}s)")
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"↪ 시간 제한으로 멈춘 작업 이어서 진행","conversation_id":ct2,"target":"claude","mode":"work","workdir":str(cw),
+                   "resume":a["claude_session"], "resume_reason":"timeout"}, raw=True)
+lg = open(os.environ["FAKE_LOG"]).read(); ok("'--resume'" in lg and "stopped by the time limit" in lg, "timeout resume uses the time-limit note")
+w.ATTACH_TIMEOUT, w.WORK_TIMEOUT, w.WORK_HARD_LIMIT = _old_t
+ct3 = post("/api/conversations")["id"]
+ev = post("/api/chat", {"question":"HEREDOC_FAIL","conversation_id":ct3,"target":"claude","mode":"work","workdir":str(cw)}, raw=True)
+ok(any(e["type"]=="progress" and e["item"]["kind"]=="error" and "syntax error" in e["item"]["text"] for e in ev), f"tool errors shown in the activity log {[e for e in ev if e['type'] in ('progress','error','model_error')][:4]}")
+import council_core as _cx
+ok(_cx._stream_texts('{"type":"assistant","message":{"content":[{"type":"text","text":"설명입니다"}]}}\n{"type":"user"}') == "설명입니다", "raw stream JSON reduced to Claude's text for errors")
 import council_commands as _ccm, json as _js
 _mf = tmp/"oldcmd"; _mf.mkdir(); (_mf/"cmd_settings.json").write_text(_js.dumps({"allowed":["ls","npm install"]}), encoding="utf-8")
 _al = _ccm.CommandStore(_mf).allowed(); ok("npm install" in _al and "sha1sum" in _al and "grep" in _al, "existing allowlist gets new read-only defaults once")
