@@ -478,14 +478,24 @@ cw = tmp/"cmdwork"; cw.mkdir(); c16 = post("/api/conversations")["id"]
 post("/api/chat", {"question":"RUN_CMD: npm install express","conversation_id":c16,"target":"claude","mode":"work","workdir":str(cw)}, raw=True)
 a = get("/api/conversation?id="+c16)["items"][-1]
 ok(a.get("cmd_denials") and a["cmd_denials"][0]["prefixes"]==["npm install"] and not (cw/"cmd_ran.txt").exists(), f"blocked command -> approval card {a.get('cmd_denials')}")
+ok(a.get("paused") and not (cw/"skipped_ahead.txt").exists() and a["elapsed"] < 3, f"blocked command stops right there (no skipping ahead) {a.get('elapsed')}")
+ok(a.get("claude_session","").startswith("sess-") and "1단계를 실행합니다" in a["content"], "paused answer keeps session id and Claude's progress text")
 # 승인 후 이어서: 같은 Claude 세션을 --resume 으로 (처음부터 다시 하지 않음)
 sid = a.get("claude_session"); ok(bool(sid), "work answer keeps claude session id")
 open(os.environ["FAKE_LOG"],"w").close()
 post("/api/chat", {"question":"↪ 승인한 명령으로 이어서 진행","conversation_id":c16,"target":"claude","mode":"work","workdir":str(cw),
                    "allow_cmds_once":["npm install"], "resume":sid}, raw=True)
 lg = open(os.environ["FAKE_LOG"]).read(); last = get("/api/conversation?id="+c16)["items"][-1]
-ok("'--resume', '"+sid+"'" in lg and "Continue the same task" in lg and "Newest user question" not in lg and "Bash(npm install:*)" in lg, "resume: same session, short prompt, approval applied")
+ok("'--resume', '"+sid+"'" in lg and "Run the blocked step again" in lg and "Newest user question" not in lg and "Bash(npm install:*)" in lg, "resume: same session, short prompt, approval applied")
 ok(last.get("resumed") and (cw/"resumed.txt").read_text()==sid, "resumed answer recorded")
+cd2 = post("/api/conversations")["id"]
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"RUN_CMD: npm install express","conversation_id":cd2,"target":"both","mode":"work","workdir":str(cw),"executor":"claude"}, raw=True)
+its = get("/api/conversation?id="+cd2)["items"]; rounds = [i.get("round") for i in its if i["role"]=="assistant"]
+r3 = next((i for i in its if i.get("round")==3), {})
+ok(r3.get("paused") and 4 not in rounds and 5 not in rounds and r3.get("claude_session"), f"discussion: paused executor skips review/fix {rounds}")
+html_ = (pathlib.Path(w.__file__).parent/"web"/"index.html").read_text(encoding="utf-8")
+ok("const canResume" in html_ and "[3, 5].includes(item.round)" in html_, "approval in discussion+work resumes the executor session (no full rerun)")
 import council_commands as _ccm, json as _js
 _mf = tmp/"oldcmd"; _mf.mkdir(); (_mf/"cmd_settings.json").write_text(_js.dumps({"allowed":["ls","npm install"]}), encoding="utf-8")
 _al = _ccm.CommandStore(_mf).allowed(); ok("npm install" in _al and "sha1sum" in _al and "grep" in _al, "existing allowlist gets new read-only defaults once")
@@ -503,7 +513,7 @@ ok((cw/"cmd_ran.txt").exists(), "always-allowed command runs")
 ok(post("/api/commands/allow", {"prefix":"a && b"})[0]==400, "unsafe prefix rejected")
 ok(any(x["prefix"]=="python" and x["powerful"] for x in post("/api/commands/allow", {"prefix":"python"})["allowed"]), "powerful command flagged")
 ok(not any(x["prefix"]=="npm install" for x in post("/api/commands/reset", {})["allowed"]), "reset to defaults")
-st = post("/api/commands/preset", {}); ok({"node","npm","python","git"} <= {x["prefix"] for x in st["allowed"]}, "dev preset allowed")
+st = post("/api/commands/preset", {}); ok({"node","npm","python","git"} <= {x["prefix"] for x in st["allowed"]} and st.get("dev_preset"), "dev preset allowed")
 post("/api/commands/reset", {})
 post("/api/chat", {"question":"RUN_CMD: npm install x && echo done","conversation_id":c16,"target":"claude","mode":"work","workdir":str(cw)}, raw=True)
 a2 = get("/api/conversation?id="+c16)["items"][-1]

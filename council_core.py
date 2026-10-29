@@ -292,6 +292,8 @@ def run_cli(name: str, arguments: list[str], prompt: str, timeout: int = TIMEOUT
 
     if cancel is not None:
         cancel.attach(process)
+    if info is not None:
+        info["_process"] = process  # 승인이 필요한 지점에서 멈추기 위해 (PermissionWatch)
     on_line = (info or {}).get("on_line")
     try:
         if on_line:
@@ -505,7 +507,12 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
     if name == "claude" and info is not None and info.get("on_progress") and extra[:2] != ["--disallowedTools", "*"]:
         # 도구를 쓰는 실행: 한 줄씩 받아 어떤 도구·명령을 쓰는지 바로 보여 준다
         base = claude_args(model, stream=True, persist=mode in WRITE_MODES)
-        info["on_line"] = lambda line, cb=info["on_progress"]: _claude_progress(line, cb)
+        if mode in WRITE_MODES:
+            # 작업 모드: 허용 목록에 없는 명령·MCP 도구가 막히면 그 자리에서 멈춘다 (건너뛰고 다음 작업을 하지 않게)
+            watch = PermissionWatch(info)
+            info["on_line"] = lambda line, cb=info["on_progress"], w=watch: (w.feed(line), _claude_progress(line, cb))
+        else:
+            info["on_line"] = lambda line, cb=info["on_progress"]: _claude_progress(line, cb)
     if name == "claude" and resume and mode in WRITE_MODES:
         base = base + ["--resume", resume]  # 승인 후: 멈춘 세션에서 이어서 (읽은 파일·실행 결과를 다시 하지 않음)
     try:
@@ -514,6 +521,8 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
         except Cancelled:
             raise
         except CliFailure as exc:
+            if info is not None and info.get("permission_stop"):
+                raise  # 승인 대기로 멈춘 것 → 다시 시도하지 않음
             blob = f"{exc.stderr}\n{exc.stdout}"
             if name == "codex" and disabled and "config.toml" in blob:
                 # MCP 끄기 설정이 Codex 설정과 맞지 않으면 끄기 없이 한 번 더 시도
@@ -527,6 +536,8 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
             else:
                 raise
     except CliFailure as exc:
+        if name == "claude" and info is not None and info.get("permission_stop"):
+            return info["permission_stop"].paused_text()  # 승인이 필요해 Council 이 멈춘 경우: 오류가 아님
         if name == "claude" and not isinstance(exc, Cancelled):
             parsed = _claude_json(exc.stdout)
             if parsed:  # JSON 오류 응답이면 사람이 읽을 본문만 남긴다
@@ -573,6 +584,75 @@ def _tool_summary(name: str, data: dict) -> str:
         if data.get(key):
             return f"{name}: {str(data[key])[:160]}"
     return name
+
+
+# Claude Code 가 막힌 도구에 돌려주는 문구 (셸의 일반 "Permission denied" 와는 구분: 반드시 'to use' 등이 함께 있음)
+_PERMISSION_TEXT = re.compile(r"requested permissions? to use|haven'?t granted it yet|requires? (your )?approval|"
+                              r"permission to use \S+ (has been|was) denied", re.IGNORECASE)
+PAUSE_DELAY = 0.5  # 거절 결과를 받은 뒤 세션 기록이 저장될 시간을 조금 두고 멈춘다
+
+
+class PermissionWatch:
+    """stream-json 을 보며, 허용되지 않은 Bash 명령·MCP 도구가 막히는 순간 Claude 를 멈춘다.
+    Claude Code 는 막힌 도구가 있어도 계속 진행하기 때문에, 그대로 두면 막힌 단계를 건너뛰고 다음 작업을 하다가
+    승인 후 다시 돌아가야 한다 (토큰·시간 낭비, 순서가 꼬일 위험). 멈춘 세션은 승인 후 --resume 으로 그 자리에서 이어 간다."""
+
+    def __init__(self, info: dict):
+        self.info = info
+        self.uses: dict[str, tuple[str, dict]] = {}
+        self.denials: list[dict] = []
+        self.texts: list[str] = []
+        self.session = ""
+        self._timer: threading.Timer | None = None
+
+    def feed(self, line: str) -> None:
+        line = line.strip()
+        if not line.startswith("{"):
+            return
+        try:
+            msg = json.loads(line)
+        except json.JSONDecodeError:
+            return
+        if not isinstance(msg, dict):
+            return
+        if msg.get("session_id") and not self.session:
+            self.session = str(msg["session_id"])
+        content = (msg.get("message") or {}).get("content") if isinstance(msg.get("message"), dict) else None
+        if not isinstance(content, list):
+            return
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            if msg.get("type") == "assistant" and block.get("type") == "tool_use":
+                self.uses[str(block.get("id", ""))] = (str(block.get("name", "")), block.get("input") or {})
+            elif msg.get("type") == "assistant" and block.get("type") == "text" and str(block.get("text", "")).strip():
+                self.texts.append(str(block["text"]).strip())
+            elif msg.get("type") == "user" and block.get("type") == "tool_result" and block.get("is_error"):
+                body = block.get("content")
+                text = body if isinstance(body, str) else " ".join(
+                    str(b.get("text", "")) for b in body or [] if isinstance(b, dict))
+                tool, data = self.uses.get(str(block.get("tool_use_id", "")), ("", {}))
+                if _PERMISSION_TEXT.search(text or "") and (tool == "Bash" or tool.startswith("mcp__")):
+                    self.denials.append({"tool": tool, "input": data if isinstance(data, dict) else {}})
+                    self._stop()
+
+    def _stop(self) -> None:
+        if self.info.get("permission_stop") is not None:
+            return
+        self.info["permission_stop"] = self
+        process = self.info.get("_process")
+        if process is not None:
+            self._timer = threading.Timer(PAUSE_DELAY, _kill_tree, args=(process,))
+            self._timer.daemon = True
+            self._timer.start()
+
+    def paused_text(self) -> str:
+        """멈춘 뒤 화면에 남길 답변: Claude 가 그때까지 쓴 설명 (없으면 빈 칸 — 화면이 '승인 대기' 표시)."""
+        self.info["permission_denials"] = self.denials
+        self.info["paused"] = True
+        if self.session:
+            self.info["claude_session"] = self.session
+        return "\n\n".join(self.texts[-3:])[:4000] or "…"
 
 
 def _claude_progress(line: str, callback) -> None:

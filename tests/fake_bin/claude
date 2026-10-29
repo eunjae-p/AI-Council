@@ -43,17 +43,30 @@ if "EDIT_FILE" in p and "acceptEdits" in sys.argv and "Implement the agreed conc
     out("파일을 수정했습니다: claude_new.txt, app.txt"); sys.exit(0)
 if "--resume" in sys.argv:
     open("resumed.txt","w").write(sys.argv[sys.argv.index("--resume")+1]); out("이어서 진행 완료"); sys.exit(0)
+def blocked(tool, data):
+    """진짜 Claude Code 처럼: 막힌 도구는 오류 결과를 받고 계속 진행한다 (Council 이 멈추지 않으면 다음 단계까지 감)."""
+    if _STREAM:
+        sid = "sess-%d" % os.getpid()
+        print(json.dumps({"type":"system","subtype":"init","session_id":sid,"mcp_servers":[]}), flush=True)
+        print(json.dumps({"type":"assistant","session_id":sid,"message":{"content":[{"type":"text","text":"1단계를 실행합니다"},
+              {"type":"tool_use","id":"tu1","name":tool,"input":data}]}}, ensure_ascii=False), flush=True)
+        print(json.dumps({"type":"user","session_id":sid,"message":{"content":[{"type":"tool_result","tool_use_id":"tu1","is_error":True,
+              "content":"Claude requested permissions to use "+tool+", but you haven't granted it yet."}]}}), flush=True)
+        time.sleep(3)
+        open("skipped_ahead.txt","w").write("다음 단계까지 진행함")
+    _DENY.append({"tool_name":tool,"tool_use_id":"tu1","tool_input":data})
 if "RUN_CMD:" in p and "Bash" in (sys.argv[sys.argv.index("--tools")+1] if "--tools" in sys.argv else ""):
     cmd = p.split("RUN_CMD:",1)[1].split("\n",1)[0].strip()
     allowed = sys.argv[sys.argv.index("--allowedTools")+1] if "--allowedTools" in sys.argv else ""
     import re as _re
     ok_ = any(cmd.startswith(m) for m in _re.findall(r"Bash\(([^:)]*):\*\)", allowed))
     if ok_: open("cmd_ran.txt","w").write(cmd); out("명령을 실행했습니다: "+cmd); sys.exit(0)
-    _DENY.append({"tool_name":"Bash","tool_use_id":"b1","tool_input":{"command":cmd}}); out("명령 승인이 필요합니다"); sys.exit(0)
+    blocked("Bash", {"command":cmd}); out("명령 승인이 필요합니다"); sys.exit(0)
 if "USE_MCP" in p:
     allowed = sys.argv[sys.argv.index("--allowedTools")+1] if "--allowedTools" in sys.argv else ""
     want = "mcp__claude_ai_Higgsfield__generate_video"
     if want in allowed: out("MCP 실행 결과: 생성 완료"); sys.exit(0)
-    _DENY.append({"tool_name":want,"tool_use_id":"t1","tool_input":{"prompt":"고양이"}}); out("생성 도구 승인이 필요합니다"); sys.exit(0)
+    blocked(want, {"prompt":"고양이"}) if "acceptEdits" in sys.argv else _DENY.append({"tool_name":want,"tool_use_id":"t1","tool_input":{"prompt":"고양이"}})
+    out("생성 도구 승인이 필요합니다"); sys.exit(0)
 if "Create one final answer" in p or "moderator of a discussion" in p: out("Council 결론입니다 · 모델 A 의견이 더 타당"); sys.exit(0)
 out("Claude 답변 ✓ 한글")

@@ -54,7 +54,7 @@ from council_mcp import McpStore, valid_tool
 import council_commands
 import council_image
 
-VERSION = "0.19.0"
+VERSION = "0.19.1"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -111,8 +111,8 @@ Working folder: {workdir}
 You can read, create and modify files under this folder and run shell commands to get the user's task done
 (create folders, write code, install dependencies, run scripts, start servers, use connected tools).
 - Shell commands run without asking only if they start with a command the user pre-approved. Other commands are
-  blocked and the user will be asked to approve them; do not try workarounds for a blocked command — finish what
-  you can and list the exact commands you still need.
+  blocked: the task pauses right there and the user is asked to approve them, then you continue from that exact
+  step. So run steps in order, and do not try workarounds or skip ahead past a blocked command.
 - Run simple, separate commands. Avoid shell loops (for/while), $(...) substitutions and long && / ; chains:
   every part of a command must be pre-approved, and loops can never be pre-approved. Prefer your file tools
   (Read/Glob/Grep) over cat/ls/grep for reading files.
@@ -128,9 +128,9 @@ The user turned on token saver mode. Answer concisely: lead with the answer, ski
 question, avoid repeating earlier messages, and keep it short unless the task truly needs detail.
 """
 
-RESUME_NOTE = """The user approved what was blocked in your previous step{approved}.
-Continue the same task from where you stopped. Do not redo work you already finished; rerun only what was blocked
-(as simple, separate commands), then finish the task and give the summary.
+RESUME_NOTE = """The task was paused because a step was blocked. The user has now approved it{approved}.
+Run the blocked step again now (as simple, separate commands), then continue the remaining steps in order.
+Do not redo work you already finished. End with the summary.
 """
 
 READ_NOTE = """
@@ -647,7 +647,9 @@ class Handler(BaseHTTPRequestHandler):
         self.emit("stage", step=0, text="대화 맥락을 준비하는 중")
         prefer = "gpt" if target == "gpt" else "claude"
         token = getattr(self, "cancel", None) or CancelToken()
-        result = maybe_summarize(store, conversation_id, prefer, gpt_model, claude_model, cancel=token)
+        resuming = bool(getattr(self, "resume", "")) and target == "claude"
+        # 승인 후 이어서 실행: Claude 세션이 이미 전체 맥락을 갖고 있으므로 요약·맥락·이미지 재전송을 하지 않는다 (토큰 절약)
+        result = {"status": "skipped"} if resuming else maybe_summarize(store, conversation_id, prefer, gpt_model, claude_model, cancel=token)
         if result["status"] == "updated":
             self.emit("summary", text=f"오래된 대화를 장기 요약으로 정리했습니다 ({result['model']}).")
         elif result["status"] == "failed":
@@ -666,7 +668,7 @@ class Handler(BaseHTTPRequestHandler):
             attached = council_attach.process(files, store.data_dir, conversation_id)
         attach_block = council_attach.prompt_block(attached, budget=council_attach.SAVER_PROMPT_BUDGET if saver else None)
         images = council_attach.images_for(attached)
-        if not images:  # 새 이미지가 없으면 최근에 첨부한 이미지·영상 프레임을 다시 보여준다
+        if not images and not resuming:  # 새 이미지가 없으면 최근에 첨부한 이미지·영상 프레임을 다시 보여준다
             resent = council_attach.recent_media(previous, question)
             if resent:
                 images = council_attach.images_for(resent)
@@ -794,6 +796,7 @@ class Handler(BaseHTTPRequestHandler):
                              for d in run_info.get("permission_denials", []) if d["tool"] == "Bash"][:10] or None,
                 claude_session=run_info.get("claude_session") if which == "claude" and call_mode in ("work",) else None,
                 resumed=True if resume else None,
+                paused=True if run_info.get("paused") else None,  # 승인이 필요해 그 자리에서 멈춤
                 **(post(answer) if post else {}),
             )
             return answer, item
@@ -964,6 +967,8 @@ class Handler(BaseHTTPRequestHandler):
                         text, item = ask(which, prompt, round_no, call_mode)
                         debate.write_log(folder, log_name, log_title, text, item.get("cli_model", ""))
                         self.emit("answer", item=item)
+                        if item.get("paused"):
+                            return None  # 승인 대기로 멈춤 → 검토·수정 단계로 넘어가지 않음 (승인 후 이 세션을 이어서 진행)
                         return text
                     except Cancelled:
                         stopped = True

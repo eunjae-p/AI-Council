@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.19.0** (2026-10-29) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.19.1** (2026-10-29) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.19.1](CHANGELOG.md#v0191-2026-10-29) | 10-29 | 작업 모드: 승인이 필요하면 **그 자리에서 멈춤**(⏸), 토론+작업도 실행 세션만 이어서, 개발 명령 허용 표시 개선 |
 | [V0.19.0](CHANGELOG.md#v0190-2026-10-29) | 10-29 | **💰 토큰 절약** — 캐시가 맞게 맥락 고정, 지난 토론은 결론만, 🪙 토큰 표시, 💰 절약 모드 |
 | [V0.18.5](CHANGELOG.md#v0185-2026-10-29) | 10-29 | 📎 **ZIP 첨부** — 안전하게 풀어서 파일 목록·코드 내용·이미지를 모델에 전달 |
 | [V0.18.4](CHANGELOG.md#v0184-2026-10-27) | 10-27 | 왼쪽 아래 **↻ 계정 바꾸기** — 로그아웃 후 다른 GPT·Claude 계정으로 로그인 |
 | [V0.18.3](CHANGELOG.md#v0183-2026-10-26) | 10-26 | 승인 후 **멈춘 Claude 세션을 이어서 실행**(처음부터 다시 하지 않음), 읽기 전용 명령 기본 허용 확대 |
-| [V0.18.2](CHANGELOG.md#v0182-2026-10-26) | 10-26 | 폴더에 **한글 이름 실행 파일**: `0_처음 설치`, `1_AI Council 실행`, `2_업데이트` (Windows · Mac) |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -146,9 +146,13 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 1. 입력창 위 **🛠 작업** → 작업 폴더 경로 입력 (예: `D:\my-project`) → 할 일을 적고 보내기.
 2. **명령 실행은 허용 목록 + 승인**: `mkdir`, `ls`, `git status` 같은 명령은 바로 실행됩니다.
    목록에 없는 명령(예: `npm install`, `python app.py`)은 실행하지 않고 답변 아래에 **🛡 승인 카드**가 뜹니다 →
-   **이번만 허용하고 다시 실행 / 항상 허용하고 다시 실행 / 허용 안 함**. 대상이 Claude 단독이면 **멈춘 Claude 세션을 그대로 이어서** 실행합니다 (앞에서 읽은 파일·실행 결과를 기억, 처음부터 다시 하지 않음).
+   **이번만 허용하고 다시 실행 / 항상 허용하고 다시 실행 / 허용 안 함**.
+   막힌 명령·MCP 도구가 나오면 Claude 는 **그 자리에서 멈춥니다** (⏸ 표시 — 막힌 단계를 건너뛰고 다음 작업을 하지 않음).
+   허용하면 **멈춘 Claude 세션을 그대로 이어서** 그 단계부터 실행합니다 (앞에서 읽은 파일·실행 결과를 기억, 처음부터 다시 하지 않음).
+   토론 + 작업 모드에서 Claude 가 실행 단계에서 멈춘 경우도 토론을 다시 하지 않고 그 세션만 이어서 진행합니다.
+   승인은 빨리 할수록 쌉니다 — 1시간 안이면 이전 기록을 캐시에서 읽습니다 (🔔 알림을 켜 두세요).
    기본 허용 목록에는 `cat`·`ls`·`grep`·`sha1sum`·`cut`·`diff`·`git show` 같은 **읽기 전용 명령**이 들어 있습니다. `for … do … done` 반복문은 허용 목록으로 허용할 수 없어, Claude에게 단순한 명령으로 나눠 실행하도록 안내합니다.
-3. 허용 목록 관리: 작업 폴더 옆 **🛡** 버튼 (추가·삭제·기본값으로, **개발 명령 한 번에 허용** = node·npm·npx·python·pip·uv·git). `python`·`node`·`rm`·`curl` 처럼 사실상 무엇이든 할 수 있는 명령은 빨간 표시가 붙습니다.
+3. 허용 목록 관리: 작업 폴더 옆 **🛡** 버튼 (추가·삭제·기본값으로, **개발 명령 한 번에 허용** = node·npm·npx·python·pip·uv·git — 누르면 방금 추가된 명령이 맨 위에 표시되고 버튼이 **✓ 개발 명령 허용됨**으로 바뀝니다). `python`·`node`·`rm`·`curl` 처럼 사실상 무엇이든 할 수 있는 명령은 빨간 표시가 붙습니다.
 4. **진행 상황**: Claude가 지금 쓰는 도구·명령(🔌 블렌더 · execute_blender_code, `$ npm install` 등)이 진행 표시 아래에 실시간으로 나오고, 끝나면 답변의 **작업 기록 보기**에 남습니다.
 5. **저장점(선택)**: 작업 폴더가 Git 저장소면 끝난 뒤 **📝 변경된 파일** 카드 → **✅ 확정 (커밋)** / **↩ 되돌리기**.
    저장 안 된 변경이 있으면 시작 전에 "저장점 만들고 시작 / 저장점 없이 진행"을 고릅니다. Git 저장소가 아닌 폴더(예: `D:\` 아래 새 폴더)는 그냥 진행합니다.
@@ -302,7 +306,7 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.19.0** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.19.1** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
@@ -367,7 +371,7 @@ Clone with `git` (not ZIP) so the built-in updater works.
 
 - **Mode**: 💬 Chat (no file access) · 🛠 Work (reads, creates and edits files and runs commands in the working folder)
 - **Target**: GPT · Claude · Discussion (both debate → neutral conclusion; *Show debate rounds* expands each round)
-- **Work mode**: blocked commands show a 🛡 card — **Allow once and run again** / **Always allow and run again**. Manage the allowlist with **🛡** next to the folder. In a Git repository you can review changes and **✅ Commit** or **↩ Revert**; with uncommitted changes you choose **Create checkpoint and start** or **Continue without**.
+- **Work mode**: when a command or MCP tool is blocked, Claude **pauses right there** (⏸, nothing after it runs) and a 🛡 card appears — **Allow once and run again** / **Always allow and run again** resumes the same Claude session from that step (also for the executor step in Discussion + Work, without rerunning the discussion). Approve soon: within about an hour the earlier history is read from cache. Manage the allowlist with **🛡** next to the folder. In a Git repository you can review changes and **✅ Commit** or **↩ Revert**; with uncommitted changes you choose **Create checkpoint and start** or **Continue without**.
 - **💰 Saver on/off** (fewer tokens: see Features), **Web search on/off**, **Claude MCP / GPT MCP on/off** (⚙ manages Claude's always-allowed tools), **Run: Claude / Run: GPT** in Discussion + Work, **Models ▾** to pin model versions
 - **⤓ MD** downloads one answer; **Chat_md** downloads the whole chat; **■ Stop** (or Esc) stops generating
 - **Long chats**: only the latest 12 turns are drawn (⬆ show earlier / show all); **🗜 Compress** summarizes the chat now; **↪ Continue in new chat** starts a new chat that carries over a summary.

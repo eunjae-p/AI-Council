@@ -146,4 +146,4 @@ class CommandStore:
 
     def state(self) -> dict:
         return {"allowed": [{"prefix": p, "powerful": is_powerful(p)} for p in self.allowed()],
-                "defaults": DEFAULT_PREFIXES}
+                "defaults": DEFAULT_PREFIXES, "dev_preset": DEV_PRESET}

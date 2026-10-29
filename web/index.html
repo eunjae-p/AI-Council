@@ -177,6 +177,8 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 .editcard .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px} .editcard .ehint{color:var(--dim);font-size:12px}
 .editcard .estate{margin-top:8px;font-weight:600} .estate.commit{color:var(--council)} .estate.revert{color:var(--muted)}
 .mcpdeny{margin:8px 0 2px;border:1px solid var(--warn-line);background:var(--warn-bg);border-radius:10px;padding:10px 12px;font-size:13px}
+.mcplist label.fresh{background:var(--warn-bg)}
+.paused{margin:2px 0 8px;padding:7px 10px;border-radius:8px;background:var(--warn-bg);color:var(--warn-text);font-size:13px}
 .mcpdeny b{color:var(--warn-text)} .mcpdeny .t{margin:6px 0 2px;font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
 .mcpdeny pre{white-space:pre-wrap;margin:2px 0 6px;color:var(--muted);font-size:12px;max-height:120px;overflow:auto}
 .mcpdeny .row{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
@@ -323,7 +325,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.19.0'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.19.1'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -465,8 +467,10 @@ function msgEl(item, index) {
     const c = el('button', 'ghost small', T('복사', 'Copy')); c.onclick = () => copyText(item.content); head.append(c);
     if (w !== '오류') { const d = el('button', 'ghost small', '⤓ MD'); d.title = T('이 답변만 Markdown 파일로 내려받기', 'Download only this answer as Markdown'); d.onclick = () => downloadAnswer(item, index); head.append(d); }
   }
-  const body = el('div', 'content'); renderText(body, item.content);
-  box.append(head, body);
+  const body = el('div', 'content'); renderText(body, item.content === '…' ? '' : item.content);
+  box.append(head);
+  if (item.paused) box.append(el('div', 'paused', T('⏸ 승인이 필요한 단계에서 멈췄습니다. 아래에서 허용하면 이 지점부터 이어서 진행합니다 (다음 작업으로 건너뛰지 않음).', '⏸ Paused at a step that needs approval. Allow it below to continue from this exact point (nothing after it was run).')));
+  box.append(body);
   if (item.activity && item.activity.length) {
     const d = el('details', 'actlog'); d.append(el('summary', '', T(`작업 기록 보기 (${item.activity.filter(a => a.kind === 'tool').length}개 도구·명령)`, `Show activity (${item.activity.filter(a => a.kind === 'tool').length} tool calls/commands)`)));
     item.activity.forEach(a => d.append(activityLine(a))); box.append(d);
@@ -544,7 +548,7 @@ function mcpDenialCard(item, index) {
     if (save) { try { for (const t of tools) await api('/api/mcp/allow', { tool:t, allowed:true }); } catch (e) { return toast(e.message, true); } }
     setMcp(true); if (q.target) setTarget(q.target); restoreMode(q);
     S.allowOnce = save ? [] : tools;
-    if (item.claude_session && item.model === 'Claude' && (q.target || 'claude') === 'claude' && ['work', 'edit'].includes(q.mode)) {
+    if (canResume(item, q) && ['work', 'edit'].includes(q.mode)) {
       S.resume = item.claude_session; setTarget('claude');
       $('#q').value = T(`↪ 승인한 도구로 이어서 진행 (${tools.map(toolLabel).join(', ')})`, `↪ Continue with the approved tools (${tools.map(toolLabel).join(', ')})`);
     } else $('#q').value = q.content;
@@ -556,6 +560,9 @@ function mcpDenialCard(item, index) {
   return c;
 }
 // ---------- 작업 모드: 허용 목록에 없어 막힌 명령 ----------
+// 멈춘 Claude 세션을 이어서 실행할 수 있는가: Claude 단독 작업, 또는 토론+작업에서 Claude 가 실행한 단계(구현·수정)
+// (예전에는 토론에서 막히면 토론 전체를 처음부터 다시 해서 토큰이 크게 들었다)
+const canResume = (item, q) => !!item.claude_session && item.model === 'Claude' && ((q.target || 'claude') === 'claude' || [3, 5].includes(item.round));
 function restoreMode(q) { if (['work', 'edit'].includes(q.mode)) { setMode('work'); if (q.workdir) $('#workdir').value = q.workdir; } }
 function cmdDenialCard(item, index) {
   const c = el('div', 'mcpdeny'), prefixes = [...new Set(item.cmd_denials.flatMap(d => d.prefixes || []))];
@@ -576,7 +583,7 @@ function cmdDenialCard(item, index) {
     if (save) { try { for (const p of prefixes) await api('/api/commands/allow', { prefix:p, allowed:true }); } catch (e) { return toast(e.message, true); } }
     if (q.target) setTarget(q.target); restoreMode(q); if (q.mcp) setMcp(true); if (q.mcp_gpt) setMcpGpt(true); if (q.executor) setExecutor(q.executor);
     S.allowCmdsOnce = save ? [] : prefixes;
-    if (item.claude_session && item.model === 'Claude' && (q.target || 'claude') === 'claude') {
+    if (canResume(item, q)) {
       // 멈춘 Claude 세션을 이어서 실행 (처음부터 다시 하지 않음)
       S.resume = item.claude_session; setTarget('claude');
       $('#q').value = T(`↪ 승인한 명령으로 이어서 진행 (${prefixes.join(', ')})`, `↪ Continue with the approved commands (${prefixes.join(', ')})`);
@@ -594,19 +601,32 @@ function cmdDenialCard(item, index) {
 const POWERFUL_CMDS = ['python', 'python3', 'py', 'node', 'bash', 'sh', 'zsh', 'powershell', 'pwsh', 'cmd', 'rm', 'del', 'rmdir', 'curl', 'wget', 'sudo', 'npx', 'mv', 'chmod', 'chown'];
 async function openCmdManager() {
   const body = el('div'), list = el('div', 'mcplist'), add = el('div', 'row'), inp = el('input'), addBtn = el('button', 'small', T('추가', 'Add'));
+  const preset = el('button', 'small', T('개발 명령 한 번에 허용', 'Allow common dev commands')), count = el('div', 'k');
   inp.placeholder = T('예: npm install', 'e.g. npm install'); inp.style.flex = '1'; inp.style.padding = '6px 9px';
-  body.append(el('div', '', T('작업 모드에서 묻지 않고 바로 실행할 명령입니다. 명령이 여기 적힌 단어로 시작하면 실행되고, 아니면 답변 아래에서 허용 여부를 묻습니다.', 'Commands that run without asking in Work mode. A command runs right away if it starts with one of these; otherwise you are asked below the answer.')), list, add);
+  body.append(el('div', '', T('작업 모드에서 묻지 않고 바로 실행할 명령입니다. 명령이 여기 적힌 단어로 시작하면 실행되고, 아니면 답변 아래에서 허용 여부를 묻습니다.', 'Commands that run without asking in Work mode. A command runs right away if it starts with one of these; otherwise you are asked below the answer.')), count, list, add);
+  let fresh = new Set();
   const render = st => { list.innerHTML = '';
-    st.allowed.forEach(x => { const r = el('label'), del = el('button', 'ghost small', '×'); del.title = T('목록에서 빼기', 'Remove');
+    const dev = st.dev_preset || [], have = new Set(st.allowed.map(x => x.prefix));
+    const allDev = dev.length && dev.every(p => have.has(p));
+    preset.textContent = allDev ? T('✓ 개발 명령 허용됨', '✓ Dev commands allowed') : T('개발 명령 한 번에 허용', 'Allow common dev commands');
+    preset.disabled = !!allDev;
+    preset.title = (allDev ? T('이미 모두 허용되어 있습니다: ', 'All already allowed: ') : '') + dev.join(' · ');
+    count.textContent = T(`허용된 명령 ${st.allowed.length}개`, `${st.allowed.length} allowed commands`);
+    // 방금 추가한 것은 맨 위에 강조해서 보여 준다
+    [...st.allowed].sort((a, b) => fresh.has(b.prefix) - fresh.has(a.prefix)).forEach(x => { const r = el('label'), del = el('button', 'ghost small', '×'); del.title = T('목록에서 빼기', 'Remove');
       del.onclick = async () => { try { render(await api('/api/commands/allow', { prefix:x.prefix, allowed:false })); } catch (e) { toast(e.message, true); } };
-      r.append(el('span', '', x.prefix)); if (x.powerful) r.append(el('span', 'kind action', T('무엇이든 실행 가능', 'can run anything'))); r.append(del); list.append(r); }); };
+      r.append(el('span', '', x.prefix)); if (fresh.has(x.prefix)) { r.classList.add('fresh'); r.append(el('span', 'kind', T('방금 추가', 'just added'))); } if (x.powerful) r.append(el('span', 'kind action', T('무엇이든 실행 가능', 'can run anything'))); r.append(del); list.append(r); }); };
   addBtn.onclick = async () => { const v = inp.value.trim(); if (!v) return;
     if (POWERFUL_CMDS.includes(v.split(' ')[0]) && !confirm(T('이 명령은 사실상 무엇이든 실행할 수 있습니다. 추가할까요?', 'This command can effectively run anything. Add it?'))) return;
     try { render(await api('/api/commands/allow', { prefix:v, allowed:true })); inp.value = ''; } catch (e) { toast(e.message, true); } };
-  const preset = el('button', 'small', T('개발 명령 한 번에 허용', 'Allow common dev commands'));
-  preset.title = 'node · npm · npx · python · pip · uv · git';
   preset.onclick = async () => { if (!confirm(T('node, npm, npx, python, pip, uv, git 명령을 묻지 않고 실행하도록 허용할까요?\n(코드 실행·패키지 설치가 가능해집니다. 목록에서 언제든 뺄 수 있습니다)', 'Allow node, npm, npx, python, pip, uv and git to run without asking?\n(This allows running code and installing packages. You can remove them any time.)'))) return;
-    try { render(await api('/api/commands/preset', {})); toast(T('개발 명령을 허용했습니다', 'Dev commands allowed')); } catch (e) { toast(e.message, true); } };
+    try {
+      const before = new Set([...list.querySelectorAll('label > span:first-child')].map(x => x.textContent));
+      const st = await api('/api/commands/preset', {});
+      fresh = new Set(st.allowed.map(x => x.prefix).filter(p => !before.has(p))); render(st); list.scrollTop = 0;
+      toast(fresh.size ? T(`허용했습니다: ${[...fresh].join(', ')} — 이제 이 명령들은 묻지 않고 실행됩니다`, `Allowed: ${[...fresh].join(', ')} — these now run without asking`)
+                       : T('이미 모두 허용되어 있습니다', 'All of them were already allowed'));
+    } catch (e) { toast(e.message, true); } };
   add.append(inp, addBtn, preset);
   modal(T('명령 실행 허용 목록', 'Command allowlist'), body, [{ label:T('기본값으로', 'Reset to defaults'), keep:true, onClick: async () => { if (confirm(T('허용 목록을 기본값으로 되돌릴까요?', 'Reset the allowlist to defaults?'))) render(await api('/api/commands/reset', {})); } }, { label:T('닫기', 'Close'), primary:true }]);
   try { render(await api('/api/commands')); } catch (e) { toast(e.message, true); }
