@@ -11,6 +11,11 @@ import time
 if "SLOWALL" in p or ("SLOWCLAUDE" in p and os.path.basename(sys.argv[0])=="claude"): time.sleep(30)
 if "UNSUPPORTED" in p:
     sys.stderr.write("Reading prompt from stdin...\nuser\n"+p+"\nERROR: {\"message\":\"The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account.\"}\n"); sys.exit(1)
+if "CAPACITY_ONCE" in p:
+    mark = os.path.join(os.environ.get("T", "."), "capacity_mark")
+    if not os.path.exists(mark):
+        open(mark, "w").write("1"); sys.stderr.write("ERROR: Selected model is at capacity. Please try a different model."); sys.exit(1)
+if "CAPACITY_ALWAYS" in p: sys.stderr.write("ERROR: Selected model is at capacity. Please try a different model."); sys.exit(1)
 if "FAILGPT" in p: sys.stderr.write("fake codex error"); sys.exit(3)
 if "EDIT_FILE" in p and "workspace-write" in sys.argv:
     open("gpt_new.txt","w").write("GPT가 만든 파일\n")

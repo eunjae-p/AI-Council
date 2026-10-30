@@ -84,6 +84,10 @@ PAIRS: list[tuple[str, str]] = [
      "{x} CLI does not support web search, so it answered without searching. Update the CLI at the bottom left."),
     ("변경 내용을 확인하지 못했습니다: {x}", "Could not read the changes: {x}"),
     ("영상 분석을 준비하지 못해 모델에 보내지 않았습니다.", "The video could not be prepared for analysis, so nothing was sent to the models."),
+    ("모델 서버가 일시적으로 붐벼 요청이 거절되었습니다 (사용량 한도 초과가 아님). 잠시 후 다시 보내거나, "
+     "'모델 설정'에서 다른 모델(또는 계정 기본값)을 고르세요. 대화 모드에서는 한 번 자동으로 다시 시도합니다.",
+     "The model server was temporarily too busy and rejected the request (not a usage limit). Send again in a moment, or "
+     "pick another model (or the account default) in 'Models'. In Chat mode Council retries once automatically."),
     ("작업 폴더의 HANDOFF.md 에 인수인계 기록을 남겼습니다.", "Added a handoff entry to HANDOFF.md in the working folder."),
     ("HANDOFF.md 에 기록하지 못했습니다: {x}", "Could not write to HANDOFF.md: {x}"),
     ("ZIP 파일을 풀지 못해 모델에 보내지 않았습니다.", "The ZIP file could not be extracted, so nothing was sent to the models."),

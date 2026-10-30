@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.20.1** (2026-10-30) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.20.2** (2026-10-30) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,10 +11,10 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.20.2](CHANGELOG.md#v0202-2026-10-30) | 10-30 | "모델 서버 혼잡(at capacity)" 오류 안내 + 대화 모드 자동 재시도 1회 |
 | [V0.20.1](CHANGELOG.md#v0201-2026-10-30) | 10-30 | 토론 결론 위에 **📁 토론 기록 폴더** 버튼 (열기 + 경로 복사) |
 | [V0.20.0](CHANGELOG.md#v0200-2026-10-30) | 10-30 | **🔁 Claude 데스크톱 앱과 번갈아 쓰기** — HANDOFF.md 자동 기록, 📄 CLAUDE.md 준비, 🖥 Claude 앱에서 이어서 |
 | [V0.19.2](CHANGELOG.md#v0192-2026-10-29) | 10-29 | 작업 모드 시간 제한: 진행 중이면 계속(15분 무응답·60분 상한), 멈춰도 **↪ 이어서 진행** |
-| [V0.19.1](CHANGELOG.md#v0191-2026-10-29) | 10-29 | 작업 모드: 승인이 필요하면 **그 자리에서 멈춤**(⏸), 토론+작업도 실행 세션만 이어서, 개발 명령 허용 표시 개선 |
 | [V0.19.0](CHANGELOG.md#v0190-2026-10-29) | 10-29 | **💰 토큰 절약** — 캐시가 맞게 맥락 고정, 지난 토론은 결론만, 🪙 토큰 표시, 💰 절약 모드 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
@@ -263,6 +263,7 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 | "Git으로 설치되지 않은 폴더" | ZIP으로 받은 폴더입니다. `git clone` 으로 다시 받기 |
 | 영상 첨부가 안 됨 ("ffmpeg 없음") | `Setup.cmd` 실행 (또는 `winget install Gyan.FFmpeg`) 후 Council 재시작 |
 | 작업 모드에서 오래 걸리는데 아무 변화가 없음 | 진행 표시 아래 실시간 기록 확인: `MCP:` 줄에 blender 가 없으면 Claude Code에 Blender MCP 미등록, 도구 호출이 없으면 웹 검색만 하는 중일 수 있음 (블렌더 작업은 웹 검색 끔 권장) |
+| `Selected model is at capacity` / `Overloaded` | 모델 서버가 일시적으로 붐빔 (사용량 한도 아님). 대화 모드는 15초 뒤 한 번 자동 재시도 — 계속되면 잠시 후 다시 보내거나 **모델 설정**에서 다른 모델·계정 기본값 선택 |
 | `Failed to authenticate: OAuth session expired` / 로그인 만료 | 왼쪽 아래 **버전 다시 확인** → 빨간 **로그인하기** (또는 터미널 `claude auth login` / `codex login`) 후 다시 보내기 |
 | GPT 모델 오류 (`not supported … ChatGPT account`) | 모델 설정에서 GPT를 **계정 기본값** 으로 |
 | 한쪽 구독만 있음 | 그 모델만 선택해서 사용 (토론은 두 구독이 모두 필요) |
@@ -320,7 +321,7 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.20.1** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.20.2** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 

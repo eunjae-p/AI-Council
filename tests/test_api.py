@@ -547,6 +547,16 @@ ok(post("/api/handoff/setup", {"workdir":str(tmp/"nope")})[0]==400, "setup needs
 html_ = (pathlib.Path(w.__file__).parent/"web"/"index.html").read_text(encoding="utf-8")
 ok("claude://resume?session=" in html_ and "openInClaudeApp" in html_ and "handoff:!!S.handoff" in html_, "UI: Claude app resume link and handoff toggle")
 ok("item.model === 'Council' && item.debate_dir" in html_ and "dlog" not in html_, "discussion log folder button on the conclusion header")
+# 모델 서버 혼잡 (Selected model is at capacity): 대화 모드는 잠시 뒤 한 번 자동 재시도, 안내 문구
+import council_core as _ccap
+_ccap.CAPACITY_RETRY_DELAY = 0.5
+ccp = post("/api/conversations")["id"]
+ev = post("/api/chat", {"question":"CAPACITY_ONCE 질문","conversation_id":ccp,"target":"gpt"}, raw=True)
+ok([e["type"] for e in ev].count("answer")==1 and "error" not in [e["type"] for e in ev], "capacity error retried once and answered")
+ev = post("/api/chat", {"question":"CAPACITY_ALWAYS 질문","conversation_id":ccp,"target":"gpt"}, raw=True)
+err = next((e["text"] for e in ev if e["type"]=="error"), "")
+ok("일시적으로 붐벼" in err and "at capacity" in err, "capacity error explained")
+ok(_ccap.is_capacity_error("API Error: 529 {\"type\":\"overloaded_error\"}") and not _ccap.is_capacity_error("usage limit reached"), "capacity detection")
 import council_commands as _ccm, json as _js
 _mf = tmp/"oldcmd"; _mf.mkdir(); (_mf/"cmd_settings.json").write_text(_js.dumps({"allowed":["ls","npm install"]}), encoding="utf-8")
 _al = _ccm.CommandStore(_mf).allowed(); ok("npm install" in _al and "sha1sum" in _al and "grep" in _al, "existing allowlist gets new read-only defaults once")

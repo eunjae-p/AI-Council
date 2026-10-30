@@ -72,6 +72,9 @@ class CliFailure(RuntimeError):
         if is_auth_error(blob):
             tips.append(f"{self.name} 로그인이 만료되었거나 필요합니다. Council 왼쪽 아래 '버전 다시 확인' → 빨간 '로그인하기'를 누르거나, "
                         f"터미널에서 '{LOGIN_HINT.get(self.name, self.name + ' login')}' 를 실행한 뒤 다시 보내세요.")
+        if is_capacity_error(blob):
+            tips.append("모델 서버가 일시적으로 붐벼 요청이 거절되었습니다 (사용량 한도 초과가 아님). 잠시 후 다시 보내거나, "
+                        "'모델 설정'에서 다른 모델(또는 계정 기본값)을 고르세요. 대화 모드에서는 한 번 자동으로 다시 시도합니다.")
         if "rate limit" in blob or "usage limit" in blob:
             tips.append("구독 사용량 한도에 도달했을 수 있습니다. 잠시 후 다시 시도하거나 다른 모델을 선택하세요.")
         return "\n→ ".join(tips)
@@ -88,9 +91,22 @@ class CliFailure(RuntimeError):
         return text
 
 
+_CAPACITY = ("at capacity", "overloaded", "server is busy", "temporarily unavailable", "try a different model", "529")
+
+
+def is_capacity_error(blob: str) -> bool:
+    """모델 서버 혼잡으로 거절됨 (Codex: 'Selected model is at capacity', Claude: 'Overloaded')."""
+    b = (blob or "").lower()
+    return any(k in b for k in _CAPACITY[:5]) or ("529" in b and "overload" in b)
+
+
+CAPACITY_RETRY_DELAY = 15  # 혼잡 오류면 이만큼 기다렸다가 한 번 다시 시도 (대화·읽기 전용 모드만)
+
+
 def trim_log(text: str, limit: int = 3000) -> str:
     """CLI 로그에서 프롬프트 에코 등은 빼고 오류·경고 줄 위주로 보여준다."""
-    keys = ("error", "warning", "fail", "denied", "invalid", "not found", "unauthorized", "limit", "required", "not support")
+    keys = ("error", "warning", "fail", "denied", "invalid", "not found", "unauthorized", "limit", "required", "not support",
+            "capacity", "overloaded")
     lines = [l for l in text.splitlines() if any(k in l.lower() for k in keys)]
     picked = "\n".join(dict.fromkeys(lines)) if lines else text
     return picked[-limit:]
@@ -442,6 +458,29 @@ def call_model(which: str, model: str, prompt: str, mode: str = "chat", workdir:
     cmd_allow: 작업 모드에서 묻지 않고 실행할 명령 접두어 (council_commands). 나머지 명령은 막히고 승인 요청.
     codex_mcp: GPT(Codex) 에 등록된 MCP 서버(블렌더 등)를 켠다. 끄면 이번 실행에서 모두 끈다.
     resume: Claude 작업 모드에서 승인 후 이어서 실행할 세션 ID (--resume). info["claude_session"] 에 새 세션 ID."""
+    try:
+        return _call_model_web(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, web,
+                               mcp_allow, cmd_allow, codex_mcp, resume)
+    except Cancelled:
+        raise
+    except CliFailure as exc:
+        # 서버 혼잡: 파일을 고치지 않는 호출(대화·읽기 전용)만 잠시 뒤 한 번 다시 시도 (작업 모드는 중간까지 한 일을 반복할 수 있어 제외)
+        if mode in WRITE_MODES or mode == "image" or not is_capacity_error(f"{exc.stderr}\n{exc.stdout}"):
+            raise
+        if info is not None:
+            info["capacity_retry"] = True
+        waited = 0.0
+        while waited < CAPACITY_RETRY_DELAY:
+            if cancel is not None and cancel.cancelled:
+                raise Cancelled(which)
+            time.sleep(0.5)
+            waited += 0.5
+        return _call_model_web(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, web,
+                               mcp_allow, cmd_allow, codex_mcp, resume)
+
+
+def _call_model_web(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, web,
+                    mcp_allow, cmd_allow, codex_mcp, resume) -> str:
     if web:
         try:
             return _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, True, mcp_allow,
