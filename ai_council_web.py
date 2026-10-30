@@ -47,6 +47,7 @@ import council_edit
 import council_i18n
 import council_versions
 import council_attach
+import council_handoff
 import council_media
 import council_update
 from council_state import CliState
@@ -54,7 +55,7 @@ from council_mcp import McpStore, valid_tool
 import council_commands
 import council_image
 
-VERSION = "0.19.2"
+VERSION = "0.20.0"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -302,6 +303,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(council_update.check(VERSION, force=arg("refresh") == "1"))
             elif parsed.path == "/api/commands":
                 self.send_json(cmd_store.state())
+            elif parsed.path == "/api/handoff/status":
+                self.send_json(council_handoff.status(check_workdir(arg("workdir"))))
             elif parsed.path == "/api/mcp":
                 self.send_json(mcp_store.state())
             elif parsed.path == "/api/versions":
@@ -435,6 +438,9 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("명령 접두어가 올바르지 않습니다.")
                 cmd_store.set_allowed(prefix, bool(body.get("allowed", True)))
                 self.send_json(cmd_store.state())
+            elif path == "/api/handoff/setup":
+                # CLAUDE.md 만들기(없으면 틀) / 인수인계 규칙 덧붙이기 — 사용자가 버튼을 누른 경우만
+                self.send_json(council_handoff.setup(check_workdir(str(body.get("workdir", ""))), self.lang))
             elif path == "/api/commands/preset":
                 for prefix in council_commands.DEV_PRESET:  # 개발 명령 한 번에 허용 (사용자가 버튼을 누른 경우만)
                     cmd_store.set_allowed(prefix, True)
@@ -607,6 +613,7 @@ class Handler(BaseHTTPRequestHandler):
             files = council_attach.validate(body.get("attachments"), store.data_dir, conversation_id)
             web = bool(body.get("web"))
             self.saver = bool(body.get("saver"))  # 💰 절약 모드
+            self.handoff = bool(body.get("handoff"))  # 작업 모드가 끝나면 작업 폴더 HANDOFF.md 에 인수인계 기록
             mcp = bool(body.get("mcp_claude", body.get("mcp")))  # Claude MCP (예전 이름: mcp)
             mcp_gpt = bool(body.get("mcp_gpt"))                     # GPT(Codex) MCP
             resume = str(body.get("resume") or "")[:100]           # 승인 후 이어서 실행할 Claude 세션
@@ -729,6 +736,7 @@ class Handler(BaseHTTPRequestHandler):
 
         models = {"gpt": ("GPT", "codex", gpt_model), "claude": ("Claude", "claude", claude_model)}
         answers: dict[str, str] = {}
+        produced: list[dict] = []  # 이번 질문에서 저장된 답변들 (HANDOFF.md 기록용)
         errors: dict[str, str] = {}
         stopped = token.cancelled
         discussion = target == "both"
@@ -811,6 +819,7 @@ class Handler(BaseHTTPRequestHandler):
                 paused=run_info.get("paused") or None,  # True: 승인이 필요해 멈춤 · "timeout": 시간 제한으로 멈춤 (둘 다 이어서 진행 가능)
                 **(post(answer) if post else {}),
             )
+            produced.append(item)
             return answer, item
 
         def run_parallel(jobs: dict[str, str], round_no: int, on_done) -> dict[str, str]:
@@ -1001,6 +1010,25 @@ class Handler(BaseHTTPRequestHandler):
                 if review and not review.lstrip().upper().startswith("LGTM") and not token.cancelled:
                     step(doer, base_prompt(doer) + FIX_NOTE.format(reviewer=c_label, review=review), 5,
                          f"검토 내용을 반영해 {d_label}가 수정하는 중", f"5_{d_label}_수정.md", f"{d_label} · 수정")
+
+        if mode == "work" and workdir and getattr(self, "handoff", False):
+            # 인수인계 기록: 실제로 무언가를 한 작업만 (파일을 읽기만 한 질문은 남기지 않음)
+            work_items = [it for it in produced if it.get("mode") in ("work", "edit")]
+            if work_items:
+                try:
+                    changed = []
+                    if track_git:
+                        try:
+                            changed = [f["path"] for f in council_edit.changes(workdir)["files"]]
+                        except council_edit.EditError:
+                            changed = []
+                    did = (changed or council_handoff.files_from_activity(work_items) or council_handoff.used_shell(work_items)
+                           or any(it.get("paused") for it in work_items) or any(it.get("model") == "GPT" for it in work_items))
+                    if did:
+                        council_handoff.append_entry(workdir, self.lang, question, work_items, changed or None)
+                        self.emit("summary", text="작업 폴더의 HANDOFF.md 에 인수인계 기록을 남겼습니다.")
+                except OSError as exc:
+                    self.emit("warning", text=f"HANDOFF.md 에 기록하지 못했습니다: {exc}")
 
         if track_git:
             # 끝나면 바뀐 파일·내용을 기록 → 화면에서 확정(커밋) 또는 되돌리기

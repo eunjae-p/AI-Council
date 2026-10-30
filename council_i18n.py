@@ -84,6 +84,8 @@ PAIRS: list[tuple[str, str]] = [
      "{x} CLI does not support web search, so it answered without searching. Update the CLI at the bottom left."),
     ("변경 내용을 확인하지 못했습니다: {x}", "Could not read the changes: {x}"),
     ("영상 분석을 준비하지 못해 모델에 보내지 않았습니다.", "The video could not be prepared for analysis, so nothing was sent to the models."),
+    ("작업 폴더의 HANDOFF.md 에 인수인계 기록을 남겼습니다.", "Added a handoff entry to HANDOFF.md in the working folder."),
+    ("HANDOFF.md 에 기록하지 못했습니다: {x}", "Could not write to HANDOFF.md: {x}"),
     ("ZIP 파일을 풀지 못해 모델에 보내지 않았습니다.", "The ZIP file could not be extracted, so nothing was sent to the models."),
     ("ZIP 파일을 푸는 중", "Extracting the ZIP file"),
     ("{x}: 이미지(png·jpg·webp·gif·bmp), 영상(mp4·mov·mkv·avi·webm 등), ZIP 만 올릴 수 있습니다.",

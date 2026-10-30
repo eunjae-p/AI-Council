@@ -277,7 +277,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
           <span class="status" id="modelInfo"></span>
           <span class="seg" id="executor" hidden title="토론 결론대로 실행할 모델 — 다른 모델이 결과를 검토하고, 실행한 모델이 수정합니다" data-en-title="Model that carries out the conclusion — the other model reviews, then the executor fixes"><button data-x="claude" class="on" data-en="Run: Claude">실행: Claude</button><button data-x="gpt" data-en="Run: GPT">실행: GPT</button></span>
           <span class="seg" id="imgOpts" hidden><button data-r="square" class="on" data-en="1:1">1:1</button><button data-r="landscape" data-en="Wide">가로</button><button data-r="portrait" data-en="Tall">세로</button><select id="imgCount" title="장수" data-en-title="Count"><option value="1" data-en="1 image">1장</option><option value="2" data-en="2 images">2장</option><option value="3" data-en="3 images">3장</option><option value="4" data-en="4 images">4장</option></select></span>
-          <input class="workdir" id="workdir"><button class="webtog gear" id="cmdManage" hidden title="명령 실행 허용 목록" data-en-title="Command allowlist">🛡</button>
+          <input class="workdir" id="workdir"><button class="webtog gear" id="cmdManage" hidden title="명령 실행 허용 목록" data-en-title="Command allowlist">🛡</button><button class="webtog tip" id="handoffToggle" hidden data-tip="📝 인수인계 기록 — 작업 모드가 끝나면 작업 폴더의 HANDOFF.md 에 요청·상태·바뀐 파일·세션·결과 요약을 덧붙입니다.&#10;Claude 데스크톱 앱에서 'HANDOFF.md 마지막 항목 보고 이어서 해줘'라고 하면 이어받습니다. 파일을 읽기만 한 질문은 기록하지 않습니다.&#10;⚠ 웹 서버가 그대로 공개하는 폴더(예: 운영 중인 사이트 폴더)라면 끄세요." data-en-tip="📝 Handoff log — after a Work-mode task, appends the request, status, changed files, session and result summary to HANDOFF.md in the working folder.&#10;In the Claude desktop app, say 'read the last entry of HANDOFF.md and continue'. Read-only questions are not logged.&#10;⚠ Turn it off for folders a web server publishes as-is (e.g. a live site folder).">📝 인수인계 켬</button><button class="webtog gear tip" id="claudeMdBtn" hidden data-tip="CLAUDE.md 준비 — 작업 폴더에 CLAUDE.md 가 없으면 틀을 만들고, 있으면 'HANDOFF.md 에 기록' 규칙만 덧붙입니다.&#10;Claude Code(데스크톱 앱·터미널·Council 작업 모드)는 이 파일을 자동으로 읽습니다." data-en-tip="Prepare CLAUDE.md — creates a template if the working folder has none, otherwise only appends the 'log to HANDOFF.md' rule.&#10;Claude Code (desktop app, terminal, Council Work mode) reads this file automatically.">📄</button>
         </div>
         <div class="models" id="models">
           <label><span data-en="GPT model (Codex CLI)">GPT 모델 (Codex CLI)</span>
@@ -326,7 +326,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.19.2'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.20.0'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -470,6 +470,12 @@ function msgEl(item, index) {
   }
   const body = el('div', 'content'); renderText(body, item.content === '…' ? '' : item.content);
   box.append(head);
+  if (item.claude_session && item.model === 'Claude' && ['work', 'edit'].includes(item.mode) && /^[0-9a-f-]{36}$/i.test(item.claude_session)) {
+    const go = el('button', 'ghost small', T('🖥 Claude 앱에서 이어서', '🖥 Continue in Claude app'));
+    go.title = T('Claude 데스크톱 앱에서 이 세션을 그대로 엽니다 (claude://resume). 터미널용 명령도 복사합니다.', 'Opens this session in the Claude desktop app (claude://resume). Also copies the terminal command.');
+    go.onclick = () => openInClaudeApp(item);
+    head.append(go);
+  }
   if (item.paused === 'timeout') {
     const pz = el('div', 'paused', T('⏱ 시간 제한(최대 60분 또는 15분 동안 진행 없음)으로 멈췄습니다. 지금까지 한 작업은 그대로 있고, 이어서 진행하면 이 지점부터 계속합니다 (1시간 안에 누르면 이전 기록을 캐시에서 읽어 토큰이 적게 듭니다).',
       '⏱ Stopped by the time limit (60 min max, or 15 min with no progress). Work done so far is kept; Continue picks up from here (within about an hour the earlier history is read from cache, so it costs fewer tokens).'));
@@ -573,6 +579,17 @@ function mcpDenialCard(item, index) {
   return c;
 }
 // ---------- 작업 모드: 허용 목록에 없어 막힌 명령 ----------
+// 🖥 Claude 데스크톱 앱에서 이어서: claude://resume?session=<ID> (앱이 CLI 세션을 가져와 엽니다)
+// 공식 문서에 없는 링크라 안 열릴 수 있어, 터미널 명령을 복사하고 데스크톱 앱 /resume 방법도 함께 안내합니다.
+function openInClaudeApp(item) {
+  const id = item.claude_session, dir = item.workdir || $('#workdir').value.trim();
+  const cmd = (S.platform === 'win32' || S.platform === 'windows' || /^[A-Za-z]:/.test(dir) ? `cd /d "${dir}" && ` : `cd "${dir}" && `) + `claude --resume ${id}`;
+  try { navigator.clipboard.writeText(cmd); } catch {}
+  const a = document.createElement('a'); a.href = 'claude://resume?session=' + encodeURIComponent(id); document.body.append(a); a.click(); a.remove();
+  modal(T('Claude 앱에서 이어서', 'Continue in Claude app'),
+    T(`Claude 데스크톱 앱에서 이 세션을 여는 중입니다 (브라우저가 "Claude 열기"를 물으면 허용).\n\n안 열리면:\n· 데스크톱 앱 Code 화면에서 /resume 입력 → 이 세션 선택\n· 또는 터미널에서 (복사됨):\n  ${cmd}\n\n주의\n· 앱에서 이어서 한 작업은 Council 대화에 자동으로 들어오지 않습니다. 다시 Council 로 올 때는 "HANDOFF.md 마지막 항목 보고 이어서" 라고 하세요.\n· 같은 폴더를 Council 과 앱에서 동시에 작업시키지 마세요.\n· 1시간 안에 이어 가면 이전 기록을 캐시에서 읽어 토큰이 적게 듭니다.`,
+      `Opening this session in the Claude desktop app (allow it if the browser asks to open Claude).\n\nIf it does not open:\n· In the desktop app's Code view, type /resume and pick this session\n· Or in a terminal (copied):\n  ${cmd}\n\nNotes\n· Work you continue in the app is not added to this Council chat. When you come back, say "read the last entry of HANDOFF.md and continue".\n· Do not let Council and the app work on the same folder at the same time.\n· Continuing within about an hour reads the earlier history from cache, so it costs fewer tokens.`));
+}
 // 멈춘 Claude 세션을 이어서 실행할 수 있는가: Claude 단독 작업, 또는 토론+작업에서 Claude 가 실행한 단계(구현·수정)
 // (예전에는 토론에서 막히면 토론 전체를 처음부터 다시 해서 토큰이 크게 들었다)
 const canResume = (item, q) => !!item.claude_session && item.model === 'Claude' && ((q.target || 'claude') === 'claude' || [3, 5].includes(item.round));
@@ -1134,6 +1151,20 @@ function syncExecutor() { $('#executor').hidden = !(S.mode === 'work' && S.targe
 $('#mcpToggle').onclick = () => setMcp(!S.mcp);
 $('#mcpManage').onclick = () => openMcpManager();
 $('#cmdManage').onclick = () => openCmdManager();
+function setHandoff(on) { S.handoff = !!on; store.set('councilHandoff', S.handoff ? '1' : '0'); const b = $('#handoffToggle'); b.classList.toggle('on', S.handoff); b.textContent = S.handoff ? T('📝 인수인계 켬', '📝 Handoff on') : T('📝 인수인계 끔', '📝 Handoff off'); }
+$('#handoffToggle').onclick = () => setHandoff(!S.handoff);
+$('#claudeMdBtn').onclick = async () => {
+  const wd = $('#workdir').value.trim(); if (!wd) return toast(T('작업 폴더를 먼저 입력하세요', 'Enter the working folder first'), true);
+  try {
+    const st = await api('/api/handoff/status?workdir=' + encodeURIComponent(wd));
+    if (st.rule) return toast(T('CLAUDE.md 에 인수인계 규칙이 이미 있습니다', 'CLAUDE.md already has the handoff rule'));
+    const msg = st.claude_md ? T('이 폴더의 CLAUDE.md 맨 아래에 인수인계 규칙(HANDOFF.md 에 기록)을 덧붙일까요?\n기존 내용은 그대로 둡니다.', 'Append the handoff rule (log to HANDOFF.md) to the end of CLAUDE.md in this folder?\nExisting content stays as is.')
+                             : T('이 폴더에 CLAUDE.md 를 만들까요?\n프로젝트 안내 틀 + 인수인계 규칙이 들어갑니다. 틀의 빈칸은 직접 채우거나 Claude 에게 "CLAUDE.md 채워줘"라고 하세요.', 'Create CLAUDE.md in this folder?\nIt contains a project guide template + the handoff rule. Fill in the blanks yourself or ask Claude to "fill in CLAUDE.md".');
+    if (!confirm(msg)) return;
+    const r = await api('/api/handoff/setup', { workdir:wd });
+    toast(r.created ? T('CLAUDE.md 를 만들었습니다: ', 'Created CLAUDE.md: ') + r.path : T('인수인계 규칙을 덧붙였습니다: ', 'Appended the handoff rule: ') + r.path);
+  } catch (e) { toast(e.message, true); }
+};
 function setTarget(v) { S.target = v; store.set('councilTarget', v); document.querySelectorAll('#target button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); updateModelInfo(); if (typeof syncExecutor === 'function' && $('#executor')) syncExecutor(); }
 document.querySelectorAll('#mode button').forEach(b => b.onclick = () => setMode(b.dataset.m));
 function setMode(m) { if (!['work', 'image'].includes(m)) m = 'chat';
@@ -1141,7 +1172,7 @@ function setMode(m) { if (!['work', 'image'].includes(m)) m = 'chat';
   const key = x => x === 'image' ? 'councilImageDir' : 'councilWorkdir';
   if (S.mode && S.mode !== m && S.mode !== 'chat') store.set(key(S.mode), $('#workdir').value.trim());
   if (m !== 'chat' && S.mode !== m) $('#workdir').value = store.get(key(m)) || '';
-  S.mode = m; store.set('councilMode', m); document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.m === m)); $('#workdir').classList.toggle('show', m !== 'chat'); $('#cmdManage').hidden = m !== 'work'; $('#imgOpts').hidden = m !== 'image'; if ($('#executor')) syncExecutor(); $('#workdir').placeholder = m === 'image' ? T('저장 폴더 (예: D:\\images) — 비우면 Council 폴더의 exports\\images\\날짜', 'Output folder (e.g. D:\\images) — empty = exports\\images\\<date> in the Council folder') : T('작업 폴더 (예: D:\\my-project) — 이 폴더에서 파일을 만들고 고치고 명령을 실행합니다', 'Working folder (e.g. D:\\my-project) — files are created/edited and commands run here'); $('#q').placeholder = m === 'image' ? T('만들 이미지를 설명해 주세요 — 예: 노을 지는 해변의 영화 포스터, 시네마틱 (📎 참고 이미지 첨부 가능)', 'Describe the image — e.g. a cinematic movie poster of a beach at sunset (attach references with 📎)') : m === 'work' ? T('할 일을 적어 주세요 — 예: 이 폴더에 Flask 서버를 만들고 실행해줘 (Enter 보내기 · Shift+Enter 줄바꿈)', 'Describe the task — e.g. create a Flask server in this folder and run it (Enter to send · Shift+Enter for a new line)') : T('질문을 입력하세요 · 📎·끌어다 놓기·Ctrl+V로 JSON·이미지·영상 첨부 (Enter 보내기 · Shift+Enter 줄바꿈)', 'Ask anything · attach JSON, images or video with 📎, drag & drop or Ctrl+V (Enter to send · Shift+Enter for a new line)'); }
+  S.mode = m; store.set('councilMode', m); document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.m === m)); $('#workdir').classList.toggle('show', m !== 'chat'); $('#cmdManage').hidden = m !== 'work'; $('#handoffToggle').hidden = m !== 'work'; $('#claudeMdBtn').hidden = m !== 'work'; $('#imgOpts').hidden = m !== 'image'; if ($('#executor')) syncExecutor(); $('#workdir').placeholder = m === 'image' ? T('저장 폴더 (예: D:\\images) — 비우면 Council 폴더의 exports\\images\\날짜', 'Output folder (e.g. D:\\images) — empty = exports\\images\\<date> in the Council folder') : T('작업 폴더 (예: D:\\my-project) — 이 폴더에서 파일을 만들고 고치고 명령을 실행합니다', 'Working folder (e.g. D:\\my-project) — files are created/edited and commands run here'); $('#q').placeholder = m === 'image' ? T('만들 이미지를 설명해 주세요 — 예: 노을 지는 해변의 영화 포스터, 시네마틱 (📎 참고 이미지 첨부 가능)', 'Describe the image — e.g. a cinematic movie poster of a beach at sunset (attach references with 📎)') : m === 'work' ? T('할 일을 적어 주세요 — 예: 이 폴더에 Flask 서버를 만들고 실행해줘 (Enter 보내기 · Shift+Enter 줄바꿈)', 'Describe the task — e.g. create a Flask server in this folder and run it (Enter to send · Shift+Enter for a new line)') : T('질문을 입력하세요 · 📎·끌어다 놓기·Ctrl+V로 JSON·이미지·영상 첨부 (Enter 보내기 · Shift+Enter 줄바꿈)', 'Ask anything · attach JSON, images or video with 📎, drag & drop or Ctrl+V (Enter to send · Shift+Enter for a new line)'); }
 $('#workdir').addEventListener('input', () => store.set(S.mode === 'image' ? 'councilImageDir' : 'councilWorkdir', $('#workdir').value.trim()));
 document.querySelectorAll('#imgOpts button').forEach(b => b.onclick = () => { S.imgRatio = b.dataset.r; store.set('councilImgRatio', b.dataset.r);
   document.querySelectorAll('#imgOpts button').forEach(x => x.classList.toggle('on', x === b)); });
@@ -1200,7 +1231,7 @@ async function send() {
   let gotUser = false, wasStopped = false;
   try {
     const res = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json', 'X-Lang':LANG},
-      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, web:!!S.web, saver:!!S.saver, mcp:!!S.mcp, mcp_claude:!!S.mcp, mcp_gpt:!!S.mcpGpt, executor:S.executor || 'claude', allow_once: allowOnceSent || [], allow_cmds_once: cmdsOnceSent, resume: resumeSent, resume_reason: resumeReason, image_ratio:S.imgRatio || 'square', image_count:Number($('#imgCount').value) || 1, workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => f.upload ? ({ name:f.name, upload:f.upload }) : ({ name:f.name, content:f.content })) }) });
+      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, web:!!S.web, saver:!!S.saver, handoff:!!S.handoff, mcp:!!S.mcp, mcp_claude:!!S.mcp, mcp_gpt:!!S.mcpGpt, executor:S.executor || 'claude', allow_once: allowOnceSent || [], allow_cmds_once: cmdsOnceSent, resume: resumeSent, resume_reason: resumeReason, image_ratio:S.imgRatio || 'square', image_count:Number($('#imgCount').value) || 1, workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => f.upload ? ({ name:f.name, upload:f.upload }) : ({ name:f.name, content:f.content })) }) });
     if (!res.ok) { let m = T('요청 실패', 'Request failed'); try { m = (await res.json()).error || m; } catch {} throw new Error(m); }
     const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
     for (;;) {
@@ -1531,6 +1562,7 @@ window.addEventListener('hashchange', () => { const id = (location.hash.match(/^
   applyTheme(store.get('councilTheme') || 'dark');
   setWeb(store.get('councilWeb') === '1');
   setSaver(store.get('councilSaver') === '1');
+  setHandoff(store.get('councilHandoff') !== '0');  // 기본 켬
   setMcp(store.get('councilMcp') === '1'); setMcpGpt(store.get('councilMcpGpt') === '1'); setExecutor(store.get('councilExecutor') || 'claude');
   setTarget(['gpt','claude','both'].includes(store.get('councilTarget')) ? store.get('councilTarget') : 'both');
   api('/api/status').then(s => { $('#ver').textContent = 'V' + s.version;

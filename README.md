@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.19.2** (2026-10-29) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.20.0** (2026-10-30) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.20.0](CHANGELOG.md#v0200-2026-10-30) | 10-30 | **🔁 Claude 데스크톱 앱과 번갈아 쓰기** — HANDOFF.md 자동 기록, 📄 CLAUDE.md 준비, 🖥 Claude 앱에서 이어서 |
 | [V0.19.2](CHANGELOG.md#v0192-2026-10-29) | 10-29 | 작업 모드 시간 제한: 진행 중이면 계속(15분 무응답·60분 상한), 멈춰도 **↪ 이어서 진행** |
 | [V0.19.1](CHANGELOG.md#v0191-2026-10-29) | 10-29 | 작업 모드: 승인이 필요하면 **그 자리에서 멈춤**(⏸), 토론+작업도 실행 세션만 이어서, 개발 명령 허용 표시 개선 |
 | [V0.19.0](CHANGELOG.md#v0190-2026-10-29) | 10-29 | **💰 토큰 절약** — 캐시가 맞게 맥락 고정, 지난 토론은 결론만, 🪙 토큰 표시, 💰 절약 모드 |
 | [V0.18.5](CHANGELOG.md#v0185-2026-10-29) | 10-29 | 📎 **ZIP 첨부** — 안전하게 풀어서 파일 목록·코드 내용·이미지를 모델에 전달 |
-| [V0.18.4](CHANGELOG.md#v0184-2026-10-27) | 10-27 | 왼쪽 아래 **↻ 계정 바꾸기** — 로그아웃 후 다른 GPT·Claude 계정으로 로그인 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -167,6 +167,17 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 - **서버 실행**: 오래 켜 두는 서버는 백그라운드로 실행하도록 지시합니다. 끄는 방법은 답변에 안내됩니다.
 - ⚠ **운영 중인 서비스 폴더는 복사본에서** 작업하고 확인 후 반영하는 것을 권장합니다. 모든 명령을 묻지 않고 실행하는 모드는 쓰지 않습니다.
 
+### 🔁 Claude 데스크톱 앱과 번갈아 쓰기
+세션(대화)을 넘기기보다 **같은 작업 폴더 + 인수인계 기록**으로 이어 가는 방식입니다.
+1. 작업 폴더 옆 **📄** → `CLAUDE.md` 준비 (없으면 프로젝트 안내 틀, 있으면 "HANDOFF.md 에 기록" 규칙만 덧붙임).
+   Claude Code(데스크톱 앱·터미널·Council 작업 모드)는 작업 폴더의 `CLAUDE.md` 를 자동으로 읽습니다. 짧게 유지하세요.
+2. **📝 인수인계 켬** (기본): 작업 모드가 끝나면 Council 이 `HANDOFF.md` 에 요청·실행 모델·상태·바뀐 파일·세션 ID·결과 요약을 덧붙입니다.
+   파일을 읽기만 한 질문은 기록하지 않습니다. ⚠ 웹 서버가 그대로 공개하는 폴더(운영 중인 사이트 폴더 등)라면 끄세요.
+3. Claude 작업 답변의 **🖥 Claude 앱에서 이어서**: 데스크톱 앱에서 그 세션을 바로 엽니다 (`claude://resume?session=…`, 공식 문서에 없는 링크).
+   안 열리면 데스크톱 앱 Code 화면에서 `/resume` → 세션 선택, 또는 복사된 터미널 명령 `claude --resume <ID>`.
+4. 앱에서 한 작업은 Council 대화에 들어오지 않습니다. Council 로 돌아올 때는 **"HANDOFF.md 마지막 항목 보고 이어서 해줘"**.
+- 같은 폴더를 Council 과 앱에서 **동시에** 작업시키지 마세요. Git 저장소면 넘기기 전에 ✅ 확정(커밋)해 두면 안전합니다.
+
 ### 🎨 이미지 모드
 - 입력창 위 **🎨 이미지** → 비율(1:1 · 가로 · 세로)·장수(1~4) → **저장 폴더** 입력(비우면 Council 폴더의 `exports\images\날짜`) → 만들 이미지를 설명하고 보내기.
 - **GPT**: Codex CLI의 이미지 생성 도구로 바로 생성. **Claude / 토론**: Claude가 이미지 프롬프트를 다듬고 → GPT가 생성 (Claude에는 이미지 생성 모델이 없음).
@@ -286,6 +297,7 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 | `council_context.py` | 맥락 구성, 긴 대화 자동 요약 |
 | `council_store.py` | 대화 저장·휴지통·검색·Markdown 내보내기 |
 | `council_attach.py` / `council_media.py` / `council_archive.py` | 첨부 처리 / 이미지·영상(ffmpeg) / ZIP 풀기 |
+| `council_handoff.py` | 작업 폴더 HANDOFF.md 인수인계 기록, CLAUDE.md 준비 |
 | `council_workflow.py` | ComfyUI 워크플로우 JSON 요약 |
 | `council_state.py` | 사용 횟수, 계정 기본 모델 기억 |
 | `council_mcp.py` | MCP 도구 목록 확인, 항상 허용 목록 |
@@ -308,7 +320,7 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.19.2** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.20.0** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
@@ -335,6 +347,7 @@ It drives the official **Codex CLI (GPT)** and **Claude Code CLI (Claude)** sign
 - **Collaboration** — Discussion + Work: both plan → the model you pick (**Run: Claude / Run: GPT**) executes → the other reviews the actual result read-only → the executor fixes.
 - **Attachments** — text/JSON, images, video (12 frames via ffmpeg), ZIP (safely extracted: file list, text/code contents, up to 8 images; in work mode the extracted folder can be opened); drag & drop or Ctrl+V. ComfyUI workflow JSON is pre-summarized (nodes, models, color-coded required inputs)
 - **💰 Token saving** — always on: the start of the recent-context window stays fixed so each prompt begins like the previous one and hits the CLIs' prompt cache (cached input counts much cheaper); older discussions keep only the conclusion; the final summary uses a short context; images are re-sent only when the question is about them. Every answer shows 🪙 tokens (new input / cached input / output), with daily totals at the bottom left. Optional **💰 Saver** toggle: skips the discussion cross review (5 → 3 calls), shorter context and attachment excerpts, concise answers, low reasoning effort for GPT in chat.
+- **🔁 Switching with the Claude desktop app** — 📄 prepares `CLAUDE.md` (template, or just appends the handoff rule); 📝 Handoff (on by default) appends request / status / changed files / session ID / result summary to `HANDOFF.md` in the working folder after each Work task (read-only questions are skipped; turn it off for folders a web server publishes); **🖥 Continue in Claude app** opens the session in the desktop app via `claude://resume?session=…` (undocumented link; fallback: `/resume` in the app or the copied `claude --resume <ID>`). Back in Council, say "read the last entry of HANDOFF.md and continue".
 - **Conversation management** — auto titles, archive/trash, full-text search, long-conversation summaries, Markdown export per answer or per chat
 - **English / 한국어** — switch with the `EN` / `한국어` button; installer and update windows follow your OS language
 - **One-click updates** — for AI Council itself (from GitHub) and for both CLIs; dark / light / system theme; Windows and Mac

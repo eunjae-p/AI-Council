@@ -521,6 +521,31 @@ ev = post("/api/chat", {"question":"HEREDOC_FAIL","conversation_id":ct3,"target"
 ok(any(e["type"]=="progress" and e["item"]["kind"]=="error" and "syntax error" in e["item"]["text"] for e in ev), f"tool errors shown in the activity log {[e for e in ev if e['type'] in ('progress','error','model_error')][:4]}")
 import council_core as _cx
 ok(_cx._stream_texts('{"type":"assistant","message":{"content":[{"type":"text","text":"설명입니다"}]}}\n{"type":"user"}') == "설명입니다", "raw stream JSON reduced to Claude's text for errors")
+# 인수인계: HANDOFF.md 자동 기록 · CLAUDE.md 준비
+hd = tmp/"handoff"; hd.mkdir(); chh = post("/api/conversations")["id"]
+post("/api/chat", {"question":"그냥 구조만 설명해줘","conversation_id":chh,"target":"claude","mode":"work","workdir":str(hd),"handoff":True}, raw=True)
+ok(not (hd/"HANDOFF.md").exists(), "read-only question is not logged to HANDOFF.md")
+ev = post("/api/chat", {"question":"RUN_CMD: npm install express","conversation_id":chh,"target":"claude","mode":"work","workdir":str(hd),"handoff":True}, raw=True)
+ho = (hd/"HANDOFF.md").read_text(encoding="utf-8") if (hd/"HANDOFF.md").exists() else ""
+sid2 = get("/api/conversation?id="+chh)["items"][-1].get("claude_session","")
+ok("# 작업 인수인계 기록" in ho and "RUN_CMD: npm install express" in ho and "승인 대기" in ho and sid2 and sid2 in ho and any(e["type"]=="summary" for e in ev),
+   "paused task logged to HANDOFF.md with session id")
+post("/api/chat", {"question":"RUN_CMD: npm install lodash","conversation_id":chh,"target":"claude","mode":"work","workdir":str(hd)}, raw=True)
+ok("lodash" not in (hd/"HANDOFF.md").read_text(encoding="utf-8"), "handoff off -> nothing written")
+post("/api/chat", {"question":"GPT 작업","conversation_id":chh,"target":"gpt","mode":"work","workdir":str(hd),"handoff":True}, raw=True)
+ho = (hd/"HANDOFF.md").read_text(encoding="utf-8"); ok(ho.count("## ") >= 2 and "GPT 작업" in ho and ho.index("RUN_CMD") < ho.index("GPT 작업"), "entries appended in order")
+import council_handoff as _ch
+ok(_ch.files_from_activity([{"activity":[{"kind":"tool","text":"Write: D:/a/app.py"},{"kind":"tool","text":"$ ls"},{"kind":"tool","text":"Edit: D:/a/app.py"}]}])==["D:/a/app.py"], "changed files from activity")
+st = get("/api/handoff/status?workdir="+urllib.parse.quote(str(hd))); ok(st=={"claude_md":False,"rule":False,"handoff":True}, f"handoff status {st}")
+r = post("/api/handoff/setup", {"workdir":str(hd)}); cm = (hd/"CLAUDE.md").read_text(encoding="utf-8")
+ok(r["created"] and "HANDOFF.md" in cm and _ch.RULE_MARKER in cm and "프로젝트 안내" in cm, "CLAUDE.md created with handoff rule")
+r = post("/api/handoff/setup", {"workdir":str(hd)}); ok(not r["created"] and not r["updated"] and (hd/"CLAUDE.md").read_text(encoding="utf-8")==cm, "setup is idempotent")
+hd2 = tmp/"handoff2"; hd2.mkdir(); (hd2/"CLAUDE.md").write_text("# 기존 규칙\n- 지키기", encoding="utf-8")
+r = post("/api/handoff/setup", {"workdir":str(hd2)}); cm2 = (hd2/"CLAUDE.md").read_text(encoding="utf-8")
+ok(r["updated"] and cm2.startswith("# 기존 규칙\n- 지키기\n") and _ch.RULE_MARKER in cm2 and "프로젝트 안내" not in cm2, "existing CLAUDE.md kept, rule appended")
+ok(post("/api/handoff/setup", {"workdir":str(tmp/"nope")})[0]==400, "setup needs an existing folder")
+html_ = (pathlib.Path(w.__file__).parent/"web"/"index.html").read_text(encoding="utf-8")
+ok("claude://resume?session=" in html_ and "openInClaudeApp" in html_ and "handoff:!!S.handoff" in html_, "UI: Claude app resume link and handoff toggle")
 import council_commands as _ccm, json as _js
 _mf = tmp/"oldcmd"; _mf.mkdir(); (_mf/"cmd_settings.json").write_text(_js.dumps({"allowed":["ls","npm install"]}), encoding="utf-8")
 _al = _ccm.CommandStore(_mf).allowed(); ok("npm install" in _al and "sha1sum" in _al and "grep" in _al, "existing allowlist gets new read-only defaults once")

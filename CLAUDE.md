@@ -61,6 +61,7 @@
 | `council_store.py` | 대화 저장·메타·휴지통·검색·Markdown 내보내기 |
 | `council_attach.py` | 첨부 파일 검사·보관·업로드·프롬프트 구성 |
 | `council_archive.py` | ZIP 첨부: 안전하게 풀기(경로 탈출·링크·암호·용량 폭탄 차단, cp949 한글 이름), 파일 목록·텍스트 내용·이미지 추출 |
+| `council_handoff.py` | 작업 폴더 `HANDOFF.md` 인수인계 기록(작업 모드가 끝나면 덧붙임), `CLAUDE.md` 준비(틀·인수인계 규칙) |
 | `council_media.py` | 이미지 정보, 영상 프레임 추출 (ffmpeg/ffprobe) |
 | `council_workflow.py` | ComfyUI 워크플로우 JSON 요약 (색상 등급 규칙 포함) |
 | `council_debate.py` | 토론 모드 프롬프트(1라운드·2라운드·결론), 토론 기록 폴더 (`data/debates/`) |
