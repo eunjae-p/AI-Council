@@ -190,7 +190,6 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 .webtog.on{background:var(--info-bg);border-color:var(--info-line);color:var(--info-text)}
 .msg .badge.web{background:var(--info-bg);color:var(--info-text)}
 .indiv .round{font-size:12px;color:var(--muted);margin:10px 4px 4px;font-weight:600}
-.indiv .dlog{margin:6px 4px 2px}
 .seg button.on[data-m],.seg button.on[data-x],.seg button.on[data-r]{background:var(--sel);color:var(--text)}
 .workdir{display:none;flex:1;min-width:220px;padding:6px 10px;font-size:13.5px} .workdir.show{display:block}
 .badge{font-size:11px;border:1px solid var(--warn-line);color:var(--warn);border-radius:6px;padding:0 6px}
@@ -326,7 +325,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.20.0'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.20.1'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -470,6 +469,14 @@ function msgEl(item, index) {
   }
   const body = el('div', 'content'); renderText(body, item.content === '…' ? '' : item.content);
   box.append(head);
+  if (item.model === 'Council' && item.debate_dir) {
+    // 토론 기록 폴더: 결론 바로 위에서 열기 (경로도 복사 → Claude 앱에 "이 폴더의 결론.md 읽어줘" 로 붙여넣기)
+    const b = el('button', 'ghost small', T('📁 토론 기록 폴더', '📁 Discussion log folder'));
+    b.title = T('질문·1차 의견·교차 검토·결론.md 가 저장된 PC 폴더를 엽니다. 폴더 경로도 복사됩니다.', 'Opens the folder on this PC with the question, round answers and 결론.md (conclusion). The path is copied too.');
+    b.onclick = async () => { try { const r = await api('/api/debate/open', { dir: item.debate_dir }); try { await navigator.clipboard.writeText(r.path); } catch {}
+      toast((r.opened ? T('폴더를 열고 경로를 복사했습니다: ', 'Opened the folder and copied its path: ') : T('폴더 경로를 복사했습니다: ', 'Folder path copied: ')) + r.path); } catch (e) { toast(e.message, true); } };
+    head.append(b);
+  }
   if (item.claude_session && item.model === 'Claude' && ['work', 'edit'].includes(item.mode) && /^[0-9a-f-]{36}$/i.test(item.claude_session)) {
     const go = el('button', 'ghost small', T('🖥 Claude 앱에서 이어서', '🖥 Continue in Claude app'));
     go.title = T('Claude 데스크톱 앱에서 이 세션을 그대로 엽니다 (claude://resume). 터미널용 명령도 복사합니다.', 'Opens this session in the Claude desktop app (claude://resume). Also copies the terminal command.');
@@ -747,12 +754,6 @@ function renderThread() {
           d.append(el('summary', '', T(`토론 과정 보기 · 1차 의견 ${names(1) || '-'} → 교차 검토 ${names(2) || '-'}`, `Show debate rounds · Round 1 ${names(1) || '-'} → Cross review ${names(2) || '-'}`)));
           let last = 0;
           sorted.forEach(([x, idx]) => { if (x.round && x.round !== last) { last = x.round; d.append(el('div', 'round', x.round === 1 ? T('1라운드 · 서로 보지 않고 낸 독립 의견', 'Round 1 · independent answers') : T('2라운드 · 상대 답변을 읽고 쓴 교차 검토', "Round 2 · cross reviews of each other's answers"))); } d.append(msgEl(x, idx)); });
-          if (council[0].debate_dir) {
-            const b = el('button', 'ghost small dlog', T('📁 토론 기록 폴더 열기', '📁 Open discussion log folder'));
-            b.onclick = async () => { try { const r = await api('/api/debate/open', { dir: council[0].debate_dir });
-              if (!r.opened) { copyText(r.path); toast(T('폴더 경로를 복사했습니다: ', 'Folder path copied: ') + r.path); } } catch (e) { toast(e.message, true); } };
-            d.append(b);
-          }
         } else {
           d.append(el('summary', '', T(`개별 답변 보기 (${rest.map(([x]) => x.model).join(' · ')})`, `Show individual answers (${rest.map(([x]) => x.model).join(' · ')})`)));
           rest.forEach(([x, idx]) => d.append(msgEl(x, idx)));

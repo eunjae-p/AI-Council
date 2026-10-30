@@ -546,6 +546,7 @@ ok(r["updated"] and cm2.startswith("# 기존 규칙\n- 지키기\n") and _ch.RUL
 ok(post("/api/handoff/setup", {"workdir":str(tmp/"nope")})[0]==400, "setup needs an existing folder")
 html_ = (pathlib.Path(w.__file__).parent/"web"/"index.html").read_text(encoding="utf-8")
 ok("claude://resume?session=" in html_ and "openInClaudeApp" in html_ and "handoff:!!S.handoff" in html_, "UI: Claude app resume link and handoff toggle")
+ok("item.model === 'Council' && item.debate_dir" in html_ and "dlog" not in html_, "discussion log folder button on the conclusion header")
 import council_commands as _ccm, json as _js
 _mf = tmp/"oldcmd"; _mf.mkdir(); (_mf/"cmd_settings.json").write_text(_js.dumps({"allowed":["ls","npm install"]}), encoding="utf-8")
 _al = _ccm.CommandStore(_mf).allowed(); ok("npm install" in _al and "sha1sum" in _al and "grep" in _al, "existing allowlist gets new read-only defaults once")

@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.20.0** (2026-10-30) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.20.1** (2026-10-30) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.20.1](CHANGELOG.md#v0201-2026-10-30) | 10-30 | 토론 결론 위에 **📁 토론 기록 폴더** 버튼 (열기 + 경로 복사) |
 | [V0.20.0](CHANGELOG.md#v0200-2026-10-30) | 10-30 | **🔁 Claude 데스크톱 앱과 번갈아 쓰기** — HANDOFF.md 자동 기록, 📄 CLAUDE.md 준비, 🖥 Claude 앱에서 이어서 |
 | [V0.19.2](CHANGELOG.md#v0192-2026-10-29) | 10-29 | 작업 모드 시간 제한: 진행 중이면 계속(15분 무응답·60분 상한), 멈춰도 **↪ 이어서 진행** |
 | [V0.19.1](CHANGELOG.md#v0191-2026-10-29) | 10-29 | 작업 모드: 승인이 필요하면 **그 자리에서 멈춤**(⏸), 토론+작업도 실행 세션만 이어서, 개발 명령 허용 표시 개선 |
 | [V0.19.0](CHANGELOG.md#v0190-2026-10-29) | 10-29 | **💰 토큰 절약** — 캐시가 맞게 맥락 고정, 지난 토론은 결론만, 🪙 토큰 표시, 💰 절약 모드 |
-| [V0.18.5](CHANGELOG.md#v0185-2026-10-29) | 10-29 | 📎 **ZIP 첨부** — 안전하게 풀어서 파일 목록·코드 내용·이미지를 모델에 전달 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -192,7 +192,7 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 
 - **행동 지침**: 근거로만 판단하고(새 근거 없이 양보·반대 금지), 확신도를 밝히고, 둘 다 검증하지 않은 공통 가정을 따로 표시합니다.
 - **중립 정리**: 결론을 정리하는 Claude는 두 답변을 이름을 가린 채(모델 A/B, 무작위) 받아 자기 답을 편들지 못합니다.
-- 화면에는 결론이 먼저, **토론 과정 보기** 를 펼치면 라운드별 답변이 보입니다. **📁 토론 기록 폴더 열기** 로 PC에 저장된 기록을 엽니다.
+- 화면에는 결론이 먼저, **토론 과정 보기** 를 펼치면 라운드별 답변이 보입니다. 결론 위쪽의 **📁 토론 기록 폴더** 로 PC에 저장된 기록(`결론.md` 등)을 열고 경로도 복사합니다 — Claude 데스크톱 앱에 "이 폴더의 결론.md 읽고 구현해줘"로 붙여넣기.
 - **읽는 법**: 두 모델이 합의했다고 정답은 아닙니다. **"의견이 갈린 점"과 "확인이 필요한 항목"** 을 먼저 확인하세요.
 - 사용량이 단독의 약 5배입니다 (💰 절약 모드에서는 3번 호출). 간단한 질문·워크플로우 분석·프롬프트 작성은 단독 모델이 효율적입니다.
 
@@ -320,7 +320,7 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.20.0** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.20.1** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
@@ -337,7 +337,7 @@ It drives the official **Codex CLI (GPT)** and **Claude Code CLI (Claude)** sign
 | **Claude** | Quick questions, file/workflow analysis | 1 |
 | **Discussion** ⚠ | Design reviews and decisions with no single right answer | 5 (≈5× usage; 3 in 💰 Saver mode) |
 
-- **Discussion mode** — round 1: both models answer independently · round 2: each critiques the other · final: a **blind, neutral synthesis** (the summarizer sees the answers only as "Model A / Model B", randomly assigned) split into *Conclusion / Agreed / Disagreed / Needs verification*. Every round is saved as Markdown in a local folder.
+- **Discussion mode** — (📁 *Discussion log folder* on the conclusion opens the saved Markdown files and copies the path) round 1: both models answer independently · round 2: each critiques the other · final: a **blind, neutral synthesis** (the summarizer sees the answers only as "Model A / Model B", randomly assigned) split into *Conclusion / Agreed / Disagreed / Needs verification*. Every round is saved as Markdown in a local folder.
 - **Two modes** — 💬 Chat (no file access) · 🛠 **Work** (like Claude Code / Codex: read, create and edit files, make folders, write code, run commands in the folder you choose)
 - **Command allowlist + approval** — allowlisted commands (`mkdir`, `ls`, `git status` …) run right away; any other command is blocked and shown below the answer with **Allow once / Always allow / Don't allow**. Codex runs in its `workspace-write` sandbox (writes inside the folder only; internet allowed for installs).
 - **Optional Git checkpoint** — if the folder is a Git repository, review the changed files and diff afterwards, then **commit** or **revert** with one click.
