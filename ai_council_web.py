@@ -55,7 +55,7 @@ from council_mcp import McpStore, valid_tool
 import council_commands
 import council_image
 
-VERSION = "0.21.0"
+VERSION = "0.21.1"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -446,7 +446,10 @@ class Handler(BaseHTTPRequestHandler):
                 # CLAUDE.md 만들기(없으면 틀) / 인수인계 규칙 덧붙이기 — 사용자가 버튼을 누른 경우만
                 self.send_json(council_handoff.setup(check_workdir(str(body.get("workdir", ""))), self.lang))
             elif path == "/api/commands/preset":
-                for prefix in council_commands.DEV_PRESET:  # 개발 명령 한 번에 허용 (사용자가 버튼을 누른 경우만)
+                name = str(body.get("name") or "dev")
+                if name not in council_commands.PRESETS:
+                    raise ValueError("알 수 없는 명령 묶음입니다.")
+                for prefix in council_commands.PRESETS[name]:  # 명령 묶음 한 번에 허용 (사용자가 버튼을 누른 경우만)
                     cmd_store.set_allowed(prefix, True)
                 self.send_json(cmd_store.state())
             elif path == "/api/commands/reset":
@@ -623,6 +626,8 @@ class Handler(BaseHTTPRequestHandler):
             resume = str(body.get("resume") or "")[:100]           # 승인 후 이어서 실행할 Claude 세션
             self.resume = resume if (mode == "work" and target == "claude" and re.match(r"^[A-Za-z0-9-]{8,100}$", resume)) else ""
             self.resume_reason = str(body.get("resume_reason") or "") if body.get("resume_reason") in ("timeout", "review") else ""
+            self.approved_names = [str(x)[:60] for x in (body.get("approved_names") or [])[:20] if council_commands.valid_prefix(str(x))]
+            self.blocked_cmds = [" ".join(str(x).split())[:300] for x in (body.get("blocked_cmds") or [])[:10]]
             self.review_ref = str(body.get("review_ref") or "")[:80] if mode == "work" else ""  # 🔧 지적 반영하기: 검토 답변 ID
             executor = "gpt" if str(body.get("executor", "")).lower() == "gpt" else "claude"  # 토론+작업에서 실행할 모델
             allow_once = [t for t in body.get("allow_once") or [] if valid_tool(t)][:20] if mcp else []
@@ -922,8 +927,12 @@ class Handler(BaseHTTPRequestHandler):
                 elif resume_id:
                     # 승인 후: 새로 처음부터 하지 않고 멈춘 Claude 세션을 이어서 실행
                     approved = (cmd_once or []) + [t for t in (allow_once or [])]
+                    approved += [a for a in getattr(self, "approved_names", []) if a not in approved]  # '항상 허용'으로 저장한 것도 알림
+                    blocked = getattr(self, "blocked_cmds", [])
                     note = (RESUME_NOTE.format(approved=": " + ", ".join(approved)) if approved or getattr(self, "resume_reason", "") != "timeout"
                             else RESUME_TIMEOUT_NOTE)
+                    if blocked:
+                        note += "\nThe blocked command(s) were:\n" + "\n".join(f"- {c}" for c in blocked) + "\n"
                     self.emit("stage", step=1, text="승인한 내용으로 Claude가 이어서 작업하는 중")
                     answer, item = ask(which, note, resume=resume_id)
                 else:

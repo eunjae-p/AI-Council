@@ -497,10 +497,11 @@ ok(a.get("claude_session","").startswith("sess-") and "1단계를 실행합니�
 sid = a.get("claude_session"); ok(bool(sid), "work answer keeps claude session id")
 open(os.environ["FAKE_LOG"],"w").close()
 post("/api/chat", {"question":"↪ 승인한 명령으로 이어서 진행","conversation_id":c16,"target":"claude","mode":"work","workdir":str(cw),
-                   "allow_cmds_once":["npm install"], "resume":sid}, raw=True)
+                   "allow_cmds_once":["npm install"], "resume":sid, "approved_names":["npm install"], "blocked_cmds":["npm install express"]}, raw=True)
 lg = open(os.environ["FAKE_LOG"]).read(); last = get("/api/conversation?id="+c16)["items"][-1]
 ok("'--resume', '"+sid+"'" in lg and "Run the blocked step again" in lg and "Newest user question" not in lg and "Bash(npm install:*)" in lg, "resume: same session, short prompt, approval applied")
 ok(last.get("resumed") and (cw/"resumed.txt").read_text()==sid, "resumed answer recorded")
+ok("The blocked command(s) were:\n- npm install express" in lg, "resume note names the blocked command")
 cd2 = post("/api/conversations")["id"]
 open(os.environ["FAKE_LOG"],"w").close()
 post("/api/chat", {"question":"RUN_CMD: npm install express","conversation_id":cd2,"target":"both","mode":"work","workdir":str(cw),"executor":"claude"}, raw=True)
@@ -588,6 +589,8 @@ ok(post("/api/commands/allow", {"prefix":"a && b"})[0]==400, "unsafe prefix reje
 ok(any(x["prefix"]=="python" and x["powerful"] for x in post("/api/commands/allow", {"prefix":"python"})["allowed"]), "powerful command flagged")
 ok(not any(x["prefix"]=="npm install" for x in post("/api/commands/reset", {})["allowed"]), "reset to defaults")
 st = post("/api/commands/preset", {}); ok({"node","npm","python","git"} <= {x["prefix"] for x in st["allowed"]} and st.get("dev_preset"), "dev preset allowed")
+st = post("/api/commands/preset", {"name":"files"}); ok({"cp","mv","robocopy"} <= {x["prefix"] for x in st["allowed"]} and "files" in st.get("presets",{}), "file copy/move preset allowed")
+ok(post("/api/commands/preset", {"name":"everything"})[0]==400, "unknown preset rejected")
 post("/api/commands/reset", {})
 post("/api/chat", {"question":"RUN_CMD: npm install x && echo done","conversation_id":c16,"target":"claude","mode":"work","workdir":str(cw)}, raw=True)
 a2 = get("/api/conversation?id="+c16)["items"][-1]

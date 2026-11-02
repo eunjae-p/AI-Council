@@ -88,6 +88,7 @@ PAIRS: list[tuple[str, str]] = [
      "'모델 설정'에서 다른 모델(또는 계정 기본값)을 고르세요. 대화 모드에서는 한 번 자동으로 다시 시도합니다.",
      "The model server was temporarily too busy and rejected the request (not a usage limit). Send again in a moment, or "
      "pick another model (or the account default) in 'Models'. In Chat mode Council retries once automatically."),
+    ("알 수 없는 명령 묶음입니다.", "Unknown command group."),
     ("작업 폴더의 HANDOFF.md 에 인수인계 기록을 남겼습니다.", "Added a handoff entry to HANDOFF.md in the working folder."),
     ("HANDOFF.md 에 기록하지 못했습니다: {x}", "Could not write to HANDOFF.md: {x}"),
     ("ZIP 파일을 풀지 못해 모델에 보내지 않았습니다.", "The ZIP file could not be extracted, so nothing was sent to the models."),

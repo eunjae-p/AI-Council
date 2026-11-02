@@ -328,7 +328,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.21.0'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.21.1'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -617,11 +617,14 @@ function cmdDenialCard(item, index) {
   let q = null; for (let i = index - 1; i >= 0; i--) if (S.items[i].role === 'user') { q = S.items[i]; break; }
   const row = el('div', 'row');
   const once = el('button', 'small', T('이번만 허용하고 다시 실행', 'Allow once and run again')), always = el('button', 'small', T('항상 허용하고 다시 실행', 'Always allow and run again')), no = el('button', 'ghost small', T('허용 안 함', "Don't allow"));
-  const rerun = async (save) => {
+  const rerun = async (save, group) => {
     if (!q) return toast(T('원래 질문을 찾지 못했습니다', 'Could not find the original question'), true);
     if (!prefixes.length) return toast(T('허용할 수 있는 명령 형식이 아닙니다. 직접 실행해 주세요', 'This command cannot be allowlisted. Please run it yourself'), true);
     if (S.running) return toast(T('답변 생성 중에는 다시 실행할 수 없습니다', 'Cannot rerun while an answer is being generated'), true);
+    if (group) { try { const st = await api('/api/commands/preset', { name:group }); noteCmdState(st); } catch (e) { return toast(e.message, true); } }
     if (save) { try { for (const p of prefixes) await api('/api/commands/allow', { prefix:p, allowed:true }); } catch (e) { return toast(e.message, true); } }
+    if (save || group) loadCmdState();
+    S.approvedNames = prefixes; S.blockedCmds = item.cmd_denials.map(d => d.command);
     if (q.target) setTarget(q.target); restoreMode(q); if (q.mcp) setMcp(true); if (q.mcp_gpt) setMcpGpt(true); if (q.executor) setExecutor(q.executor);
     S.allowCmdsOnce = save ? [] : prefixes;
     if (canResume(item, q)) {
@@ -637,8 +640,20 @@ function cmdDenialCard(item, index) {
   always.onclick = () => { if (prefixes.some(p => POWERFUL_CMDS.includes(p.split(' ')[0])) && !confirm(T('이 명령은 사실상 무엇이든 실행할 수 있습니다 (코드 실행·삭제·다운로드 등).\n앞으로 묻지 않고 실행할까요?', 'This command can effectively run anything (code, deletion, downloads…).\nRun it without asking from now on?'))) return; rerun(true); };
   no.onclick = () => { c.remove(); toast(T('실행하지 않았습니다', 'Not run')); };
   row.append(once, always, no); c.append(row);
+  // 묶음 허용: 막힌 명령이 개발 명령·파일 복사·이동 묶음에 속하면, 같은 종류를 한 번에 허용해 다음부터 덜 묻게
+  const presets = (S.cmdState || {}).presets || {}, have = new Set(((S.cmdState || {}).allowed || []).map(x => x.prefix));
+  const GROUP_LABEL = { dev:T('개발 명령', 'dev commands'), files:T('파일 복사·이동', 'file copy/move') };
+  Object.entries(presets).forEach(([name, list]) => {
+    if (!prefixes.some(p => list.includes(p.split(' ')[0])) || list.every(p => have.has(p))) return;
+    const g = el('button', 'small primary', T(`🧰 ${GROUP_LABEL[name] || name} 묶음 모두 허용하고 다시 실행`, `🧰 Allow all ${GROUP_LABEL[name] || name} and run again`));
+    g.title = list.join(' · ') + T('\n앞으로 이 명령들은 묻지 않고 실행됩니다 (🛡 에서 언제든 뺄 수 있음).', '\nThese will run without asking from now on (remove them any time in 🛡).');
+    g.onclick = () => { if (!confirm(T(`다음 명령을 앞으로 묻지 않고 실행할까요?\n${list.join(', ')}\n(코드 실행·설치·파일 덮어쓰기가 가능해집니다)`, `Run these without asking from now on?\n${list.join(', ')}\n(Allows running code, installing and overwriting files)`))) return; rerun(true, name); };
+    row.prepend(g);
+  });
   return c;
 }
+function noteCmdState(st) { S.cmdState = st; }
+async function loadCmdState() { try { noteCmdState(await api('/api/commands')); } catch {} }
 const POWERFUL_CMDS = ['python', 'python3', 'py', 'node', 'bash', 'sh', 'zsh', 'powershell', 'pwsh', 'cmd', 'rm', 'del', 'rmdir', 'curl', 'wget', 'sudo', 'npx', 'mv', 'chmod', 'chown'];
 async function openCmdManager() {
   const body = el('div'), list = el('div', 'mcplist'), add = el('div', 'row'), inp = el('input'), addBtn = el('button', 'small', T('추가', 'Add'));
@@ -646,7 +661,7 @@ async function openCmdManager() {
   inp.placeholder = T('예: npm install', 'e.g. npm install'); inp.style.flex = '1'; inp.style.padding = '6px 9px';
   body.append(el('div', '', T('작업 모드에서 묻지 않고 바로 실행할 명령입니다. 명령이 여기 적힌 단어로 시작하면 실행되고, 아니면 답변 아래에서 허용 여부를 묻습니다.', 'Commands that run without asking in Work mode. A command runs right away if it starts with one of these; otherwise you are asked below the answer.')), count, list, add);
   let fresh = new Set();
-  const render = st => { list.innerHTML = '';
+  const render = st => { noteCmdState(st); list.innerHTML = '';
     const dev = st.dev_preset || [], have = new Set(st.allowed.map(x => x.prefix));
     const allDev = dev.length && dev.every(p => have.has(p));
     preset.textContent = allDev ? T('✓ 개발 명령 허용됨', '✓ Dev commands allowed') : T('개발 명령 한 번에 허용', 'Allow common dev commands');
@@ -668,7 +683,15 @@ async function openCmdManager() {
       toast(fresh.size ? T(`허용했습니다: ${[...fresh].join(', ')} — 이제 이 명령들은 묻지 않고 실행됩니다`, `Allowed: ${[...fresh].join(', ')} — these now run without asking`)
                        : T('이미 모두 허용되어 있습니다', 'All of them were already allowed'));
     } catch (e) { toast(e.message, true); } };
-  add.append(inp, addBtn, preset);
+  const filesPreset = el('button', 'small', T('파일 복사·이동 허용', 'Allow file copy/move'));
+  filesPreset.title = 'cp · mv · copy · move · xcopy · robocopy · unzip · tar · zip';
+  filesPreset.onclick = async () => { if (!confirm(T('cp, mv, copy, move, xcopy, robocopy, unzip, tar, zip 명령을 묻지 않고 실행하도록 허용할까요?\n(백업·정리에 자주 쓰지만 파일을 덮어쓸 수 있습니다. 목록에서 언제든 뺄 수 있습니다)', 'Allow cp, mv, copy, move, xcopy, robocopy, unzip, tar and zip without asking?\n(Common for backups and tidying, but they can overwrite files. You can remove them any time.)'))) return;
+    try { const before = new Set([...list.querySelectorAll('label > span:first-child')].map(x => x.textContent));
+      const st = await api('/api/commands/preset', { name:'files' }); noteCmdState(st);
+      fresh = new Set(st.allowed.map(x => x.prefix).filter(p => !before.has(p))); render(st); list.scrollTop = 0;
+      toast(fresh.size ? T(`허용했습니다: ${[...fresh].join(', ')}`, `Allowed: ${[...fresh].join(', ')}`) : T('이미 모두 허용되어 있습니다', 'All of them were already allowed'));
+    } catch (e) { toast(e.message, true); } };
+  add.append(inp, addBtn, preset, filesPreset);
   modal(T('명령 실행 허용 목록', 'Command allowlist'), body, [{ label:T('기본값으로', 'Reset to defaults'), keep:true, onClick: async () => { if (confirm(T('허용 목록을 기본값으로 되돌릴까요?', 'Reset the allowlist to defaults?'))) render(await api('/api/commands/reset', {})); } }, { label:T('닫기', 'Close'), primary:true }]);
   try { render(await api('/api/commands')); } catch (e) { toast(e.message, true); }
 }
@@ -1262,6 +1285,7 @@ async function send() {
   const draft = question; q.value = ''; autoGrow();
   const allowOnceSent = S.allowOnce || []; S.allowOnce = []; S.skipGitCheck = false;
   const cmdsOnceSent = S.allowCmdsOnce || []; S.allowCmdsOnce = [];
+  const approvedNames = S.approvedNames || [], blockedCmds = S.blockedCmds || []; S.approvedNames = []; S.blockedCmds = [];
   const resumeSent = S.resume || '', resumeReason = S.resumeReason || '', reviewRef = S.reviewRef || ''; S.resume = ''; S.resumeReason = ''; S.reviewRef = '';
   const sentFiles = S.files.slice(); S.files = []; renderChips();
   if (sentFiles.length) { const t = pend.querySelector('.ptext'); if (t) t.textContent = T('첨부 파일을 보내는 중', 'Sending attachments'); }
@@ -1269,7 +1293,7 @@ async function send() {
   let gotUser = false, wasStopped = false;
   try {
     const res = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json', 'X-Lang':LANG},
-      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, web:!!S.web, saver:!!S.saver, handoff:!!S.handoff, mcp:!!S.mcp, mcp_claude:!!S.mcp, mcp_gpt:!!S.mcpGpt, executor:S.executor || 'claude', allow_once: allowOnceSent || [], allow_cmds_once: cmdsOnceSent, resume: resumeSent, resume_reason: resumeReason, review_ref: reviewRef, image_ratio:S.imgRatio || 'square', image_count:Number($('#imgCount').value) || 1, workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => f.upload ? ({ name:f.name, upload:f.upload }) : ({ name:f.name, content:f.content })) }) });
+      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, web:!!S.web, saver:!!S.saver, handoff:!!S.handoff, mcp:!!S.mcp, mcp_claude:!!S.mcp, mcp_gpt:!!S.mcpGpt, executor:S.executor || 'claude', allow_once: allowOnceSent || [], allow_cmds_once: cmdsOnceSent, approved_names: approvedNames, blocked_cmds: blockedCmds, resume: resumeSent, resume_reason: resumeReason, review_ref: reviewRef, image_ratio:S.imgRatio || 'square', image_count:Number($('#imgCount').value) || 1, workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => f.upload ? ({ name:f.name, upload:f.upload }) : ({ name:f.name, content:f.content })) }) });
     if (!res.ok) { let m = T('요청 실패', 'Request failed'); try { m = (await res.json()).error || m; } catch {} throw new Error(m); }
     const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
     for (;;) {
@@ -1601,6 +1625,7 @@ window.addEventListener('hashchange', () => { const id = (location.hash.match(/^
   setWeb(store.get('councilWeb') === '1');
   setSaver(store.get('councilSaver') === '1');
   setHandoff(store.get('councilHandoff') !== '0');  // 기본 켬
+  loadCmdState().then(() => { if (S.items && S.items.length) renderThread(); });
   setMcp(store.get('councilMcp') === '1'); setMcpGpt(store.get('councilMcpGpt') === '1'); setExecutor(store.get('councilExecutor') || 'claude');
   setTarget(['gpt','claude','both'].includes(store.get('councilTarget')) ? store.get('councilTarget') : 'both');
   api('/api/status').then(s => { $('#ver').textContent = 'V' + s.version;

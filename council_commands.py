@@ -41,6 +41,9 @@ SHELL_WORDS = {"for", "do", "done", "while", "until", "if", "then", "else", "eli
                "!", "function", "select", "time"}
 # 🛡 "개발 명령 한 번에 허용" 버튼: 코드 작성·실행·설치에 자주 쓰는 명령 (사용자가 누를 때만 추가)
 DEV_PRESET = ["node", "npm", "npx", "python", "python3", "py", "pip", "pip3", "uv", "git"]
+# 🛡 "파일 복사·이동 허용" 버튼: 백업·정리에 자주 쓰는 명령 (덮어쓸 수 있으므로 사용자가 누를 때만)
+FILE_PRESET = ["cp", "mv", "copy", "move", "xcopy", "robocopy", "unzip", "tar", "zip"]
+PRESETS = {"dev": DEV_PRESET, "files": FILE_PRESET}
 # 두 단어까지 접두어로 쓰는 명령 (npm install, git commit, pip install …)
 TWO_WORD = {"git", "npm", "npx", "pnpm", "yarn", "pip", "pip3", "uv", "cargo", "docker", "brew", "winget", "conda", "go"}
 # 인터프리터는 사실상 무엇이든 실행할 수 있다 → 화면에서 따로 경고
@@ -146,4 +149,4 @@ class CommandStore:
 
     def state(self) -> dict:
         return {"allowed": [{"prefix": p, "powerful": is_powerful(p)} for p in self.allowed()],
-                "defaults": DEFAULT_PREFIXES, "dev_preset": DEV_PRESET}
+                "defaults": DEFAULT_PREFIXES, "dev_preset": DEV_PRESET, "presets": PRESETS}
