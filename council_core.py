@@ -669,6 +669,19 @@ def _stream_texts(stdout: str, keep: int = 3) -> str:
 
 _PERMISSION_TEXT = re.compile(r"requested permissions? to use|haven'?t granted it yet|requires? (your )?approval|"
                               r"permission to use \S+ (has been|was) denied", re.IGNORECASE)
+_SHELL_DENIED = re.compile(r":\s*permission denied|eacces|operation not permitted", re.IGNORECASE)
+
+
+def _is_permission_block(text: str) -> bool:
+    """Claude Code 가 승인 없이 막은 도구 결과인가. 셸의 파일 권한 오류("…: Permission denied")와는 구분한다."""
+    if _PERMISSION_TEXT.search(text):
+        return True
+    low = text.lower()
+    if _SHELL_DENIED.search(text):
+        return False
+    return ("permission" in low or "approv" in low or "not allowed" in low) and len(text) < 600
+
+
 PAUSE_DELAY = 0.5  # 거절 결과를 받은 뒤 세션 기록이 저장될 시간을 조금 두고 멈춘다
 
 
@@ -712,7 +725,7 @@ class PermissionWatch:
                 text = body if isinstance(body, str) else " ".join(
                     str(b.get("text", "")) for b in body or [] if isinstance(b, dict))
                 tool, data = self.uses.get(str(block.get("tool_use_id", "")), ("", {}))
-                if _PERMISSION_TEXT.search(text or "") and (tool == "Bash" or tool.startswith("mcp__")):
+                if _is_permission_block(text or "") and (tool == "Bash" or tool.startswith("mcp__")):
                     self.denials.append({"tool": tool, "input": data if isinstance(data, dict) else {}})
                     self._stop()
 

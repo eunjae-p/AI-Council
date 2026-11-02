@@ -179,6 +179,9 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 .mcpdeny{margin:8px 0 2px;border:1px solid var(--warn-line);background:var(--warn-bg);border-radius:10px;padding:10px 12px;font-size:13px}
 .mcplist label.fresh{background:var(--warn-bg)}
 .act.error .ax{color:var(--warn-text)}
+.badge.final{background:var(--ok-bg, rgba(46,160,67,.15));color:var(--ok, #3fb950);border-color:transparent;font-weight:700}
+.reviewbar{margin:6px 0 10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px}
+.reviewbar details{margin:6px 0} .reviewbar .content{font-size:13px;max-height:420px;overflow:auto}
 .paused{margin:2px 0 8px;padding:7px 10px;border-radius:8px;background:var(--warn-bg);color:var(--warn-text);font-size:13px}
 .mcpdeny b{color:var(--warn-text)} .mcpdeny .t{margin:6px 0 2px;font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
 .mcpdeny pre{white-space:pre-wrap;margin:2px 0 6px;color:var(--muted);font-size:12px;max-height:120px;overflow:auto}
@@ -325,7 +328,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.20.2'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.21.0'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -447,6 +450,7 @@ function msgEl(item, index) {
   const w = who(item), box = el('article', 'msg ' + (KIND[w] || ''));
   if (index != null) box.dataset.index = index;
   const head = el('div', 'head');
+  if (item._final) head.append(el('span', 'badge final', item._final === 'work' ? T('🏁 최종 결과', '🏁 Final result') : T('🏁 최종 결론', '🏁 Final conclusion')));
   head.append(el('span', 'who', (LABEL[w] || w) + (item.round ? ' · ' + ROUND[item.round] : '')));
   if (item.web) head.append(el('span', 'badge web', T('🌐 웹 검색', '🌐 Web search')));
   if (item.mcp) head.append(el('span', 'badge web', '🔌 MCP'));
@@ -709,6 +713,7 @@ function renderThread() {
       el('div', '', T('질문마다 GPT, Claude, 또는 토론을 고를 수 있습니다. 토론은 두 모델이 각자 답한 뒤 서로의 답을 검토하고 최종 결론을 냅니다. 최신 정보가 필요하면 🌐 웹 검색을 켜세요.', 'Pick GPT, Claude, or Discussion for each question. In Discussion, both models answer, review each other, and a neutral conclusion is written. Turn on 🌐 Web search for up-to-date facts.')));
     box.append(w); return;
   }
+  S.items.forEach(x => { delete x._final; });
   // 승인 요청 모으기: 질문 하나당 MCP·명령 승인 카드 한 장씩
   let turn = [];
   const flush = () => { for (const key of ['mcp_denials', 'cmd_denials']) {
@@ -736,33 +741,65 @@ function renderThread() {
     if (item.role === 'user') { box.append(msgEl(item, i)); i++; }
     const all = [];
     while (i < S.items.length && S.items[i].role !== 'user') { all.push([S.items[i], i]); i++; }
-    // 파일 변경 기록·구현 답변은 토론 과정 밖, 결론 아래에 표시
-    const edits = all.filter(([x]) => x.role === 'edit' && !x.ref), impl = all.filter(([x]) => x.round >= 3);
-    const group = all.filter(([x]) => x.role !== 'edit' && !(x.round >= 3));
-    const tail = () => { impl.forEach(([x, idx]) => box.append(msgEl(x, idx))); edits.forEach(([x]) => box.append(editCard(x))); };
-    const council = group.find(([x]) => x.model === 'Council');
-    if (council) {
-      box.append(msgEl(council[0], council[1]));
-      const rest = group.filter(g => g !== council);
-      if (rest.length) {
-        const d = el('details', 'indiv'), rounds = rest.some(([x]) => x.round);
-        if (rounds) {
-          // 토론: 1차 의견(GPT·Claude) → 교차 검토(GPT·Claude) 순서로
-          const order = ([x]) => (x.round || 9) * 10 + (x.model === 'GPT' ? 0 : x.model === 'Claude' ? 1 : 2);
-          const sorted = [...rest].sort((a, b) => order(a) - order(b));
-          const names = r => sorted.filter(([x]) => x.round === r).map(([x]) => x.model).join('·');
-          d.append(el('summary', '', T(`토론 과정 보기 · 1차 의견 ${names(1) || '-'} → 교차 검토 ${names(2) || '-'}`, `Show debate rounds · Round 1 ${names(1) || '-'} → Cross review ${names(2) || '-'}`)));
-          let last = 0;
-          sorted.forEach(([x, idx]) => { if (x.round && x.round !== last) { last = x.round; d.append(el('div', 'round', x.round === 1 ? T('1라운드 · 서로 보지 않고 낸 독립 의견', 'Round 1 · independent answers') : T('2라운드 · 상대 답변을 읽고 쓴 교차 검토', "Round 2 · cross reviews of each other's answers"))); } d.append(msgEl(x, idx)); });
-        } else {
-          d.append(el('summary', '', T(`개별 답변 보기 (${rest.map(([x]) => x.model).join(' · ')})`, `Show individual answers (${rest.map(([x]) => x.model).join(' · ')})`)));
-          rest.forEach(([x, idx]) => d.append(msgEl(x, idx)));
-        }
-        box.append(d);
-      }
-      tail();
-    } else { group.forEach(([x, idx]) => box.append(msgEl(x, idx))); tail(); }
+    // 한 질문의 표시 순서: [과정 (접힘)] → [최종 결과] → 검토 상태·승인 카드·파일 변경 카드
+    // · 대화 토론: 과정 = 1차 의견·교차 검토, 최종 = Council 결론
+    // · 토론 + 작업: 과정 = 1차 의견·교차 검토·합의한 계획(결론)·구현·검토, 최종 = 마지막 구현(또는 수정) 결과
+    const edits = all.filter(([x]) => x.role === 'edit' && !x.ref);
+    const answersOnly = all.filter(([x]) => x.role !== 'edit');
+    const council = answersOnly.find(([x]) => x.model === 'Council');
+    const works = answersOnly.filter(([x]) => x.round === 3 || x.round === 5);
+    const review = [...answersOnly].reverse().find(([x]) => x.round === 4);
+    const final = works.length ? works[works.length - 1] : council;
+    if (final && (council || works.length)) {
+      const rest = answersOnly.filter(g => g !== final);
+      if (rest.length) box.append(processBox(rest, !!works.length));
+      final[0]._final = works.length ? 'work' : 'conclusion';
+      box.append(msgEl(final[0], final[1]));
+      if (works.length && review) box.append(reviewBar(review[0], final[0]));
+    } else answersOnly.forEach(([x, idx]) => box.append(msgEl(x, idx)));
+    edits.forEach(([x]) => box.append(editCard(x)));
   }
+}
+// 토론·작업 과정 (접힘): 1차 의견 → 교차 검토 → 합의한 계획 → 구현 → 검토 순서
+const STEP_ORDER = x => x.model === 'Council' ? 25 : (x.round || 9) * 10 + (x.model === 'GPT' ? 0 : x.model === 'Claude' ? 1 : 2);
+function processBox(items, work) {
+  const d = el('details', 'indiv process'), sorted = [...items].sort((a, b) => STEP_ORDER(a[0]) - STEP_ORDER(b[0]));
+  const has = r => sorted.some(([x]) => x.round === r), steps = [];
+  if (has(1)) steps.push(T('1차 의견', 'Round 1')); if (has(2)) steps.push(T('교차 검토', 'Cross review'));
+  if (work && sorted.some(([x]) => x.model === 'Council')) steps.push(T('합의한 계획', 'Agreed plan'));
+  if (work) steps.push(has(3) ? T('구현', 'Implementation') : T('구현 (아래 최종 결과)', 'Implementation (final result below)'));
+  if (has(4)) steps.push(T('결과 검토', 'Result review'));
+  const title = work ? T('토론·작업 과정 보기', 'Show discussion & work steps') : sorted.some(([x]) => x.round) ? T('토론 과정 보기', 'Show debate rounds') : T('개별 답변 보기', 'Show individual answers');
+  d.append(el('summary', '', `${title} · ${steps.join(' → ') || sorted.map(([x]) => x.model).join(' · ')}`));
+  const LABEL_STEP = { 1:T('1라운드 · 서로 보지 않고 낸 독립 의견', 'Round 1 · independent answers'), 2:T('2라운드 · 상대 답변을 읽고 쓴 교차 검토', "Round 2 · cross reviews of each other's answers"),
+    25:T('합의한 계획 (Council 결론) — 이 계획대로 구현', 'Agreed plan (Council conclusion) — implemented as below'), 3:T('구현', 'Implementation'), 4:T('결과 검토 (읽기 전용)', 'Result review (read-only)') };
+  let last = null;
+  sorted.forEach(([x, idx]) => { const k = x.model === 'Council' ? 25 : x.round;
+    if (k && k !== last && LABEL_STEP[k]) { last = k; d.append(el('div', 'round', LABEL_STEP[k])); }
+    d.append(msgEl(x, idx)); });
+  return d;
+}
+// 결과 검토 상태: 문제 없음 / 지적 N건 → 🔧 지적 반영하기 (실행했던 Claude 세션을 이어서 고침)
+function reviewBar(rv, fin) {
+  const bar = el('div', 'reviewbar'), lgtm = rv.review_verdict === 'lgtm' || /^\s*LGTM/i.test(rv.content || '');
+  const applied = fin.round === 5 || S.items.some(x => x.role === 'user' && x.review_ref === rv.id);
+  bar.append(el('b', '', lgtm ? T(`✅ ${rv.model} 검토: 문제 없음 (LGTM)`, `✅ ${rv.model} review: no issues (LGTM)`)
+    : applied ? T(`✔ ${rv.model} 검토 지적을 반영했습니다`, `✔ ${rv.model} review applied`) : T(`⚠ ${rv.model} 검토에서 고칠 점이 나왔습니다 — 아직 반영하지 않음`, `⚠ ${rv.model} review found issues — not applied yet`)));
+  const d = el('details'); d.append(el('summary', '', T('검토 내용 보기', 'Show review'))); const b = el('div', 'content'); renderText(b, rv.content || ''); d.append(b); bar.append(d);
+  if (!lgtm && !applied && (fin.model === 'GPT' || fin.claude_session)) {
+    const go = el('button', 'small primary', T(`🔧 ${rv.model} 지적 반영하기`, `🔧 Apply ${rv.model}'s review`));
+    go.title = fin.claude_session ? T('구현했던 Claude 세션을 이어서 고칩니다 — 파일을 처음부터 다시 읽지 않아 토큰이 적게 듭니다 (1시간 안이면 캐시).', 'Continues the Claude session that did the work — no re-reading from scratch, so fewer tokens (cached within about an hour).') : '';
+    go.onclick = () => {
+      if (S.running) return toast(T('답변 생성 중에는 실행할 수 없습니다', 'Cannot run while an answer is being generated'), true);
+      let q = null; for (let i = S.items.indexOf(fin) - 1; i >= 0; i--) if (S.items[i].role === 'user') { q = S.items[i]; break; }
+      if (q) { restoreMode(q); if (q.mcp) setMcp(true); if (q.mcp_gpt) setMcpGpt(true); }
+      setTarget(fin.model === 'GPT' ? 'gpt' : 'claude');
+      if (fin.model === 'Claude') S.resume = fin.claude_session;
+      S.resumeReason = 'review'; S.reviewRef = rv.id;
+      $('#q').value = T(`🔧 ${rv.model} 검토 지적 반영`, `🔧 Apply ${rv.model}'s review`); send(); };
+    bar.append(go);
+  }
+  return bar;
 }
 // ---------- 수정 모드: 바뀐 파일 확인 → 확정(커밋) / 되돌리기 ----------
 const FILE_STATUS = { new:T('새 파일', 'new'), modified:T('수정', 'modified'), deleted:T('삭제', 'deleted') };
@@ -1225,14 +1262,14 @@ async function send() {
   const draft = question; q.value = ''; autoGrow();
   const allowOnceSent = S.allowOnce || []; S.allowOnce = []; S.skipGitCheck = false;
   const cmdsOnceSent = S.allowCmdsOnce || []; S.allowCmdsOnce = [];
-  const resumeSent = S.resume || '', resumeReason = S.resumeReason || ''; S.resume = ''; S.resumeReason = '';
+  const resumeSent = S.resume || '', resumeReason = S.resumeReason || '', reviewRef = S.reviewRef || ''; S.resume = ''; S.resumeReason = ''; S.reviewRef = '';
   const sentFiles = S.files.slice(); S.files = []; renderChips();
   if (sentFiles.length) { const t = pend.querySelector('.ptext'); if (t) t.textContent = T('첨부 파일을 보내는 중', 'Sending attachments'); }
   const here = () => S.current === convId;
   let gotUser = false, wasStopped = false;
   try {
     const res = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json', 'X-Lang':LANG},
-      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, web:!!S.web, saver:!!S.saver, handoff:!!S.handoff, mcp:!!S.mcp, mcp_claude:!!S.mcp, mcp_gpt:!!S.mcpGpt, executor:S.executor || 'claude', allow_once: allowOnceSent || [], allow_cmds_once: cmdsOnceSent, resume: resumeSent, resume_reason: resumeReason, image_ratio:S.imgRatio || 'square', image_count:Number($('#imgCount').value) || 1, workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => f.upload ? ({ name:f.name, upload:f.upload }) : ({ name:f.name, content:f.content })) }) });
+      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, web:!!S.web, saver:!!S.saver, handoff:!!S.handoff, mcp:!!S.mcp, mcp_claude:!!S.mcp, mcp_gpt:!!S.mcpGpt, executor:S.executor || 'claude', allow_once: allowOnceSent || [], allow_cmds_once: cmdsOnceSent, resume: resumeSent, resume_reason: resumeReason, review_ref: reviewRef, image_ratio:S.imgRatio || 'square', image_count:Number($('#imgCount').value) || 1, workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => f.upload ? ({ name:f.name, upload:f.upload }) : ({ name:f.name, content:f.content })) }) });
     if (!res.ok) { let m = T('요청 실패', 'Request failed'); try { m = (await res.json()).error || m; } catch {} throw new Error(m); }
     const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
     for (;;) {

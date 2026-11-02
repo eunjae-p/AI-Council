@@ -55,7 +55,7 @@ from council_mcp import McpStore, valid_tool
 import council_commands
 import council_image
 
-VERSION = "0.20.2"
+VERSION = "0.21.0"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -132,6 +132,10 @@ SAVER_NOTE = """
 ## Token saver mode
 The user turned on token saver mode. Answer concisely: lead with the answer, skip preambles and restating the
 question, avoid repeating earlier messages, and keep it short unless the task truly needs detail.
+"""
+
+RESUME_REVIEW_NOTE = """You are continuing the same task in the same session: your implementation is above, and the other model has
+now reviewed the result. Apply the review below. Re-read only the files you need to change.
 """
 
 RESUME_TIMEOUT_NOTE = """Your previous run was stopped by the time limit before you finished. Continue the same task from where
@@ -618,7 +622,8 @@ class Handler(BaseHTTPRequestHandler):
             mcp_gpt = bool(body.get("mcp_gpt"))                     # GPT(Codex) MCP
             resume = str(body.get("resume") or "")[:100]           # 승인 후 이어서 실행할 Claude 세션
             self.resume = resume if (mode == "work" and target == "claude" and re.match(r"^[A-Za-z0-9-]{8,100}$", resume)) else ""
-            self.resume_reason = "timeout" if body.get("resume_reason") == "timeout" else ""
+            self.resume_reason = str(body.get("resume_reason") or "") if body.get("resume_reason") in ("timeout", "review") else ""
+            self.review_ref = str(body.get("review_ref") or "")[:80] if mode == "work" else ""  # 🔧 지적 반영하기: 검토 답변 ID
             executor = "gpt" if str(body.get("executor", "")).lower() == "gpt" else "claude"  # 토론+작업에서 실행할 모델
             allow_once = [t for t in body.get("allow_once") or [] if valid_tool(t)][:20] if mcp else []
             cmd_once = [c.strip() for c in body.get("allow_cmds_once") or []
@@ -731,6 +736,7 @@ class Handler(BaseHTTPRequestHandler):
                                          mcp=mcp or None, mcp_gpt=mcp_gpt or None, allow_once=allow_once or None,
                                          executor=executor if (mode == "work" and target == "both") else None,
                                          allow_cmds_once=cmd_once or None,
+                                         review_ref=getattr(self, "review_ref", "") or None,
                                          attachments=council_attach.history_records(attached) or None)
         self.emit("saved", item=user_item, context=info)
 
@@ -905,7 +911,15 @@ class Handler(BaseHTTPRequestHandler):
             self.emit("stage", step=1, text=f"{label}가 답변하는 중" + (" (웹 검색 사용)" if web else ""))
             try:
                 resume_id = getattr(self, "resume", "") if which == "claude" else ""
-                if resume_id:
+                review_item = next((x for x in previous if x.get("id") == getattr(self, "review_ref", "") and x.get("round") == 4), None)
+                if review_item is not None:
+                    # 🔧 지적 반영하기: 검토 내용을 실행했던 모델에게 (Claude 는 구현 세션을 이어서 → 파일을 다시 읽지 않음)
+                    reviewer = str(review_item.get("model") or "")
+                    fix = FIX_NOTE.format(reviewer=reviewer, review=review_item.get("content", ""))
+                    self.emit("stage", step=1, text=f"{reviewer} 검토 지적을 {label}가 반영하는 중")
+                    answer, item = ask(which, (RESUME_REVIEW_NOTE + fix) if resume_id else base_prompt(which) + fix,
+                                       round_no=5, resume=resume_id or None, post=lambda a: {"review_ref": review_item.get("id")})
+                elif resume_id:
                     # 승인 후: 새로 처음부터 하지 않고 멈춘 Claude 세션을 이어서 실행
                     approved = (cmd_once or []) + [t for t in (allow_once or [])]
                     note = (RESUME_NOTE.format(approved=": " + ", ".join(approved)) if approved or getattr(self, "resume_reason", "") != "timeout"
@@ -982,15 +996,15 @@ class Handler(BaseHTTPRequestHandler):
                 doer, checker = executor, ("claude" if executor == "gpt" else "gpt")
                 d_label, c_label = models[doer][0], models[checker][0]
 
-                def step(which, prompt, round_no, stage, log_name, log_title, call_mode=None):
+                def step(which, prompt, round_no, stage, log_name, log_title, call_mode=None, post=None):
                     nonlocal stopped
                     self.emit("stage", step=round_no + 1, text=stage)
                     try:
-                        text, item = ask(which, prompt, round_no, call_mode)
+                        text, item = ask(which, prompt, round_no, call_mode, post=post)
                         debate.write_log(folder, log_name, log_title, text, item.get("cli_model", ""))
                         self.emit("answer", item=item)
-                        if item.get("paused"):
-                            return None  # 승인 대기로 멈춤 → 검토·수정 단계로 넘어가지 않음 (승인 후 이 세션을 이어서 진행)
+                        if item.get("paused") or item.get("cmd_denials") or item.get("mcp_denials"):
+                            return None  # 승인 대기·막힌 명령이 있음 → 검토로 넘어가지 않음 (승인 후 이 세션을 이어서 진행)
                         return text
                     except Cancelled:
                         stopped = True
@@ -1002,14 +1016,14 @@ class Handler(BaseHTTPRequestHandler):
 
                 report = step(doer, base_prompt(doer) + IMPLEMENT_NOTE.format(conclusion=answers["Council"], other=c_label), 3,
                               f"결론대로 {d_label}가 작업하는 중", f"3_{d_label}_구현.md", f"{d_label} · 구현")
-                review = None
                 if report is not None and not token.cancelled:
-                    review = step(checker, base_prompt(checker, "review") + REVIEW_NOTE.format(
-                                      executor=d_label, conclusion=answers["Council"], report=report), 4,
-                                  f"{c_label}가 결과를 검토하는 중", f"4_{c_label}_검토.md", f"{c_label} · 검토", "read")
-                if review and not review.lstrip().upper().startswith("LGTM") and not token.cancelled:
-                    step(doer, base_prompt(doer) + FIX_NOTE.format(reviewer=c_label, review=review), 5,
-                         f"검토 내용을 반영해 {d_label}가 수정하는 중", f"5_{d_label}_수정.md", f"{d_label} · 수정")
+                    # 다른 모델이 결과를 읽기 전용으로 검토하고 여기서 끝낸다.
+                    # (예전: 지적이 있으면 실행 모델이 자동으로 다시 고침 → 같은 일을 두 번 해 토큰이 크게 들었다.
+                    #  이제 화면의 '🔧 지적 반영하기'를 누를 때만, 실행했던 Claude 세션을 이어서 고친다)
+                    step(checker, base_prompt(checker, "review") + REVIEW_NOTE.format(
+                             executor=d_label, conclusion=answers["Council"], report=report), 4,
+                         f"{c_label}가 결과를 검토하는 중", f"4_{c_label}_검토.md", f"{c_label} · 검토", "read",
+                         post=lambda a: {"review_verdict": "lgtm" if a.lstrip().upper().startswith("LGTM") else "issues"})
 
         if mode == "work" and workdir and getattr(self, "handoff", False):
             # 인수인계 기록: 실제로 무언가를 한 작업만 (파일을 읽기만 한 질문은 남기지 않음)

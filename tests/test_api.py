@@ -462,9 +462,22 @@ post("/api/chat", {"question":"EDIT_FILE 토론 후 수정","conversation_id":c1
 log = open(os.environ["FAKE_LOG"]).read()
 items = get("/api/conversation?id="+c15)["items"]
 rr = {i.get("round"): i["model"] for i in items[-8:] if i.get("round") in (3, 4, 5)}
-ok(rr == {3:"Claude", 4:"GPT", 5:"Claude"} and items[-1]["role"]=="edit", f"discussion+work: Claude runs, GPT reviews, Claude fixes {rr}")
-ok(log.count("acceptEdits")==2 and "workspace-write" not in log and "planning round" in log and "'read-only'" in log, "planning/review rounds are read-only")
+rv = next(i for i in reversed(items) if i.get("round")==4); r3i = next(i for i in reversed(items) if i.get("round")==3)
+ok(rr == {3:"Claude", 4:"GPT"} and items[-1]["role"]=="edit" and rv.get("review_verdict")=="issues",
+   f"discussion+work: Claude runs, GPT reviews, no automatic second fix {rr}")
+ok(log.count("acceptEdits")==1 and "workspace-write" not in log and "planning round" in log and "'read-only'" in log, "planning/review rounds are read-only")
 post("/api/edit/apply", {"conversation_id":c15,"ref":items[-1]["id"],"action":"revert"})
+# 🔧 지적 반영하기: 구현했던 Claude 세션을 이어서 (--resume) 검토 내용만 전달
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"🔧 GPT 검토 지적 반영","conversation_id":c15,"target":"claude","mode":"work","workdir":str(ed),
+                   "resume":r3i["claude_session"],"resume_reason":"review","review_ref":rv["id"]}, raw=True)
+log = open(os.environ["FAKE_LOG"]).read(); items = get("/api/conversation?id="+c15)["items"]
+fx = next(i for i in reversed(items) if i["role"]=="assistant"); uq = [i for i in items if i["role"]=="user"][-1]
+ok("'--resume', '"+r3i["claude_session"]+"'" in log and "Apply the review" in log and rv["content"][:20] in log and "Newest user question" not in log,
+   "apply review: same session, only the review is sent")
+ok(fx.get("round")==5 and fx.get("review_ref")==rv["id"] and uq.get("review_ref")==rv["id"], "applied review recorded (round 5, linked)")
+html_ = (pathlib.Path(w.__file__).parent/"web"/"index.html").read_text(encoding="utf-8")
+ok("function processBox" in html_ and "function reviewBar" in html_ and "_final" in html_, "UI: process above, final result last, review bar")
 # 실행 모델을 GPT 로: GPT 가 실행(workspace-write + 인터넷), Claude 가 검토(읽기 전용)
 open(os.environ["FAKE_LOG"],"w").close()
 post("/api/chat", {"question":"EDIT_FILE GPT 실행","conversation_id":c15,"target":"both","mode":"work","workdir":str(ed),"executor":"gpt"}, raw=True)

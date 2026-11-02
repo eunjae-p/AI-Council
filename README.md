@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.20.2** (2026-10-30) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.21.0** (2026-11-02) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,10 +11,10 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.21.0](CHANGELOG.md#v0210-2026-11-02) | 11-02 | 토론·작업 **과정은 위(접힘), 🏁 최종 결과는 마지막**, 검토 후 자동 재수정 없앰 → **🔧 지적 반영하기** |
 | [V0.20.2](CHANGELOG.md#v0202-2026-10-30) | 10-30 | "모델 서버 혼잡(at capacity)" 오류 안내 + 대화 모드 자동 재시도 1회 |
 | [V0.20.1](CHANGELOG.md#v0201-2026-10-30) | 10-30 | 토론 결론 위에 **📁 토론 기록 폴더** 버튼 (열기 + 경로 복사) |
 | [V0.20.0](CHANGELOG.md#v0200-2026-10-30) | 10-30 | **🔁 Claude 데스크톱 앱과 번갈아 쓰기** — HANDOFF.md 자동 기록, 📄 CLAUDE.md 준비, 🖥 Claude 앱에서 이어서 |
-| [V0.19.2](CHANGELOG.md#v0192-2026-10-29) | 10-29 | 작업 모드 시간 제한: 진행 중이면 계속(15분 무응답·60분 상한), 멈춰도 **↪ 이어서 진행** |
 | [V0.19.0](CHANGELOG.md#v0190-2026-10-29) | 10-29 | **💰 토큰 절약** — 캐시가 맞게 맥락 고정, 지난 토론은 결론만, 🪙 토큰 표시, 💰 절약 모드 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
@@ -162,8 +162,10 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 - **GPT(Codex)**: `workspace-write` 샌드박스 — 작업 폴더 안에서만 쓰고, 명령 실행과 **인터넷(설치 등)은 허용**됩니다. Codex는 명령별 승인을 할 수 없어 폴더 범위로 제한합니다.
 - **블렌더 등 연결된 도구**: 모드와 별개로 **🔌 Claude MCP** / **🔌 GPT MCP** 를 켭니다 (각 CLI에 Blender MCP가 등록돼 있어야 함).
 - **토론 + 작업 (협업)**: ① GPT·Claude가 **읽기만 하며** 계획 토론 → ② 결론 → ③ **실행: Claude / 실행: GPT** 로 고른 모델이 작업 →
-  ④ 다른 모델이 결과(파일·블렌더 씬)를 **읽기 전용으로 검토** → ⑤ 문제가 있으면 실행한 모델이 수정 (검토가 `LGTM`이면 생략).
-  같은 파일·같은 블렌더 씬을 동시에 고치지 않도록 순서대로 주고받습니다. 기록은 `3_구현`·`4_검토`·`5_수정.md`.
+  ④ 다른 모델이 결과(파일·블렌더 씬)를 **읽기 전용으로 검토**하고 끝납니다. 지적이 있으면 **🔧 지적 반영하기** 를 누를 때만
+  실행했던 Claude 세션을 이어서 고칩니다 (자동으로 두 번 고치지 않음 → 토큰 절약). 구현 중 승인이 필요한 명령이 막히면 검토 전에 멈춥니다.
+  화면: **토론·작업 과정 보기**(접힘: 1차 의견 → 교차 검토 → 합의한 계획 → 구현 → 결과 검토) 아래에 **🏁 최종 결과**, 그 아래 검토 상태·변경 파일.
+  대화 모드 토론도 과정(접힘) 아래에 **🏁 최종 결론**이 마지막으로 보입니다. 기록은 `3_구현`·`4_검토.md`.
 - **서버 실행**: 오래 켜 두는 서버는 백그라운드로 실행하도록 지시합니다. 끄는 방법은 답변에 안내됩니다.
 - ⚠ **운영 중인 서비스 폴더는 복사본에서** 작업하고 확인 후 반영하는 것을 권장합니다. 모든 명령을 묻지 않고 실행하는 모드는 쓰지 않습니다.
 
@@ -321,7 +323,7 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.20.2** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.21.0** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
@@ -345,7 +347,7 @@ It drives the official **Codex CLI (GPT)** and **Claude Code CLI (Claude)** sign
 - **🌐 Web search** toggle — both models search the web and cite sources
 - **🎨 Image mode** — GPT generates real images (Codex image tool, ChatGPT Plus or higher) and saves PNGs to the folder you choose; shown in the chat too. With Claude/Discussion, Claude writes the prompt and GPT generates.
 - **🔌 Claude MCP / GPT MCP** — use connected tools such as Blender with either model. Claude: only tools you allow run automatically, others ask first. GPT: all tools registered in Codex are enabled when on.
-- **Collaboration** — Discussion + Work: both plan → the model you pick (**Run: Claude / Run: GPT**) executes → the other reviews the actual result read-only → the executor fixes.
+- **Collaboration** — Discussion + Work: both plan → the model you pick (**Run: Claude / Run: GPT**) executes → the other reviews the actual result read-only and it stops there; **🔧 Apply review** continues the executor's Claude session only when you click it (no automatic second pass). The steps are collapsed above, and the **🏁 Final result** (or **🏁 Final conclusion** in a chat discussion) comes last.
 - **Attachments** — text/JSON, images, video (12 frames via ffmpeg), ZIP (safely extracted: file list, text/code contents, up to 8 images; in work mode the extracted folder can be opened); drag & drop or Ctrl+V. ComfyUI workflow JSON is pre-summarized (nodes, models, color-coded required inputs)
 - **💰 Token saving** — always on: the start of the recent-context window stays fixed so each prompt begins like the previous one and hits the CLIs' prompt cache (cached input counts much cheaper); older discussions keep only the conclusion; the final summary uses a short context; images are re-sent only when the question is about them. Every answer shows 🪙 tokens (new input / cached input / output), with daily totals at the bottom left. Optional **💰 Saver** toggle: skips the discussion cross review (5 → 3 calls), shorter context and attachment excerpts, concise answers, low reasoning effort for GPT in chat.
 - **🔁 Switching with the Claude desktop app** — 📄 prepares `CLAUDE.md` (template, or just appends the handoff rule); 📝 Handoff (on by default) appends request / status / changed files / session ID / result summary to `HANDOFF.md` in the working folder after each Work task (read-only questions are skipped; turn it off for folders a web server publishes); **🖥 Continue in Claude app** opens the session in the desktop app via `claude://resume?session=…` (undocumented link; fallback: `/resume` in the app or the copied `claude --resume <ID>`). Back in Council, say "read the last entry of HANDOFF.md and continue".
