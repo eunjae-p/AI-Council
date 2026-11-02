@@ -55,7 +55,7 @@ from council_mcp import McpStore, valid_tool
 import council_commands
 import council_image
 
-VERSION = "0.21.1"
+VERSION = "0.21.2"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -82,6 +82,20 @@ def cli_available(name: str) -> bool:
         return True
     except CliFailure:
         return False
+
+
+def _cmd_denial(d: dict, cmd_allow: list[str] | None) -> dict:
+    """막힌 명령 1건 → 화면 카드용. 이미 허용한 접두어(echo 등)는 빼고 실제로 막힌 것만.
+    모든 접두어를 이미 허용했는데도 막혔다면 허용 목록 문제가 아니다 (Claude Code 의 경로·안전 검사) → still_blocked."""
+    command = str(d["input"].get("command", ""))
+    every = council_commands.prefixes_for(command)
+    missing = [x for x in every if x not in (cmd_allow or [])]
+    out = {"command": command[:500], "prefixes": missing or every}
+    if every and not missing:
+        out["still_blocked"] = True
+    if d.get("reason"):
+        out["reason"] = str(d["reason"])[:400]
+    return out
 
 
 def model_label(name: str, model: str) -> str:
@@ -819,12 +833,7 @@ class Handler(BaseHTTPRequestHandler):
                 mcp_denials=[{"tool": d["tool"], "input": json.dumps(d["input"], ensure_ascii=False)[:600]}
                              for d in run_info.get("permission_denials", []) if d["tool"].startswith("mcp__")][:10] or None,
                 # 허용 목록에 없어 막힌 명령 → 화면에서 허용 여부를 묻는다
-                cmd_denials=[{"command": str(d["input"].get("command", ""))[:500],
-                              # 이미 허용된 접두어(echo 등)는 빼고, 실제로 막힌 것만
-                              "prefixes": [x for x in council_commands.prefixes_for(str(d["input"].get("command", "")))
-                                           if x not in (cmd_allow or [])] or
-                                          council_commands.prefixes_for(str(d["input"].get("command", "")))}
-                             for d in run_info.get("permission_denials", []) if d["tool"] == "Bash"][:10] or None,
+                cmd_denials=[_cmd_denial(d, cmd_allow) for d in run_info.get("permission_denials", []) if d["tool"] == "Bash"][:10] or None,
                 claude_session=run_info.get("claude_session") if which == "claude" and call_mode in ("work",) else None,
                 resumed=True if resume else None,
                 paused=run_info.get("paused") or None,  # True: 승인이 필요해 멈춤 · "timeout": 시간 제한으로 멈춤 (둘 다 이어서 진행 가능)

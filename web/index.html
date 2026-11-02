@@ -328,7 +328,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.21.1'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.21.2'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -606,6 +606,7 @@ function openInClaudeApp(item) {
 const canResume = (item, q) => !!item.claude_session && item.model === 'Claude' && ((q.target || 'claude') === 'claude' || [3, 5].includes(item.round));
 function restoreMode(q) { if (['work', 'edit'].includes(q.mode)) { setMode('work'); if (q.workdir) $('#workdir').value = q.workdir; } }
 function cmdDenialCard(item, index) {
+  if (item.cmd_denials.every(d => d.still_blocked)) return stillBlockedCard(item);
   const c = el('div', 'mcpdeny'), prefixes = [...new Set(item.cmd_denials.flatMap(d => d.prefixes || []))];
   c.append(el('b', '', T('🛡 허용 목록에 없는 명령이라 실행하지 않았습니다', '🛡 These commands are not on the allowlist, so they were not run')));
   item.cmd_denials.forEach(d => c.append(el('pre', '', '$ ' + d.command)));
@@ -650,6 +651,20 @@ function cmdDenialCard(item, index) {
     g.onclick = () => { if (!confirm(T(`다음 명령을 앞으로 묻지 않고 실행할까요?\n${list.join(', ')}\n(코드 실행·설치·파일 덮어쓰기가 가능해집니다)`, `Run these without asking from now on?\n${list.join(', ')}\n(Allows running code, installing and overwriting files)`))) return; rerun(true, name); };
     row.prepend(g);
   });
+  return c;
+}
+// 허용했는데도 막힌 명령: 허용 목록 문제가 아니라 Claude Code 자체 검사(작업 폴더 밖 경로, 드라이브 루트, 보호 폴더 등).
+// 같은 승인 카드를 다시 띄우면 같은 일이 반복되므로, 이유와 해결 방법을 보여 준다.
+function stillBlockedCard(item) {
+  const c = el('div', 'mcpdeny');
+  c.append(el('b', '', T('⚠ 허용했는데도 Claude Code 가 이 명령을 막았습니다', '⚠ Claude Code blocked this command even though it is allowed')));
+  item.cmd_denials.forEach(d => { c.append(el('pre', '', '$ ' + d.command)); if (d.reason) c.append(el('div', 'k', T('Claude Code 가 알려 준 이유: ', 'Reason from Claude Code: ') + d.reason)); });
+  const wd = item.workdir || $('#workdir').value.trim(), root = /^[A-Za-z]:[\\/]?$/.test(wd);
+  c.append(el('div', '', T('허용 목록 문제가 아니라 Claude Code 의 안전 검사입니다 (작업 폴더 밖 경로·보호 폴더 등). 다시 허용해도 같은 결과라 버튼을 숨겼습니다.', "This is Claude Code's own safety check (paths outside the working folder, protected folders…), not the allowlist. Allowing it again gives the same result, so the buttons are hidden.")));
+  if (root) c.append(el('div', '', T(`→ 작업 폴더가 드라이브 전체(${wd})입니다. 프로젝트 폴더(예: ${wd.replace(/[\\/]?$/, '\\')}VQC)로 바꾸고 다시 보내세요.`, `→ The working folder is a whole drive (${wd}). Change it to the project folder (e.g. ${wd.replace(/[\\/]?$/, '\\')}VQC) and send again.`)));
+  else c.append(el('div', '', T('→ 명령이 작업 폴더 밖을 가리키면 작업 폴더를 그 위 폴더로 바꾸거나, 아래 명령을 직접 실행한 뒤 "직접 실행했어, 이어서 해줘"라고 보내세요.', '→ If the command points outside the working folder, use a parent folder as the working folder, or run the command yourself and then say "I ran it, continue".')));
+  const row = el('div', 'row'), cp = el('button', 'small', T('명령 복사', 'Copy command'));
+  cp.onclick = () => copyText(item.cmd_denials.map(d => d.command).join('\n')); row.append(cp); c.append(row);
   return c;
 }
 function noteCmdState(st) { S.cmdState = st; }
@@ -1268,6 +1283,11 @@ async function send() {
   if (S.target !== 'claude' && !gpt) { $('#models').classList.add('open'); $('#gptCustom').focus(); return; }
   if (S.target !== 'gpt' && !claude) { $('#models').classList.add('open'); $('#claudeCustom').focus(); return; }
   if (S.mode === 'work' && !$('#workdir').value.trim()) { $('#workdir').focus(); toast(T('작업 폴더를 입력하세요', 'Enter a working folder'), true); return; }
+  if (S.mode === 'work' && /^[A-Za-z]:[\\/]?$/.test($('#workdir').value.trim()) && !S.rootOk) {
+    if (!confirm(T(`작업 폴더가 드라이브 전체(${$('#workdir').value.trim()})입니다.\nClaude 가 드라이브 어디든 파일을 만들고 고칠 수 있고, Claude Code 의 안전 검사로 cp·mv 같은 명령이 허용해도 막힐 수 있습니다.\n프로젝트 폴더(예: D:\\VQC)를 권장합니다. 그래도 진행할까요?`,
+      `The working folder is a whole drive (${$('#workdir').value.trim()}).\nClaude could create and edit files anywhere on it, and Claude Code's safety checks may block commands like cp or mv even when allowed.\nA project folder (e.g. D:\\VQC) is recommended. Continue anyway?`))) return;
+    S.rootOk = true;
+  }
   if (S.mode === 'work' && !S.skipGitCheck) {  // 작업 폴더가 Git 저장소인데 저장 안 된 변경이 있으면 저장점을 권한다 (선택)
     let st; try { st = await api('/api/edit/status', { workdir:$('#workdir').value.trim() }); } catch (e) { toast(e.message, true); return; }
     if (st.repo && !st.clean) {

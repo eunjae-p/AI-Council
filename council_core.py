@@ -726,7 +726,8 @@ class PermissionWatch:
                     str(b.get("text", "")) for b in body or [] if isinstance(b, dict))
                 tool, data = self.uses.get(str(block.get("tool_use_id", "")), ("", {}))
                 if _is_permission_block(text or "") and (tool == "Bash" or tool.startswith("mcp__")):
-                    self.denials.append({"tool": tool, "input": data if isinstance(data, dict) else {}})
+                    self.denials.append({"tool": tool, "input": data if isinstance(data, dict) else {},
+                                         "reason": " ".join(str(text).split())[:400]})  # Claude Code 가 막은 이유 (화면 표시용)
                     self._stop()
 
     def _stop(self) -> None:

@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.21.1** (2026-11-02) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.21.2** (2026-11-02) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.21.2](CHANGELOG.md#v0212-2026-11-02) | 11-02 | 허용했는데도 막힌 명령은 같은 카드 반복 대신 **⚠ 이유·해결 방법**, 드라이브 전체 작업 폴더 경고 |
 | [V0.21.1](CHANGELOG.md#v0211-2026-11-02) | 11-02 | 승인 카드에 **🧰 묶음 모두 허용**(개발 명령·파일 복사·이동), 이어서 실행할 때 막힌 명령을 Claude 에게 알림 |
 | [V0.21.0](CHANGELOG.md#v0210-2026-11-02) | 11-02 | 토론·작업 **과정은 위(접힘), 🏁 최종 결과는 마지막**, 검토 후 자동 재수정 없앰 → **🔧 지적 반영하기** |
 | [V0.20.2](CHANGELOG.md#v0202-2026-10-30) | 10-30 | "모델 서버 혼잡(at capacity)" 오류 안내 + 대화 모드 자동 재시도 1회 |
 | [V0.20.1](CHANGELOG.md#v0201-2026-10-30) | 10-30 | 토론 결론 위에 **📁 토론 기록 폴더** 버튼 (열기 + 경로 복사) |
-| [V0.20.0](CHANGELOG.md#v0200-2026-10-30) | 10-30 | **🔁 Claude 데스크톱 앱과 번갈아 쓰기** — HANDOFF.md 자동 기록, 📄 CLAUDE.md 준비, 🖥 Claude 앱에서 이어서 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -147,6 +147,8 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 2. **명령 실행은 허용 목록 + 승인**: `mkdir`, `ls`, `git status` 같은 명령은 바로 실행됩니다.
    목록에 없는 명령(예: `npm install`, `python app.py`)은 실행하지 않고 답변 아래에 **🛡 승인 카드**가 뜹니다 →
    **이번만 허용하고 다시 실행 / 항상 허용하고 다시 실행 / 허용 안 함**.
+   **허용했는데도 막히면**(Claude Code 자체 안전 검사 — 작업 폴더 밖 경로·드라이브 전체·보호 폴더 등) 같은 카드를 반복하지 않고 **⚠ 이유와 해결 방법**을 보여 줍니다.
+   작업 폴더는 드라이브 전체(`D:\`)보다 **프로젝트 폴더**(`D:\VQC`)를 쓰세요 — 드라이브 전체로 보내면 확인 창이 뜹니다.
    승인 카드의 **🧰 … 묶음 모두 허용하고 다시 실행**: 막힌 명령이 개발 명령·파일 복사·이동 묶음에 속하면 같은 종류를 한 번에 허용해 다음부터 덜 묻습니다.
    막힌 명령·MCP 도구가 나오면 Claude 는 **그 자리에서 멈춥니다** (⏸ 표시 — 막힌 단계를 건너뛰고 다음 작업을 하지 않음).
    허용하면 **멈춘 Claude 세션을 그대로 이어서** 그 단계부터 실행합니다 (앞에서 읽은 파일·실행 결과를 기억, 처음부터 다시 하지 않음).
@@ -324,7 +326,7 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.21.1** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.21.2** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
@@ -390,7 +392,7 @@ Clone with `git` (not ZIP) so the built-in updater works.
 
 - **Mode**: 💬 Chat (no file access) · 🛠 Work (reads, creates and edits files and runs commands in the working folder)
 - **Target**: GPT · Claude · Discussion (both debate → neutral conclusion; *Show debate rounds* expands each round)
-- **Work mode**: the approval card offers **🧰 Allow all dev commands / file copy/move and run again** when the blocked command belongs to one of those groups, so you get asked less next time. When a command or MCP tool is blocked, Claude **pauses right there** (⏸, nothing after it runs) and a 🛡 card appears — **Allow once and run again** / **Always allow and run again** resumes the same Claude session from that step (also for the executor step in Discussion + Work, without rerunning the discussion). Approve soon: within about an hour the earlier history is read from cache. Time limit: Claude keeps going while it reports progress; it stops after 15 minutes with no progress or 60 minutes in total, and **↪ Continue** resumes the same session (work is not thrown away). Manage the allowlist with **🛡** next to the folder. In a Git repository you can review changes and **✅ Commit** or **↩ Revert**; with uncommitted changes you choose **Create checkpoint and start** or **Continue without**.
+- **Work mode**: if a command is blocked even though it is allowed (Claude Code's own safety checks: paths outside the working folder, a whole drive as the working folder, protected folders), Council shows the reason instead of repeating the same approval card; use a project folder (e.g. `D:\VQC`) rather than a whole drive. The approval card offers **🧰 Allow all dev commands / file copy/move and run again** when the blocked command belongs to one of those groups, so you get asked less next time. When a command or MCP tool is blocked, Claude **pauses right there** (⏸, nothing after it runs) and a 🛡 card appears — **Allow once and run again** / **Always allow and run again** resumes the same Claude session from that step (also for the executor step in Discussion + Work, without rerunning the discussion). Approve soon: within about an hour the earlier history is read from cache. Time limit: Claude keeps going while it reports progress; it stops after 15 minutes with no progress or 60 minutes in total, and **↪ Continue** resumes the same session (work is not thrown away). Manage the allowlist with **🛡** next to the folder. In a Git repository you can review changes and **✅ Commit** or **↩ Revert**; with uncommitted changes you choose **Create checkpoint and start** or **Continue without**.
 - **💰 Saver on/off** (fewer tokens: see Features), **Web search on/off**, **Claude MCP / GPT MCP on/off** (⚙ manages Claude's always-allowed tools), **Run: Claude / Run: GPT** in Discussion + Work, **Models ▾** to pin model versions
 - **⤓ MD** downloads one answer; **Chat_md** downloads the whole chat; **■ Stop** (or Esc) stops generating
 - **Long chats**: only the latest 12 turns are drawn (⬆ show earlier / show all); **🗜 Compress** summarizes the chat now; **↪ Continue in new chat** starts a new chat that carries over a summary.

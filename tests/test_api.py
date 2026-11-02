@@ -571,6 +571,17 @@ ev = post("/api/chat", {"question":"CAPACITY_ALWAYS 질문","conversation_id":cc
 err = next((e["text"] for e in ev if e["type"]=="error"), "")
 ok("일시적으로 붐벼" in err and "at capacity" in err, "capacity error explained")
 ok(_ccap.is_capacity_error("API Error: 529 {\"type\":\"overloaded_error\"}") and not _ccap.is_capacity_error("usage limit reached"), "capacity detection")
+# 허용했는데도 Claude Code 가 막은 명령 → 같은 승인 카드 대신 이유 표시 (반복 방지)
+cb = post("/api/conversations")["id"]
+post("/api/chat", {"question":"BLOCK_ALWAYS: cp -r /d/VQC/program /d/VQC/_backup","conversation_id":cb,"target":"claude","mode":"work","workdir":str(cw),
+                   "allow_cmds_once":["cp"]}, raw=True)
+a = get("/api/conversation?id="+cb)["items"][-1]; dn = (a.get("cmd_denials") or [{}])[0]
+ok(dn.get("still_blocked") and "outside the allowed working directories" in dn.get("reason","") and a.get("paused"), f"allowed-but-blocked detected with reason {dn}")
+post("/api/chat", {"question":"BLOCK_ALWAYS: cp -r x y","conversation_id":cb,"target":"claude","mode":"work","workdir":str(cw)}, raw=True)
+dn = get("/api/conversation?id="+cb)["items"][-1]["cmd_denials"][0]
+ok(not dn.get("still_blocked") and dn["prefixes"]==["cp"], "not-yet-allowed command still gets the normal approval card")
+html_ = (pathlib.Path(w.__file__).parent/"web"/"index.html").read_text(encoding="utf-8")
+ok("function stillBlockedCard" in html_ and "S.rootOk" in html_, "UI: still-blocked card and drive-root warning")
 import council_commands as _ccm, json as _js
 _mf = tmp/"oldcmd"; _mf.mkdir(); (_mf/"cmd_settings.json").write_text(_js.dumps({"allowed":["ls","npm install"]}), encoding="utf-8")
 _al = _ccm.CommandStore(_mf).allowed(); ok("npm install" in _al and "sha1sum" in _al and "grep" in _al, "existing allowlist gets new read-only defaults once")
