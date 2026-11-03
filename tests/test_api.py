@@ -665,7 +665,7 @@ html_ = (pathlib.Path(w.__file__).parent/"web"/"index.html").read_text(encoding=
 ok("setFullAccess" in html_ and "faBanner" in html_ and "confirm: on ? 'full-access'" in html_, "UI: per-chat toggle, confirmation and banner")
 import council_core as _cpw
 ok(_cpw._is_permission_block("cp with flags requires manual approval to ensure path safety. For security, Claude Code cannot automatically validate cp commands that use flags")
-   and _cpw._is_permission_block("Claude Code refused it: only files inside the working directory may be listed") is False or True, "real CLI denial text (cp with flags) is recognized")
+   and not _cpw._is_permission_block("cp: cannot create regular file 'x': Permission denied"), "real CLI denial text (cp with flags) is recognized, shell errors are not")
 ok(_cpw._PERMISSION_TEXT.search("cp with flags requires manual approval to ensure path safety") is not None, "manual approval phrase matched directly")
 import council_commands as _ccm, json as _js
 _mf = tmp/"oldcmd"; _mf.mkdir(); (_mf/"cmd_settings.json").write_text(_js.dumps({"allowed":["ls","npm install"]}), encoding="utf-8")
