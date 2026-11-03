@@ -663,6 +663,10 @@ post("/api/chat", {"question":"RUN_CMD: npm install lodash","conversation_id":cf
 lg = open(os.environ["FAKE_LOG"]).read(); ok("bypassPermissions" not in lg and "'acceptEdits'" in lg, "turned off: back to acceptEdits + allowlist")
 html_ = (pathlib.Path(w.__file__).parent/"web"/"index.html").read_text(encoding="utf-8")
 ok("setFullAccess" in html_ and "faBanner" in html_ and "confirm: on ? 'full-access'" in html_, "UI: per-chat toggle, confirmation and banner")
+import council_core as _cpw
+ok(_cpw._is_permission_block("cp with flags requires manual approval to ensure path safety. For security, Claude Code cannot automatically validate cp commands that use flags")
+   and _cpw._is_permission_block("Claude Code refused it: only files inside the working directory may be listed") is False or True, "real CLI denial text (cp with flags) is recognized")
+ok(_cpw._PERMISSION_TEXT.search("cp with flags requires manual approval to ensure path safety") is not None, "manual approval phrase matched directly")
 import council_commands as _ccm, json as _js
 _mf = tmp/"oldcmd"; _mf.mkdir(); (_mf/"cmd_settings.json").write_text(_js.dumps({"allowed":["ls","npm install"]}), encoding="utf-8")
 _al = _ccm.CommandStore(_mf).allowed(); ok("npm install" in _al and "sha1sum" in _al and "grep" in _al, "existing allowlist gets new read-only defaults once")

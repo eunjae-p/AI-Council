@@ -692,7 +692,7 @@ def _stream_texts(stdout: str, keep: int = 3) -> str:
     return "\n\n".join(texts[-keep:])[:3000]
 
 
-_PERMISSION_TEXT = re.compile(r"requested permissions? to use|haven'?t granted it yet|requires? (your )?approval|"
+_PERMISSION_TEXT = re.compile(r"requested permissions? to use|haven'?t granted it yet|requires? (your |manual )?approval|"
                               r"permission to use \S+ (has been|was) denied", re.IGNORECASE)
 _SHELL_DENIED = re.compile(r":\s*permission denied|eacces|operation not permitted", re.IGNORECASE)
 

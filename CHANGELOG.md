@@ -83,6 +83,9 @@ PARK 이 위험을 알고 승인한 "전체 권한 모드" (CLAUDE.md 규칙 변
   도구 목록을 확인한 적이 없으면 먼저 확인하고, 그래도 모르면 MCP 전체를 묻습니다.
 - 전체 권한에서 막힌 명령(보호 폴더 등 Claude Code 자체 검사)은 승인으로 풀리지 않으므로 ⚠ 이유 카드로 표시.
 - 상태는 그 대화 정보(`data/`)에만 저장 — 새 대화·새 대화로 이어가기·다른 PC 로 넘어가지 않음.
+- 실제 Claude CLI(2.1.317) 확인: 전체 권한 켬 → `cp -p` 실행·`Z:\Server` 목록 읽기 모두 묻지 않고 실행 (`--add-dir` 불필요),
+  끔 → 둘 다 막힘. 옵션이 붙은 `cp` 는 Claude Code 가 허용 목록과 상관없이 항상 승인을 요구("cp with flags requires manual approval")하므로
+  이 문구를 '승인이 필요해 멈춤' 감지에 추가.
 - CLAUDE.md·AGENTS.md 규칙, council_commands·council_mcp 주석, README 갱신.
 
 ## V0.22.0 (2026-11-03)
