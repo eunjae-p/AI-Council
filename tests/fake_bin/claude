@@ -82,6 +82,7 @@ if "RUN_CMD:" in p and "Bash" in (sys.argv[sys.argv.index("--tools")+1] if "--to
     allowed = sys.argv[sys.argv.index("--allowedTools")+1] if "--allowedTools" in sys.argv else ""
     import re as _re
     ok_ = any(cmd.startswith(m) for m in _re.findall(r"Bash\(([^:)]*):\*\)", allowed))
+    if "bypassPermissions" in sys.argv: ok_ = True  # 전체 권한 모드: 허용 목록과 상관없이 실행
     if ok_: open("cmd_ran.txt","w").write(cmd); out("명령을 실행했습니다: "+cmd); sys.exit(0)
     blocked("Bash", {"command":cmd}); out("명령 승인이 필요합니다"); sys.exit(0)
 if "USE_MCP" in p:

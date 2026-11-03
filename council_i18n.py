@@ -89,6 +89,10 @@ PAIRS: list[tuple[str, str]] = [
      "The model server was temporarily too busy and rejected the request (not a usage limit). Send again in a moment, or "
      "pick another model (or the account default) in 'Models'. In Chat mode Council retries once automatically."),
     ("알 수 없는 명령 묶음입니다.", "Unknown command group."),
+    ("허용되지 않은 주소로 들어온 요청입니다.", "Request to a host name that is not allowed."),
+    ("다른 사이트에서 보낸 요청은 받지 않습니다.", "Requests sent from other sites are not accepted."),
+    ("JSON 요청만 받습니다.", "Only JSON requests are accepted."),
+    ("전체 권한 모드를 켜려면 화면의 확인 창에서 동의해야 합니다.", "To turn on full access mode, confirm it in the on-screen dialog."),
     ("가져갈 답변을 찾을 수 없습니다.", "Could not find the answer to take along."),
     ("작업 폴더의 HANDOFF.md 에 인수인계 기록을 남겼습니다.", "Added a handoff entry to HANDOFF.md in the working folder."),
     ("HANDOFF.md 에 기록하지 못했습니다: {x}", "Could not write to HANDOFF.md: {x}"),

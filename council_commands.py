@@ -7,7 +7,9 @@
   "이번만 허용 / 항상 허용 / 허용 안 함"을 보여 준다. 허용하면 멈춘 Claude 세션을 이어서(--resume) 실행한다.
 - 허용 단위는 명령 앞부분(접두어)이다. 예: `npm install express` → `npm install`.
   접두어는 영문·숫자·공백·. _ - / 만 허용한다 (따옴표·&·| 등이 들어간 규칙은 만들지 않음).
-- 모든 명령을 묻지 않고 실행하는 모드(bypassPermissions)는 쓰지 않는다.
+- 기본은 허용 목록 + 승인. 사용자가 그 대화에서 확인 후 켠 "전체 권한 모드"에서만 Claude 작업 실행이
+  bypassPermissions 로 돌아가 이 목록과 상관없이 실행된다 (ai_council_web·council_core 참고). 그때 막히는 명령은
+  Claude Code 자체 검사라 승인으로 풀리지 않으므로 화면에 still_blocked 카드로 보인다.
 
 저장 (Git 제외): data/cmd_settings.json — 사용자가 고친 허용 목록
 """

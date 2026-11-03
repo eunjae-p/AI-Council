@@ -4,7 +4,8 @@
 - 기본은 꺼짐. 켜도 **사용자가 허용한 도구만** 승인 없이 실행된다 (Claude Code 의 --allowedTools).
 - 허용하지 않은 도구를 모델이 쓰려 하면 CLI 가 실행을 거부하고(permission_denials), Council 이 화면에
   "이 도구를 쓰려 합니다 — 허용/거부"를 보여 준다. 사용자가 허용하면 그 도구를 열고 다시 답하게 한다.
-- 모든 도구를 묻지 않고 실행하는 모드(bypassPermissions)는 쓰지 않는다.
+- 작업 모드의 "전체 권한 모드"(대화별로 사용자가 켬, bypassPermissions)에서도 MCP 는 지금처럼 '항상 허용'한 도구만
+  바로 실행된다: 허용하지 않은 도구는 ask 규칙(ask_rules)으로 넘겨, 화면 없는 실행(-p)에서는 거절 → 승인 카드가 뜬다.
 - 현재는 Claude(Claude Code) 의 MCP 만 지원. Claude Code 는 claude.ai 계정에 연결된 커넥터도 불러온다.
   GPT(Codex) 쪽 MCP 는 승인 흐름을 확인하기 전까지 Council 에서 끈다.
 
@@ -227,3 +228,23 @@ def discover_claude() -> tuple[list[dict], list[str]]:
     servers = [{"name": str(s.get("name", "")), "status": str(s.get("status", ""))}
                for s in init.get("mcp_servers", []) if isinstance(s, dict)]
     return servers, tools
+
+
+def ask_rules(state: dict) -> list[str]:
+    """전체 권한 모드용: '항상 허용'하지 않은 MCP 도구를 ask 규칙으로 (ask 는 bypassPermissions 에서도 적용됨).
+    - 서버 전체를 허용했으면 그 서버는 제외
+    - 서버 안에 개별 허용 도구가 없으면 서버 전체를 ask (mcp__서버__*) — 아직 목록에 없는 도구까지 막는다
+    - 개별 허용 도구가 있으면, 알려진 나머지 도구만 하나씩 ask"""
+    allowed = set(state.get("allowed") or [])
+    tools = [t["name"] if isinstance(t, dict) else t for t in state.get("tools") or []]
+    keys = {server_key(s.get("name", "")) for s in state.get("servers") or []} | {split_name(t)[0] for t in tools}
+    rules: list[str] = []
+    for key in sorted(keys):
+        if f"mcp__{key}" in allowed:
+            continue
+        mine = [t for t in tools if split_name(t)[0] == key]
+        if not any(t in allowed for t in mine):
+            rules.append(f"mcp__{key}__*")
+        else:
+            rules += [t for t in mine if t not in allowed]
+    return rules

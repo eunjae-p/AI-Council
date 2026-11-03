@@ -279,6 +279,7 @@ class ConversationStore:
             "modes": meta.get("modes_used") or [],
             "continued_from": meta.get("continued_from"),  # 새 대화로 이어간 경우 이전 대화 ID
             "continued_to": meta.get("continued_to"),
+            "full_access": bool(meta.get("full_access")),  # 전체 권한 모드 (이 대화에만, 기본 꺼짐)
         }
 
     def detail(self, conversation_id: str) -> dict:

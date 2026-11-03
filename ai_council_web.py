@@ -48,6 +48,7 @@ import council_i18n
 import council_versions
 import council_attach
 import council_handoff
+import council_mcp
 import council_media
 import council_update
 from council_state import CliState
@@ -55,7 +56,7 @@ from council_mcp import McpStore, valid_tool
 import council_commands
 import council_image
 
-VERSION = "0.22.0"
+VERSION = "0.23.0"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -234,8 +235,44 @@ Claude answer:
 """
 
 
+# ---------- 요청 출처 검사 (1단계 보안) ----------
+# 이 서버는 이 PC 의 브라우저 화면만을 위한 것이다. 다른 웹사이트가 사용자 브라우저를 통해 /api/chat 같은 API 를 부르거나
+# (CSRF), 다른 도메인 이름을 127.0.0.1 로 돌려 대화 내용을 읽는 것(DNS 리바인딩)을 막는다.
+# - 모든 요청: Host 가 127.0.0.1:<포트> 또는 localhost:<포트> 일 때만
+# - POST: Origin 이 없거나(같은 PC 의 스크립트·업데이트 도우미) 같은 출처일 때만
+# - JSON API: Content-Type 이 application/json 일 때만 (파일 업로드 /api/upload 는 바이트 그대로)
+UPLOAD_PATHS = {"/api/upload"}
+
+
+def check_request(method: str, path: str, headers, port: int) -> tuple[int, str] | None:
+    """요청을 받아도 되면 None, 아니면 (상태 코드, 이유)."""
+    hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
+    host = str(headers.get("Host") or "").strip().lower()
+    if host not in hosts:
+        return 403, "허용되지 않은 주소로 들어온 요청입니다."
+    if method == "POST":
+        origin = headers.get("Origin")
+        if origin is not None and origin.strip().lower().rstrip("/") not in {f"http://{h}" for h in hosts}:
+            return 403, "다른 사이트에서 보낸 요청은 받지 않습니다."
+        if path not in UPLOAD_PATHS:
+            ctype = str(headers.get("Content-Type") or "").split(";")[0].strip().lower()
+            if ctype != "application/json":
+                return 415, "JSON 요청만 받습니다."
+    return None
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = f"AI-Council/{VERSION}"
+
+    def _blocked(self, method: str, path: str) -> bool:
+        """출처 검사에 걸리면 거절 응답을 보내고 True."""
+        problem = check_request(method, path, self.headers, self.server.server_address[1])
+        if problem is None:
+            return False
+        if method == "POST":
+            self.close_connection = True  # 본문을 읽지 않았으므로 연결을 닫는다
+        self.send_json({"error": problem[1]}, problem[0])
+        return True
 
     def log_message(self, _format: str, *_args: object) -> None:
         return
@@ -294,6 +331,8 @@ class Handler(BaseHTTPRequestHandler):
     # ---------- GET ----------
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+        if self._blocked("GET", parsed.path):
+            return
         query = parse_qs(parsed.query)
         arg = lambda key: query.get(key, [""])[0]  # noqa: E731
         try:
@@ -350,6 +389,8 @@ class Handler(BaseHTTPRequestHandler):
     # ---------- POST ----------
     def do_POST(self) -> None:
         path = urlparse(self.path).path
+        if self._blocked("POST", path):
+            return
         if path == "/api/chat":
             self.handle_chat()
             return
@@ -518,6 +559,15 @@ class Handler(BaseHTTPRequestHandler):
                     tok.reason = {"esc": "Esc 키", "button": "■ 중지 버튼"}.get(str(body.get("reason")), "중지 요청")
                     tok.cancel()
                     self.send_json({"ok": True})
+            elif path == "/api/conversation/full-access":
+                # 전체 권한 모드: 이 대화에만 저장 (data/ — Git 제외). 새 대화·새 대화로 이어가기·다른 PC 로 넘어가지 않음.
+                conversation_id = cid()
+                enabled = bool(body.get("enabled"))
+                if enabled and body.get("confirm") != "full-access":
+                    raise ValueError("전체 권한 모드를 켜려면 화면의 확인 창에서 동의해야 합니다.")
+                self.ensure_idle(conversation_id)
+                meta = store.update_meta(conversation_id, full_access=enabled, full_access_changed_at=time.time())
+                self.send_json({"meta": store._public_meta(meta)})
             elif path == "/api/conversation/rename":
                 self.send_json({"meta": store.rename(cid(), str(body.get("title", "")))})
             elif path == "/api/conversation/archive":
@@ -717,6 +767,9 @@ class Handler(BaseHTTPRequestHandler):
 
         # 2) 컨텍스트는 질문 저장 전에 만든다 (질문은 별도 섹션으로 전달)
         saver = getattr(self, "saver", False)
+        # 전체 권한 모드: 이 대화에 켜져 있고 작업 모드일 때만 (요청 값이 아니라 저장된 대화 설정을 따른다)
+        full_access = mode == "work" and bool(store.get_meta(conversation_id).get("full_access"))
+        mcp_ask: list[str] = []
         context, info = build_context(store, conversation_id, SAVER_BUDGET_CHARS if saver else RECENT_BUDGET_CHARS)
         attached = []
         previous = store.load_messages(conversation_id)
@@ -759,6 +812,16 @@ class Handler(BaseHTTPRequestHandler):
             timeout = max(timeout, WEB_TIMEOUT)
         # MCP: 사용자가 "항상 허용"한 도구 + 이번 질문에서만 허용한 도구
         mcp_allow = sorted(set(mcp_store.allowed()) | set(allow_once or [])) if mcp else None
+        if full_access and mcp:
+            # 전체 권한이어도 MCP 는 '항상 허용'(+ 이번만 허용)한 도구만: 나머지는 ask 규칙으로 → 승인 카드
+            st = mcp_store.state()
+            if not st.get("servers") and not st.get("tools"):
+                try:
+                    st = mcp_store.refresh()  # 도구 목록을 한 번도 확인하지 않았으면 먼저 확인 (모델 답변 전 종료, 사용량 거의 없음)
+                except Exception:  # noqa: BLE001 — 확인 실패 시에도 아래에서 전체 MCP 를 묻도록 처리
+                    pass
+            st = {**st, "allowed": sorted(set(st.get("allowed") or []) | set(allow_once or []))}
+            mcp_ask = council_mcp.ask_rules(st) or (["mcp__*"] if not st.get("allowed") else [])
         # 작업 모드 명령: 허용 목록 + 이번 질문에서만 허용한 명령 접두어
         cmd_allow = sorted(set(cmd_store.allowed()) | set(cmd_once or [])) if mode == "work" else None
         # 작업 폴더가 깨끗한 Git 저장소면 끝난 뒤 바뀐 파일을 보여 주고 확정/되돌리기 (아니면 건너뜀)
@@ -775,6 +838,7 @@ class Handler(BaseHTTPRequestHandler):
                                          executor=executor if (mode == "work" and target == "both") else None,
                                          allow_cmds_once=cmd_once or None,
                                          review_ref=getattr(self, "review_ref", "") or None,
+                                         full_access=True if full_access else None,
                                          attachments=council_attach.history_records(attached) or None)
         self.emit("saved", item=user_item, context=info)
 
@@ -817,6 +881,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.emit("progress", model=label, item=entry)
 
             run_info: dict = {"on_progress": on_progress}
+            # 전체 권한은 Claude 의 작업 실행에만 (토론의 계획·검토 = read, 대화·이미지 모드, GPT 는 그대로)
+            fa = full_access and which == "claude" and (call_mode or mode) == "work"
             if (call_mode or mode) in ("work", "edit"):
                 run_info["hard_limit"] = WORK_HARD_LIMIT
             if saver:
@@ -826,7 +892,8 @@ class Handler(BaseHTTPRequestHandler):
                 answer = call_model(which, model, prompt, call_mode, workdir, timeout=timeout, info=run_info, cancel=token,
                                     images=images, image_dir=image_dir, web=web,
                                     mcp_allow=mcp_allow if which == "claude" else None, cmd_allow=cmd_allow,
-                                    codex_mcp=mcp_gpt and which == "gpt", resume=resume if which == "claude" else None)
+                                    codex_mcp=mcp_gpt and which == "gpt", resume=resume if which == "claude" else None,
+                                    full_access=fa, mcp_ask=mcp_ask if fa else None, settings_dir=store.data_dir)
             except Cancelled:
                 raise
             except CliFailure as exc:
@@ -852,7 +919,9 @@ class Handler(BaseHTTPRequestHandler):
                 mcp_denials=[{"tool": d["tool"], "input": json.dumps(d["input"], ensure_ascii=False)[:600]}
                              for d in run_info.get("permission_denials", []) if d["tool"].startswith("mcp__")][:10] or None,
                 # 허용 목록에 없어 막힌 명령 → 화면에서 허용 여부를 묻는다
-                cmd_denials=[_cmd_denial(d, cmd_allow) for d in run_info.get("permission_denials", []) if d["tool"] == "Bash"][:10] or None,
+                cmd_denials=[{**_cmd_denial(d, cmd_allow), **({"still_blocked": True} if fa else {})}
+                             for d in run_info.get("permission_denials", []) if d["tool"] == "Bash"][:10] or None,
+                full_access=True if fa else None,
                 claude_session=run_info.get("claude_session") if which == "claude" and call_mode in ("work",) else None,
                 resumed=True if resume else None,
                 paused=run_info.get("paused") or None,  # True: 승인이 필요해 멈춤 · "timeout": 시간 제한으로 멈춤 (둘 다 이어서 진행 가능)

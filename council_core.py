@@ -448,7 +448,8 @@ def call_model(which: str, model: str, prompt: str, mode: str = "chat", workdir:
                timeout: int = TIMEOUT_SECONDS, info: dict | None = None, cancel: CancelToken | None = None,
                images: list[str] | None = None, image_dir: Path | None = None, web: bool = False,
                mcp_allow: list[str] | None = None, cmd_allow: list[str] | None = None, codex_mcp: bool = False,
-               resume: str | None = None) -> str:
+               resume: str | None = None, full_access: bool = False, mcp_ask: list[str] | None = None,
+               settings_dir: Path | None = None) -> str:
     """which: gpt | claude.  mode: chat(도구 없음, 빈 폴더) | work(작업 폴더 읽기 전용).
     images: 모델에 보여줄 이미지 파일 경로 (GPT: --image, Claude: 파일 읽기 도구).
     web: 웹 검색 허용 (GPT: codex --search, Claude: WebSearch·WebFetch 도구).
@@ -457,10 +458,12 @@ def call_model(which: str, model: str, prompt: str, mode: str = "chat", workdir:
                (나머지 MCP 도구는 CLI 가 막고, 막힌 호출은 info["permission_denials"] 로 돌려준다).
     cmd_allow: 작업 모드에서 묻지 않고 실행할 명령 접두어 (council_commands). 나머지 명령은 막히고 승인 요청.
     codex_mcp: GPT(Codex) 에 등록된 MCP 서버(블렌더 등)를 켠다. 끄면 이번 실행에서 모두 끈다.
-    resume: Claude 작업 모드에서 승인 후 이어서 실행할 세션 ID (--resume). info["claude_session"] 에 새 세션 ID."""
+    resume: Claude 작업 모드에서 승인 후 이어서 실행할 세션 ID (--resume). info["claude_session"] 에 새 세션 ID.
+    full_access: 전체 권한 모드 (사용자가 그 대화에서 켠 경우만). Claude 작업 실행(work)에만 --permission-mode bypassPermissions.
+                 mcp_ask: 그때도 승인 카드로 묻게 할 MCP 도구(ask 규칙), settings_dir 에 설정 파일을 만들어 --settings 로 넘긴다."""
     try:
         return _call_model_web(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, web,
-                               mcp_allow, cmd_allow, codex_mcp, resume)
+                               mcp_allow, cmd_allow, codex_mcp, resume, full_access, mcp_ask, settings_dir)
     except Cancelled:
         raise
     except CliFailure as exc:
@@ -476,15 +479,15 @@ def call_model(which: str, model: str, prompt: str, mode: str = "chat", workdir:
             time.sleep(0.5)
             waited += 0.5
         return _call_model_web(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, web,
-                               mcp_allow, cmd_allow, codex_mcp, resume)
+                               mcp_allow, cmd_allow, codex_mcp, resume, full_access, mcp_ask, settings_dir)
 
 
 def _call_model_web(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, web,
-                    mcp_allow, cmd_allow, codex_mcp, resume) -> str:
+                    mcp_allow, cmd_allow, codex_mcp, resume, full_access=False, mcp_ask=None, settings_dir=None) -> str:
     if web:
         try:
             return _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, True, mcp_allow,
-                               cmd_allow, codex_mcp, resume)
+                               cmd_allow, codex_mcp, resume, full_access, mcp_ask, settings_dir)
         except Cancelled:
             raise
         except CliFailure as exc:
@@ -493,11 +496,12 @@ def _call_model_web(which, model, prompt, mode, workdir, timeout, info, cancel, 
             if info is not None:
                 info["web_fallback"] = True
     return _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, False, mcp_allow,
-                       cmd_allow, codex_mcp, resume)
+                       cmd_allow, codex_mcp, resume, full_access, mcp_ask, settings_dir)
 
 
 def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, web,
-                mcp_allow=None, cmd_allow=None, codex_mcp=False, resume=None) -> str:
+                mcp_allow=None, cmd_allow=None, codex_mcp=False, resume=None, full_access=False, mcp_ask=None,
+                settings_dir=None) -> str:
     from council_commands import rules as command_rules
     images = [str(p) for p in images or []]
     cwd = workdir if mode in FOLDER_MODES and workdir else chat_dir()
@@ -542,7 +546,13 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
                 approved += command_rules(cmd_allow or [])
             if approved:
                 extra += ["--allowedTools", ",".join(approved)]
-            if mode in WRITE_MODES:
+            if mode in WRITE_MODES and full_access:
+                # 전체 권한 모드 (사용자가 이 대화에서 확인 후 켬): 명령·파일·작업 폴더 밖 접근을 묻지 않고 실행.
+                # MCP 는 '항상 허용'한 도구만 — 나머지는 ask 규칙(bypass 에서도 적용)으로 거절 → 승인 카드
+                extra += ["--permission-mode", "bypassPermissions"]
+                if mcp and mcp_ask:
+                    extra += ["--settings", str(_full_access_settings(settings_dir or chat_dir(), mcp_ask))]
+            elif mode in WRITE_MODES:
                 extra += ["--permission-mode", "acceptEdits"]  # 작업 폴더 안 파일 편집만 자동 승인 (명령은 위 허용 목록만)
             if not mcp:
                 extra += ["--strict-mcp-config", "--disallowedTools", "mcp__*"]
@@ -649,6 +659,21 @@ def _tool_summary(name: str, data: dict) -> str:
 
 
 # Claude Code 가 막힌 도구에 돌려주는 문구 (셸의 일반 "Permission denied" 와는 구분: 반드시 'to use' 등이 함께 있음)
+def _full_access_settings(folder: Path, ask: list[str]) -> Path:
+    """전체 권한 모드에서 MCP 승인을 유지하기 위한 설정 파일 (ask 규칙). 실행마다 같은 내용이면 그대로 둔다."""
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / "full_access_settings.json"
+    data = json.dumps({"permissions": {"ask": sorted(set(ask))}}, ensure_ascii=False, indent=2)
+    try:
+        if path.read_text(encoding="utf-8") == data:
+            return path
+    except OSError:
+        pass
+    path.write_text(data, encoding="utf-8")
+    return path
+
+
 def _stream_texts(stdout: str, keep: int = 3) -> str:
     """stream-json 출력에서 Claude 가 쓴 설명 글만 꺼낸다 (오류 화면에 원본 JSON 을 보이지 않게)."""
     texts = []

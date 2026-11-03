@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.22.0** (2026-11-03) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.23.0** (2026-11-03) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.23.0](CHANGELOG.md#v0230-2026-11-03) | 11-03 | 🔒 요청 출처 검사(Host·Origin·JSON) + 작업 모드 **⚠ 전체 권한 모드**(대화별, 기본 꺼짐) |
 | [V0.22.0](CHANGELOG.md#v0220-2026-11-03) | 11-03 | 대화 모드 답변·토론 결론에 **🖥 Claude 앱으로 가져가기** (질문·결론·맥락을 한 문서로 복사 + 파일 저장) |
 | [V0.21.2](CHANGELOG.md#v0212-2026-11-02) | 11-02 | 허용했는데도 막힌 명령은 같은 카드 반복 대신 **⚠ 이유·해결 방법**, 드라이브 전체 작업 폴더 경고 |
 | [V0.21.1](CHANGELOG.md#v0211-2026-11-02) | 11-02 | 승인 카드에 **🧰 묶음 모두 허용**(개발 명령·파일 복사·이동), 이어서 실행할 때 막힌 명령을 Claude 에게 알림 |
 | [V0.21.0](CHANGELOG.md#v0210-2026-11-02) | 11-02 | 토론·작업 **과정은 위(접힘), 🏁 최종 결과는 마지막**, 검토 후 자동 재수정 없앰 → **🔧 지적 반영하기** |
-| [V0.20.2](CHANGELOG.md#v0202-2026-10-30) | 10-30 | "모델 서버 혼잡(at capacity)" 오류 안내 + 대화 모드 자동 재시도 1회 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -170,7 +170,12 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
   화면: **토론·작업 과정 보기**(접힘: 1차 의견 → 교차 검토 → 합의한 계획 → 구현 → 결과 검토) 아래에 **🏁 최종 결과**, 그 아래 검토 상태·변경 파일.
   대화 모드 토론도 과정(접힘) 아래에 **🏁 최종 결론**이 마지막으로 보입니다. 기록은 `3_구현`·`4_검토.md`.
 - **서버 실행**: 오래 켜 두는 서버는 백그라운드로 실행하도록 지시합니다. 끄는 방법은 답변에 안내됩니다.
-- ⚠ **운영 중인 서비스 폴더는 복사본에서** 작업하고 확인 후 반영하는 것을 권장합니다. 모든 명령을 묻지 않고 실행하는 모드는 쓰지 않습니다.
+- ⚠ **운영 중인 서비스 폴더는 복사본에서** 작업하고 확인 후 반영하는 것을 권장합니다.
+- **⚠ 전체 권한 모드** (작업 폴더 옆 **🔓 전체 권한 끔/켬**, 대화별, 기본 꺼짐): 켜면 이 대화의 Claude 작업 실행이 명령·파일 수정·**작업 폴더 밖 접근**(다른 드라이브, `Z:` 등)을
+  묻지 않고 실행합니다 (Claude Code `bypassPermissions`). 켤 때 위험 안내·확인 창이 뜨고, 켜져 있는 동안 입력창 위에 빨간 띠가 보입니다.
+  - 적용: Claude 단독 작업, 승인·시간 제한 후 이어서, 토론의 구현·지적 반영 단계. 그대로: 대화·이미지 모드, 토론의 계획·검토, GPT 샌드박스.
+  - MCP 도구는 전체 권한에서도 **항상 허용한 것만** 바로 실행되고, 나머지는 지금처럼 승인 카드가 뜹니다.
+  - 그 대화에만 적용 — 새 대화·새 대화로 이어가기·다른 PC 로 넘어가지 않습니다. 운영 서버 작업 전에는 백업을 먼저 하세요.
 
 ### 🔁 Claude 데스크톱 앱과 번갈아 쓰기
 세션(대화)을 넘기기보다 **같은 작업 폴더 + 인수인계 기록**으로 이어 가는 방식입니다.
@@ -277,6 +282,8 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 
 ## 🔒 저장 위치 · 보안
 
+- Council 서버는 이 PC 의 화면만 받습니다: 주소(Host)가 `127.0.0.1`/`localhost` 가 아니거나, 다른 웹사이트(Origin)에서 보낸 요청, JSON 이 아닌 API 요청은 거절합니다 (403/415).
+
 | 경로 | 내용 |
 |---|---|
 | `data/conversations/` | 대화 원문(`.jsonl`, 추가만 함)과 제목·요약 등 메타 정보 |
@@ -328,7 +335,7 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.22.0** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.23.0** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
@@ -347,6 +354,8 @@ It drives the official **Codex CLI (GPT)** and **Claude Code CLI (Claude)** sign
 
 - **Discussion mode** — (📁 *Discussion log folder* on the conclusion opens the saved Markdown files and copies the path) round 1: both models answer independently · round 2: each critiques the other · final: a **blind, neutral synthesis** (the summarizer sees the answers only as "Model A / Model B", randomly assigned) split into *Conclusion / Agreed / Disagreed / Needs verification*. Every round is saved as Markdown in a local folder.
 - **Two modes** — 💬 Chat (no file access) · 🛠 **Work** (like Claude Code / Codex: read, create and edit files, make folders, write code, run commands in the folder you choose)
+- **⚠ Full access mode** (per chat, off by default, confirmation required, red banner while on) — Claude's Work-mode runs in that chat use `bypassPermissions`: commands, file edits and access outside the working folder (other drives, `Z:`) run without asking. Only Claude's work execution steps are affected (not Chat/Image modes, discussion planning/review, or GPT's sandbox); MCP tools still need "Always allow". Not carried into new chats or other PCs.
+- **Local-only server** — requests with a foreign Host, a cross-site Origin or a non-JSON body are refused (403/415).
 - **Command allowlist + approval** — allowlisted commands (`mkdir`, `ls`, `git status` …) run right away; any other command is blocked and shown below the answer with **Allow once / Always allow / Don't allow**. Codex runs in its `workspace-write` sandbox (writes inside the folder only; internet allowed for installs).
 - **Optional Git checkpoint** — if the folder is a Git repository, review the changed files and diff afterwards, then **commit** or **revert** with one click.
 - **🌐 Web search** toggle — both models search the web and cite sources

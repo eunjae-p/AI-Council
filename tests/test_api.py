@@ -30,6 +30,29 @@ ok(urllib.request.urlopen(B+"/").status == 200, "index 200")
 s = get("/api/status"); ok(s["ok"] and s["cli"] == {"codex": True, "claude": True}, f"status {s}")
 c1 = post("/api/conversations")["id"]; c2 = post("/api/conversations")["id"]
 ok(len(get("/api/conversations")["items"]) == 2, "create+list")
+# ---- 1단계 보안: Host·Origin·Content-Type 검사 ----
+def raw(method, path, headers=None, body=None):
+    r = urllib.request.Request(B+path, data=body, headers=headers or {}, method=method)
+    try: return urllib.request.urlopen(r).status
+    except urllib.error.HTTPError as e: return e.code
+J = {"Content-Type":"application/json"}
+ok(raw("GET", "/api/conversations", {"Host":"evil.example"})==403, "GET with a foreign Host -> 403 (DNS rebinding)")
+ok(raw("GET", "/", {"Host":f"evil.example:{port}"})==403, "page itself also needs a local Host")
+ok(raw("GET", "/api/conversations", {"Host":f"localhost:{port}"})==200, "GET via localhost:<port> allowed")
+ok(raw("POST", "/api/conversations", {**J, "Origin":"http://evil.example"}, b"{}")==403, "POST from another origin -> 403")
+ok(raw("POST", "/api/conversations", {**J, "Origin":"null"}, b"{}")==403, "POST with Origin null -> 403")
+ok(raw("POST", "/api/history/clear", {**J, "Origin":f"http://localhost:{port}"}, b'{"id":"bad!"}')==400, "POST from the same origin passes the origin check")
+ok(raw("POST", "/api/conversations", {"Content-Type":"text/plain"}, b"{}")==415, "JSON API without application/json -> 415")
+ok(raw("POST", "/api/conversations", {**J, "Host":"evil.example"}, b"{}")==403, "POST with a foreign Host -> 403")
+open(os.environ["FAKE_LOG"],"w").close()
+ok(raw("POST", "/api/chat", {**J, "Origin":"https://evil.example"}, json.dumps({"question":"x","target":"claude"}).encode())==403
+   and open(os.environ["FAKE_LOG"]).read()=="", "chat from another origin is refused before any model call")
+ok(w.check_request("POST", "/api/shutdown", {"Host":"127.0.0.1:8765", "Content-Type":"application/json"}, 8765) is None, "updater/app shutdown request (no Origin, JSON) allowed")
+ok(w.check_request("POST", "/api/upload", {"Host":"127.0.0.1:8765", "Content-Type":"image/png", "Origin":"http://127.0.0.1:8765"}, 8765) is None, "upload keeps raw file bytes")
+ok(w.check_request("POST", "/api/upload", {"Host":"127.0.0.1:8765", "Content-Type":"multipart/form-data", "Origin":"http://evil.example"}, 8765)[0]==403, "cross-site upload refused")
+_ui = (pathlib.Path(w.__file__).parent/"web"/"index.html").read_text(encoding="utf-8")
+_upd = (pathlib.Path(w.__file__).parent/"council_update.py").read_text(encoding="utf-8")
+ok("fetch('/api/shutdown', { method:'POST', headers:{ 'Content-Type':'application/json'" in _ui and '"Content-Type": "application/json"' in _upd, "quit button and updater send JSON")
 # chat both
 ev = post("/api/chat", {"question":"첫 질문입니다 ComfyUI","conversation_id":c1,"target":"both","gpt_model":"gpt-6.1-sol","claude_model":"account default"}, raw=True)
 types = [e["type"] for e in ev]; ok(types.count("answer")==5 and types[-1]=="done", f"discussion events {types}")
@@ -596,6 +619,50 @@ ok("앞선 질문 맥락용" in r["text"] and "## 답변 (Claude)" in r["text"] 
 ok(post("/api/handoff/export", {"conversation_id":cx, "item_id":"nope"})[0]==400, "export needs a real answer")
 html_ = (pathlib.Path(w.__file__).parent/"web"/"index.html").read_text(encoding="utf-8")
 ok("takeToClaudeApp" in html_ and "/api/handoff/export" in html_, "UI: take chat to Claude app button")
+# ---- 2단계: 대화별 전체 권한 모드 ----
+fw = tmp/"fullaccess"; fw.mkdir(); cf = post("/api/conversations")["id"]
+ok(get("/api/conversation?id="+cf)["meta"]["full_access"] is False, "full access is off by default")
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"RUN_CMD: npm install express","conversation_id":cf,"target":"claude","mode":"work","workdir":str(fw)}, raw=True)
+lg = open(os.environ["FAKE_LOG"]).read()
+ok("bypassPermissions" not in lg and "'acceptEdits'" in lg and not (fw/"cmd_ran.txt").exists(), "off: acceptEdits + allowlist, no bypassPermissions")
+ok(post("/api/conversation/full-access", {"id":cf, "enabled":True})[0]==400, "turning on needs the on-screen confirmation")
+r = post("/api/conversation/full-access", {"id":cf, "enabled":True, "confirm":"full-access"}); ok(r["meta"]["full_access"] is True, "turned on for this chat")
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"RUN_CMD: npm install express","conversation_id":cf,"target":"claude","mode":"work","workdir":str(fw)}, raw=True)
+lg = open(os.environ["FAKE_LOG"]).read(); its = get("/api/conversation?id="+cf)["items"]
+ok("'--permission-mode', 'bypassPermissions'" in lg and "'acceptEdits'" not in lg and (fw/"cmd_ran.txt").exists(), "on: Claude work runs with bypassPermissions")
+ok(its[-1].get("full_access") and [i for i in its if i["role"]=="user"][-1].get("full_access"), "answer and question marked full access")
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"그냥 대화","conversation_id":cf,"target":"claude","mode":"chat"}, raw=True)
+ok("bypassPermissions" not in open(os.environ["FAKE_LOG"]).read(), "chat mode unaffected even when on")
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"GPT 작업","conversation_id":cf,"target":"gpt","mode":"work","workdir":str(fw)}, raw=True)
+lg = open(os.environ["FAKE_LOG"]).read(); ok("workspace-write" in lg and "bypass" not in lg and "danger-full-access" not in lg, "GPT sandbox unchanged")
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"EDIT_FILE 토론 실행","conversation_id":cf,"target":"both","mode":"work","workdir":str(fw),"executor":"claude"}, raw=True)
+lg = open(os.environ["FAKE_LOG"]).read(); claude_calls = [x for x in lg.split("=====CLAUDE")[1:]]
+ok(sum("bypassPermissions" in x for x in claude_calls)==1 and any("Implement the agreed conclusion" in x and "bypassPermissions" in x for x in claude_calls)
+   and not any("planning round" in x and "bypassPermissions" in x for x in claude_calls), "discussion: only the implementation step gets full access")
+# MCP: 전체 권한이어도 '항상 허용'한 도구만 — 나머지는 ask 규칙
+post("/api/mcp/refresh", {}); post("/api/mcp/allow", {"tool":"mcp__claude_ai_Higgsfield__balance","allowed":True})
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"MCP 작업","conversation_id":cf,"target":"claude","mode":"work","workdir":str(fw),"mcp":True,"mcp_claude":True}, raw=True)
+lg = open(os.environ["FAKE_LOG"]).read(); sf = w.store.data_dir/"full_access_settings.json"
+ask = json.loads(sf.read_text(encoding="utf-8"))["permissions"]["ask"] if sf.exists() else []
+ok("'--settings'" in lg and "mcp__claude_ai_Higgsfield__generate_video" in ask and "mcp__claude_ai_Higgsfield__balance" not in ask and "mcp__blender__*" in ask,
+   f"MCP keeps approvals under full access {ask}")
+post("/api/mcp/allow", {"tool":"mcp__claude_ai_Higgsfield__balance","allowed":False})
+import council_mcp as _cm
+ok(_cm.ask_rules({"servers":[{"name":"blender"}],"tools":[],"allowed":["mcp__blender"]})==[] and _cm.ask_rules({"servers":[{"name":"x"}],"tools":[],"allowed":[]})==["mcp__x__*"], "ask rules per server")
+# 새 대화·새 대화로 이어가기에는 넘어가지 않음, 끄면 원래대로
+cn = post("/api/conversations")["id"]; ok(get("/api/conversation?id="+cn)["meta"]["full_access"] is False, "new chat starts off")
+cc2 = post("/api/conversation/continue", {"id":cf}); ok(get("/api/conversation?id="+cc2["id"])["meta"]["full_access"] is False, "continue-in-new-chat does not carry full access")
+post("/api/conversation/full-access", {"id":cf, "enabled":False}); open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"RUN_CMD: npm install lodash","conversation_id":cf,"target":"claude","mode":"work","workdir":str(fw)}, raw=True)
+lg = open(os.environ["FAKE_LOG"]).read(); ok("bypassPermissions" not in lg and "'acceptEdits'" in lg, "turned off: back to acceptEdits + allowlist")
+html_ = (pathlib.Path(w.__file__).parent/"web"/"index.html").read_text(encoding="utf-8")
+ok("setFullAccess" in html_ and "faBanner" in html_ and "confirm: on ? 'full-access'" in html_, "UI: per-chat toggle, confirmation and banner")
 import council_commands as _ccm, json as _js
 _mf = tmp/"oldcmd"; _mf.mkdir(); (_mf/"cmd_settings.json").write_text(_js.dumps({"allowed":["ls","npm install"]}), encoding="utf-8")
 _al = _ccm.CommandStore(_mf).allowed(); ok("npm install" in _al and "sha1sum" in _al and "grep" in _al, "existing allowlist gets new read-only defaults once")

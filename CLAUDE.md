@@ -46,7 +46,14 @@
 - `data/`(대화 기록·첨부 원본), `exports/` 는 절대 커밋하지 않습니다 (`.gitignore` 유지).
 - `git reset --hard`, 사용자 파일에 대한 `git checkout --` 등 되돌릴 수 없는 명령은 사용자 확인 없이 쓰지 않습니다.
 - 대화 원문 JSONL을 다시 쓰는 마이그레이션 금지 (추가만 함).
-- 작업 모드의 명령 실행은 **허용 목록(`council_commands.py`) + 화면 승인**으로만 합니다. `bypassPermissions`·모든 명령 자동 허용·`Bash(*)` 같은 전체 허용 규칙 금지. 허용 규칙 접두어에 따옴표·`&`·`|` 등 특수문자 금지 (Windows cmd 경유 실행).
+- 작업 모드의 명령 실행은 기본적으로 **허용 목록(`council_commands.py`) + 화면 승인**으로 합니다. `Bash(*)` 같은 전체 허용 규칙은 쓰지 않습니다. 허용 규칙 접두어에 따옴표·`&`·`|` 등 특수문자 금지 (Windows cmd 경유 실행).
+- `bypassPermissions` 는 **전체 권한 모드**에서만 씁니다 (2026-11-03 PARK 승인). 조건:
+  - 대화별 켜기/끄기, **기본 꺼짐**. 켤 때 화면에서 위험 안내·확인을 거치고(서버는 `confirm: "full-access"` 없으면 거절), 켜져 있는 동안 빨간 띠와 답변 표시.
+  - 상태는 그 대화의 정보(`data/`, Git 제외)에만 저장 — 새 대화·"새 대화로 이어가기"·다른 PC 로 넘어가지 않음. 서버는 요청 값이 아니라 저장된 대화 설정을 따른다.
+  - 적용 대상은 **Claude 작업 실행(work)**뿐: Claude 단독 작업, 승인·시간 제한 후 이어서 실행, 토론의 구현·지적 반영 단계.
+    대화·이미지 모드, 토론의 계획·검토(read) 단계, GPT(Codex) 샌드박스는 바꾸지 않습니다 (`danger-full-access` 금지 유지).
+  - MCP 는 전체 권한에서도 '항상 허용'한 도구만 바로 실행: 나머지는 ask 규칙(`council_mcp.ask_rules`, `--settings`)으로 거절 → 승인 카드.
+  - 꺼져 있을 때의 acceptEdits·허용 목록·승인 카드는 그대로. 모든 요청은 Host·Origin·Content-Type 검사(`check_request`)를 통과해야 합니다.
 - `.cmd` 파일 **내용**은 영문(ASCII)만 씁니다 (cmd.exe 가 시스템 코드 페이지로 읽어 한글이 깨짐). 한글은 파일 이름에만.
 - `.cmd` / `.ps1` 은 CRLF 유지 (`.gitattributes`), `setup.ps1` 은 UTF-8 BOM 유지 (Windows PowerShell 5.1 한글).
 - Mac용 `.command` 는 LF 와 실행 권한(755) 유지. Windows 전용 처리(`os.name == "nt"`)를 추가하면 Mac(`IS_MAC`)·Linux 동작도 확인.
@@ -54,7 +61,7 @@
 ## 파일 구성
 | 파일 | 역할 |
 |---|---|
-| `ai_council_web.py` | 로컬 웹 서버(127.0.0.1:8765)와 API, `VERSION` |
+| `ai_council_web.py` | 로컬 웹 서버(127.0.0.1:8765)와 API, `VERSION`, 요청 출처 검사(`check_request`: Host·Origin·Content-Type), 대화별 전체 권한 모드 |
 | `web/index.html` | 채팅 UI, `UI_VERSION` |
 | `council_core.py` | CLI 호출·타임아웃·중지(CancelToken)·오류 안내, 대화/작업 모드 (내부 read = 토론 계획 단계 읽기 전용) |
 | `council_context.py` | 메시지 단위 맥락 구성, 장기 요약, 토큰 절약(맥락 창 시작 고정 = 프롬프트 캐시, 지난 토론은 결론만) |
@@ -66,9 +73,9 @@
 | `council_workflow.py` | ComfyUI 워크플로우 JSON 요약 (색상 등급 규칙 포함) |
 | `council_debate.py` | 토론 모드 프롬프트(1라운드·2라운드·결론), 토론 기록 폴더 (`data/debates/`) |
 | `council_state.py` | 계정 기본 모델(실제 사용 모델) 기억, 날짜별 사용 횟수 (`data/cli_state.json`) |
-| `council_mcp.py` | MCP 도구 목록·"항상 허용" 목록 (`data/mcp_*.json`). 모든 도구 자동 실행(bypassPermissions)은 쓰지 않음 |
+| `council_mcp.py` | MCP 도구 목록·"항상 허용" 목록 (`data/mcp_*.json`). 전체 권한 모드에서도 허용하지 않은 MCP 도구는 ask 규칙으로 승인 카드 (`ask_rules`) |
 | `council_edit.py` | 작업 모드의 선택 기능: Git 저장점·변경 내용(diff)·확정(커밋)/되돌리기 |
-| `council_commands.py` | 작업 모드 명령 허용 목록(`data/cmd_settings.json`)·명령 → 허용 접두어 변환. Claude 는 Read·Edit·Write·Bash + acceptEdits + 허용 규칙, Codex 는 workspace-write + 인터넷 허용 (`danger-full-access`·승인 우회 옵션은 쓰지 않음) |
+| `council_commands.py` | 작업 모드 명령 허용 목록(`data/cmd_settings.json`)·명령 → 허용 접두어 변환. Claude 는 Read·Edit·Write·Bash + acceptEdits + 허용 규칙 (그 대화에서 전체 권한 모드를 켠 경우만 bypassPermissions), Codex 는 workspace-write + 인터넷 허용 (`danger-full-access`·Codex 승인 우회 옵션은 쓰지 않음) |
 | `council_image.py` | 🎨 이미지 모드: Codex 이미지 생성 결과(`~/.codex/generated_images`)를 찾아 저장 폴더·화면용으로 복사, 프롬프트 |
 | `council_i18n.py` | 서버 안내·오류 문구 영어 번역표(`PAIRS`), `X-Lang: en` 요청이면 응답 직전에 번역 (기록 원문은 그대로) |
 | `council_versions.py` | Codex/Claude CLI 버전·로그인 상태 |

@@ -182,6 +182,9 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 .badge.final{background:var(--ok-bg, rgba(46,160,67,.15));color:var(--ok, #3fb950);border-color:transparent;font-weight:700}
 .reviewbar{margin:6px 0 10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px}
 .reviewbar details{margin:6px 0} .reviewbar .content{font-size:13px;max-height:420px;overflow:auto}
+.fabanner{margin:0 0 8px;padding:8px 12px;border-radius:10px;background:#5c1515;color:#ffd7d7;border:1px solid #c0392b;font-size:13px;font-weight:600;display:flex;gap:10px;align-items:center}
+.fabanner button{margin-left:auto} .webtog.danger{background:#5c1515;color:#ffd7d7;border-color:#c0392b}
+.badge.danger{background:#5c1515;color:#ffd7d7;border-color:#c0392b}
 .paused{margin:2px 0 8px;padding:7px 10px;border-radius:8px;background:var(--warn-bg);color:var(--warn-text);font-size:13px}
 .mcpdeny b{color:var(--warn-text)} .mcpdeny .t{margin:6px 0 2px;font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
 .mcpdeny pre{white-space:pre-wrap;margin:2px 0 6px;color:var(--muted);font-size:12px;max-height:120px;overflow:auto}
@@ -265,6 +268,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 
     <div class="composer">
       <div class="inner">
+        <div class="fabanner" id="faBanner" hidden></div>
         <div class="ctl">
           <div class="seg" id="mode">
             <button data-m="chat" class="on" data-en="💬 Chat">💬 대화</button><button data-m="work" class="tip" data-tip="🛠 작업 모드 — Claude Code·Codex처럼 작업 폴더에서 직접 일합니다.&#10;· 파일 읽기·만들기·고치기, 폴더 만들기, 코드 작성, 명령 실행(설치·서버 실행 등)&#10;· 명령은 허용 목록(🛡)에 있는 것만 바로 실행되고, 나머지는 답변 아래에서 허용 여부를 묻습니다.&#10;· GPT(Codex)는 샌드박스 안에서 작업 폴더에만 쓰고, 인터넷(설치 등)은 허용됩니다.&#10;· 폴더가 Git 저장소면 끝난 뒤 바뀐 파일을 보여 주고 확정·되돌리기를 고를 수 있습니다.&#10;· 블렌더 등 연결된 도구는 🔌 Claude MCP / GPT MCP를 켜세요. 토론으로 보내면 한 모델이 실행하고 다른 모델이 검토합니다. 운영 중인 서비스는 복사본 폴더에서 쓰는 것을 권장합니다." data-en-tip="🛠 Work mode — works directly in the folder, like Claude Code / Codex.&#10;· Read, create and edit files, make folders, write code, run commands (installs, servers…)&#10;· Only commands on the allowlist (🛡) run right away; others ask for approval below the answer.&#10;· GPT (Codex) writes only inside the folder in a sandbox; internet (installs etc.) is allowed.&#10;· If the folder is a Git repository, you can review the changed files afterwards and commit or revert.&#10;· For Blender and other connected tools, turn on 🔌 Claude MCP / GPT MCP. With Discussion, one model executes and the other reviews. For live services, use a copy of the folder." data-en="🛠 Work">🛠 작업</button><button data-m="image" class="tip" data-tip="🎨 이미지 — GPT가 이미지 생성 모델(Codex 이미지 도구)로 실제 이미지를 만들어 저장 폴더에 PNG로 저장합니다.&#10;· 대상 GPT: 바로 생성 / Claude·토론: Claude가 프롬프트를 다듬고 GPT가 생성&#10;· 📎 이미지를 첨부하면 참고 이미지로 씁니다&#10;· ChatGPT Plus 이상 구독 필요, 장당 30초~1분, 텍스트 질문보다 사용량이 큽니다" data-en-tip="🎨 Image — GPT creates real images with its image model (Codex image tool) and saves them as PNG in the output folder.&#10;· Target GPT: generates directly / Claude or Discussion: Claude refines the prompt, GPT generates&#10;· Attach images with 📎 to use them as references&#10;· Needs ChatGPT Plus or higher; 30 s – 1 min per image; uses more quota than text" data-en="🎨 Image">🎨 이미지</button>
@@ -279,7 +283,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
           <span class="status" id="modelInfo"></span>
           <span class="seg" id="executor" hidden title="토론 결론대로 실행할 모델 — 다른 모델이 결과를 검토하고, 실행한 모델이 수정합니다" data-en-title="Model that carries out the conclusion — the other model reviews, then the executor fixes"><button data-x="claude" class="on" data-en="Run: Claude">실행: Claude</button><button data-x="gpt" data-en="Run: GPT">실행: GPT</button></span>
           <span class="seg" id="imgOpts" hidden><button data-r="square" class="on" data-en="1:1">1:1</button><button data-r="landscape" data-en="Wide">가로</button><button data-r="portrait" data-en="Tall">세로</button><select id="imgCount" title="장수" data-en-title="Count"><option value="1" data-en="1 image">1장</option><option value="2" data-en="2 images">2장</option><option value="3" data-en="3 images">3장</option><option value="4" data-en="4 images">4장</option></select></span>
-          <input class="workdir" id="workdir"><button class="webtog gear" id="cmdManage" hidden title="명령 실행 허용 목록" data-en-title="Command allowlist">🛡</button><button class="webtog tip" id="handoffToggle" hidden data-tip="📝 인수인계 기록 — 작업 모드가 끝나면 작업 폴더의 HANDOFF.md 에 요청·상태·바뀐 파일·세션·결과 요약을 덧붙입니다.&#10;Claude 데스크톱 앱에서 'HANDOFF.md 마지막 항목 보고 이어서 해줘'라고 하면 이어받습니다. 파일을 읽기만 한 질문은 기록하지 않습니다.&#10;⚠ 웹 서버가 그대로 공개하는 폴더(예: 운영 중인 사이트 폴더)라면 끄세요." data-en-tip="📝 Handoff log — after a Work-mode task, appends the request, status, changed files, session and result summary to HANDOFF.md in the working folder.&#10;In the Claude desktop app, say 'read the last entry of HANDOFF.md and continue'. Read-only questions are not logged.&#10;⚠ Turn it off for folders a web server publishes as-is (e.g. a live site folder).">📝 인수인계 켬</button><button class="webtog gear tip" id="claudeMdBtn" hidden data-tip="CLAUDE.md 준비 — 작업 폴더에 CLAUDE.md 가 없으면 틀을 만들고, 있으면 'HANDOFF.md 에 기록' 규칙만 덧붙입니다.&#10;Claude Code(데스크톱 앱·터미널·Council 작업 모드)는 이 파일을 자동으로 읽습니다." data-en-tip="Prepare CLAUDE.md — creates a template if the working folder has none, otherwise only appends the 'log to HANDOFF.md' rule.&#10;Claude Code (desktop app, terminal, Council Work mode) reads this file automatically.">📄</button>
+          <input class="workdir" id="workdir"><button class="webtog gear" id="cmdManage" hidden title="명령 실행 허용 목록" data-en-title="Command allowlist">🛡</button><button class="webtog tip" id="handoffToggle" hidden data-tip="📝 인수인계 기록 — 작업 모드가 끝나면 작업 폴더의 HANDOFF.md 에 요청·상태·바뀐 파일·세션·결과 요약을 덧붙입니다.&#10;Claude 데스크톱 앱에서 'HANDOFF.md 마지막 항목 보고 이어서 해줘'라고 하면 이어받습니다. 파일을 읽기만 한 질문은 기록하지 않습니다.&#10;⚠ 웹 서버가 그대로 공개하는 폴더(예: 운영 중인 사이트 폴더)라면 끄세요." data-en-tip="📝 Handoff log — after a Work-mode task, appends the request, status, changed files, session and result summary to HANDOFF.md in the working folder.&#10;In the Claude desktop app, say 'read the last entry of HANDOFF.md and continue'. Read-only questions are not logged.&#10;⚠ Turn it off for folders a web server publishes as-is (e.g. a live site folder).">📝 인수인계 켬</button><button class="webtog tip" id="fullAccessBtn" hidden data-tip="전체 권한 모드 — 이 대화의 Claude 작업 실행에서만, 명령·파일 수정·작업 폴더 밖 접근을 묻지 않고 실행합니다 (Claude Code bypassPermissions).&#10;기본은 꺼짐이며 이 대화에만 적용됩니다. MCP 도구는 지금처럼 '항상 허용'한 것만 바로 실행됩니다." data-en-tip="Full access mode — only for Claude's Work-mode runs in this chat: commands, file edits and access outside the working folder run without asking (Claude Code bypassPermissions).&#10;Off by default and applies to this chat only. MCP tools still run only if you marked them 'Always allow'.">🔓 전체 권한 끔</button><button class="webtog gear tip" id="claudeMdBtn" hidden data-tip="CLAUDE.md 준비 — 작업 폴더에 CLAUDE.md 가 없으면 틀을 만들고, 있으면 'HANDOFF.md 에 기록' 규칙만 덧붙입니다.&#10;Claude Code(데스크톱 앱·터미널·Council 작업 모드)는 이 파일을 자동으로 읽습니다." data-en-tip="Prepare CLAUDE.md — creates a template if the working folder has none, otherwise only appends the 'log to HANDOFF.md' rule.&#10;Claude Code (desktop app, terminal, Council Work mode) reads this file automatically.">📄</button>
         </div>
         <div class="models" id="models">
           <label><span data-en="GPT model (Codex CLI)">GPT 모델 (Codex CLI)</span>
@@ -328,7 +332,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.22.0'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.23.0'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -454,6 +458,7 @@ function msgEl(item, index) {
   head.append(el('span', 'who', (LABEL[w] || w) + (item.round ? ' · ' + ROUND[item.round] : '')));
   if (item.web) head.append(el('span', 'badge web', T('🌐 웹 검색', '🌐 Web search')));
   if (item.mcp) head.append(el('span', 'badge web', '🔌 MCP'));
+  if (item.full_access) head.append(el('span', 'badge danger', T('⚠ 전체 권한', '⚠ Full access')));
   if (item.mode === 'image') head.append(el('span', 'badge', T('🎨 이미지', '🎨 Image') + (item.save_dir ? ' · ' + item.save_dir : '')));
   else if (['work', 'edit', 'read'].includes(item.mode)) head.append(el('span', 'badge', (item.mode === 'read' ? T('🛠 작업 · 읽기 전용', '🛠 Work · read-only') : T('🛠 작업', '🛠 Work')) + (item.workdir ? ' · ' + item.workdir : '')));
   if (item.cli_model) head.append(el('span', '', item.cli_model));
@@ -1018,7 +1023,7 @@ async function openConversation(id, focusIndex) {
   try {
     const data = await api('/api/conversation?id=' + encodeURIComponent(id));
     if (S.current !== id) S.renderTurns = RENDER_TURNS;  // 다른 대화를 열면 다시 최근 묶음만
-    S.current = id; S.meta = data.meta; S.items = data.items;
+    S.current = id; S.meta = data.meta; S.items = data.items; updateFullAccessUI();
     if (focusIndex != null) {  // 검색으로 오래된 메시지로 이동할 때는 그 위치까지 그린다
       const need = S.items.slice(focusIndex).filter(x => x.role === 'user').length + 1;
       S.renderTurns = Math.max(S.renderTurns || RENDER_TURNS, need);
@@ -1249,6 +1254,29 @@ function syncExecutor() { $('#executor').hidden = !(S.mode === 'work' && S.targe
 $('#mcpToggle').onclick = () => setMcp(!S.mcp);
 $('#mcpManage').onclick = () => openMcpManager();
 $('#cmdManage').onclick = () => openCmdManager();
+// ⚠ 전체 권한 모드: 대화별(서버의 대화 정보에 저장), 기본 꺼짐. 켜는 동안 빨간 띠로 표시.
+function updateFullAccessUI() {
+  const on = !!(S.meta && S.meta.full_access), work = S.mode === 'work', b = $('#fullAccessBtn'), bar = $('#faBanner');
+  b.hidden = !work; b.classList.toggle('danger', on);
+  b.textContent = on ? T('⚠ 전체 권한 켬', '⚠ Full access on') : T('🔓 전체 권한 끔', '🔓 Full access off');
+  bar.hidden = !(on && work); bar.innerHTML = '';
+  if (on && work) {
+    bar.append(el('span', '', T('⚠ 전체 권한 모드 — 이 대화의 Claude 작업은 명령·파일 수정·작업 폴더 밖 접근을 묻지 않고 실행합니다 (MCP 는 항상 허용한 것만).', "⚠ Full access mode — Claude's work in this chat runs commands, edits files and reaches outside the working folder without asking (MCP: only always-allowed tools).")));
+    const off = el('button', 'small', T('끄기', 'Turn off')); off.onclick = () => setFullAccess(false); bar.append(off);
+  }
+}
+async function setFullAccess(on) {
+  if (S.running) return toast(T('답변 생성 중에는 바꿀 수 없습니다', 'Cannot change this while an answer is being generated'), true);
+  if (on && !confirm(T('⚠ 전체 권한 모드를 이 대화에서 켤까요?\n\n켜면 이 대화의 작업 모드에서 Claude 가:\n· 모든 명령을 묻지 않고 실행합니다 (삭제·설치·서버 조작 포함)\n· 작업 폴더 밖(다른 드라이브·네트워크 드라이브 Z: 등)의 파일도 읽고 고칠 수 있습니다\n· 잘못 지시하거나 모델이 실수하면 되돌리기 어려운 변경이 생길 수 있습니다\n\n그대로인 것: 대화·이미지 모드, 토론의 계획·검토 단계, GPT, MCP 도구 승인(항상 허용한 것만 실행)\n이 대화에만 적용되고 새 대화로 이어지지 않습니다. 운영 서버 작업 전에는 백업을 먼저 하세요.\n\n위험을 이해하고 켭니다.',
+      '⚠ Turn on full access mode for this chat?\n\nIn Work mode in this chat, Claude will:\n· run every command without asking (including deleting, installing, server operations)\n· read and change files outside the working folder (other drives, network drive Z:, etc.)\n· possibly make changes that are hard to undo if instructed wrongly or if the model makes a mistake\n\nUnchanged: Chat/Image modes, discussion planning/review steps, GPT, MCP approvals (only always-allowed tools run)\nApplies to this chat only and is not carried into new chats. Back up live servers first.\n\nI understand the risk and turn it on.'))) return;
+  try {
+    if (!S.current) await newConversation();
+    const r = await api('/api/conversation/full-access', { id:S.current, enabled:!!on, confirm: on ? 'full-access' : '' });
+    S.meta = r.meta; updateFullAccessUI();
+    toast(on ? T('이 대화에서 전체 권한 모드를 켰습니다', 'Full access mode is on for this chat') : T('전체 권한 모드를 껐습니다', 'Full access mode is off'), on);
+  } catch (e) { toast(e.message, true); }
+}
+$('#fullAccessBtn').onclick = () => setFullAccess(!(S.meta && S.meta.full_access));
 function setHandoff(on) { S.handoff = !!on; store.set('councilHandoff', S.handoff ? '1' : '0'); const b = $('#handoffToggle'); b.classList.toggle('on', S.handoff); b.textContent = S.handoff ? T('📝 인수인계 켬', '📝 Handoff on') : T('📝 인수인계 끔', '📝 Handoff off'); }
 $('#handoffToggle').onclick = () => setHandoff(!S.handoff);
 $('#claudeMdBtn').onclick = async () => {
@@ -1270,7 +1298,7 @@ function setMode(m) { if (!['work', 'image'].includes(m)) m = 'chat';
   const key = x => x === 'image' ? 'councilImageDir' : 'councilWorkdir';
   if (S.mode && S.mode !== m && S.mode !== 'chat') store.set(key(S.mode), $('#workdir').value.trim());
   if (m !== 'chat' && S.mode !== m) $('#workdir').value = store.get(key(m)) || '';
-  S.mode = m; store.set('councilMode', m); document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.m === m)); $('#workdir').classList.toggle('show', m !== 'chat'); $('#cmdManage').hidden = m !== 'work'; $('#handoffToggle').hidden = m !== 'work'; $('#claudeMdBtn').hidden = m !== 'work'; $('#imgOpts').hidden = m !== 'image'; if ($('#executor')) syncExecutor(); $('#workdir').placeholder = m === 'image' ? T('저장 폴더 (예: D:\\images) — 비우면 Council 폴더의 exports\\images\\날짜', 'Output folder (e.g. D:\\images) — empty = exports\\images\\<date> in the Council folder') : T('작업 폴더 (예: D:\\my-project) — 이 폴더에서 파일을 만들고 고치고 명령을 실행합니다', 'Working folder (e.g. D:\\my-project) — files are created/edited and commands run here'); $('#q').placeholder = m === 'image' ? T('만들 이미지를 설명해 주세요 — 예: 노을 지는 해변의 영화 포스터, 시네마틱 (📎 참고 이미지 첨부 가능)', 'Describe the image — e.g. a cinematic movie poster of a beach at sunset (attach references with 📎)') : m === 'work' ? T('할 일을 적어 주세요 — 예: 이 폴더에 Flask 서버를 만들고 실행해줘 (Enter 보내기 · Shift+Enter 줄바꿈)', 'Describe the task — e.g. create a Flask server in this folder and run it (Enter to send · Shift+Enter for a new line)') : T('질문을 입력하세요 · 📎·끌어다 놓기·Ctrl+V로 JSON·이미지·영상 첨부 (Enter 보내기 · Shift+Enter 줄바꿈)', 'Ask anything · attach JSON, images or video with 📎, drag & drop or Ctrl+V (Enter to send · Shift+Enter for a new line)'); }
+  S.mode = m; store.set('councilMode', m); document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.m === m)); $('#workdir').classList.toggle('show', m !== 'chat'); $('#cmdManage').hidden = m !== 'work'; if (typeof updateFullAccessUI === 'function' && $('#fullAccessBtn')) setTimeout(updateFullAccessUI); $('#handoffToggle').hidden = m !== 'work'; $('#claudeMdBtn').hidden = m !== 'work'; $('#imgOpts').hidden = m !== 'image'; if ($('#executor')) syncExecutor(); $('#workdir').placeholder = m === 'image' ? T('저장 폴더 (예: D:\\images) — 비우면 Council 폴더의 exports\\images\\날짜', 'Output folder (e.g. D:\\images) — empty = exports\\images\\<date> in the Council folder') : T('작업 폴더 (예: D:\\my-project) — 이 폴더에서 파일을 만들고 고치고 명령을 실행합니다', 'Working folder (e.g. D:\\my-project) — files are created/edited and commands run here'); $('#q').placeholder = m === 'image' ? T('만들 이미지를 설명해 주세요 — 예: 노을 지는 해변의 영화 포스터, 시네마틱 (📎 참고 이미지 첨부 가능)', 'Describe the image — e.g. a cinematic movie poster of a beach at sunset (attach references with 📎)') : m === 'work' ? T('할 일을 적어 주세요 — 예: 이 폴더에 Flask 서버를 만들고 실행해줘 (Enter 보내기 · Shift+Enter 줄바꿈)', 'Describe the task — e.g. create a Flask server in this folder and run it (Enter to send · Shift+Enter for a new line)') : T('질문을 입력하세요 · 📎·끌어다 놓기·Ctrl+V로 JSON·이미지·영상 첨부 (Enter 보내기 · Shift+Enter 줄바꿈)', 'Ask anything · attach JSON, images or video with 📎, drag & drop or Ctrl+V (Enter to send · Shift+Enter for a new line)'); }
 $('#workdir').addEventListener('input', () => store.set(S.mode === 'image' ? 'councilImageDir' : 'councilWorkdir', $('#workdir').value.trim()));
 document.querySelectorAll('#imgOpts button').forEach(b => b.onclick = () => { S.imgRatio = b.dataset.r; store.set('councilImgRatio', b.dataset.r);
   document.querySelectorAll('#imgOpts button').forEach(x => x.classList.toggle('on', x === b)); });
@@ -1651,7 +1679,7 @@ document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => setScop
 $('#search').addEventListener('input', () => { clearTimeout(S.searchTimer); S.searchTimer = setTimeout(() => doSearch().catch(e => toast(e.message, true)), 250); });
 $('#menu').onclick = () => $('#app').classList.toggle('nav'); $('#scrim').onclick = () => $('#app').classList.remove('nav');
 $('#quit').onclick = async () => { if (S.running && !confirm(T('답변 생성 중입니다. 그래도 종료할까요?', 'An answer is being generated. Quit anyway?'))) return;
-  try { await fetch('/api/shutdown', { method:'POST', headers:{ 'X-Lang':LANG } }); } finally { document.body.innerHTML = '<div style="padding:40px;font:16px system-ui;color:var(--text);background:var(--bg);height:100vh">' + T('AI Council을 종료했습니다. 이 창을 닫아도 됩니다.', 'AI Council has quit. You can close this window.') + '</div>'; } };
+  try { await fetch('/api/shutdown', { method:'POST', headers:{ 'Content-Type':'application/json', 'X-Lang':LANG }, body:'{}' }); } finally { document.body.innerHTML = '<div style="padding:40px;font:16px system-ui;color:var(--text);background:var(--bg);height:100vh">' + T('AI Council을 종료했습니다. 이 창을 닫아도 됩니다.', 'AI Council has quit. You can close this window.') + '</div>'; } };
 window.addEventListener('beforeunload', e => { if (S.running) { e.preventDefault(); e.returnValue = ''; } });
 window.addEventListener('hashchange', () => { const id = (location.hash.match(/^#c=([\w-]+)/) || [])[1]; if (id && id !== S.current) openConversation(id).catch(() => {}); });
 
