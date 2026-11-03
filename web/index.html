@@ -328,7 +328,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.21.2'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.22.0'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -473,6 +473,13 @@ function msgEl(item, index) {
   }
   const body = el('div', 'content'); renderText(body, item.content === '…' ? '' : item.content);
   box.append(head);
+  if (item.role === 'assistant' && !['work', 'edit', 'read', 'image'].includes(item.mode) && (item.model === 'Council' || !item.round) && item.id) {
+    // 대화 모드 답변·토론 결론 → Claude 데스크톱 앱으로 (질문·결론·앞선 맥락을 한 문서로 복사 + 파일 저장)
+    const go = el('button', 'ghost small', T('🖥 Claude 앱으로 가져가기', '🖥 Take to Claude app'));
+    go.title = T('질문·결론·앞선 대화 맥락을 한 문서로 묶어 복사합니다. Claude 데스크톱 앱 새 대화에 붙여넣으면 이어집니다.', 'Copies the question, conclusion and earlier context as one document. Paste it into a new chat in the Claude desktop app to continue.');
+    go.onclick = () => takeToClaudeApp(item);
+    head.append(go);
+  }
   if (item.model === 'Council' && item.debate_dir) {
     // 토론 기록 폴더: 결론 바로 위에서 열기 (경로도 복사 → Claude 앱에 "이 폴더의 결론.md 읽어줘" 로 붙여넣기)
     const b = el('button', 'ghost small', T('📁 토론 기록 폴더', '📁 Discussion log folder'));
@@ -590,6 +597,21 @@ function mcpDenialCard(item, index) {
   return c;
 }
 // ---------- 작업 모드: 허용 목록에 없어 막힌 명령 ----------
+// 🖥 대화 모드 → Claude 앱으로 가져가기 (대화 모드는 Claude Code 세션이 없어 문서로 넘긴다)
+async function takeToClaudeApp(item) {
+  let r; try { r = await api('/api/handoff/export', { conversation_id:S.current, item_id:item.id }); } catch (e) { return toast(e.message, true); }
+  let copied = false; try { await navigator.clipboard.writeText(r.text); copied = true; } catch {}
+  const body = el('div');
+  body.append(el('pre', '', (copied ? T(`복사했습니다 (${r.chars.toLocaleString()}자).`, `Copied (${r.chars.toLocaleString()} chars).`) : T('자동 복사가 막혔습니다. 아래 "다시 복사"를 누르세요.', 'Automatic copy was blocked. Press "Copy again" below.'))
+    + T(`\n\n1. Claude 데스크톱 앱을 열고 새 대화를 시작합니다.\n2. 입력창에 붙여넣기(Ctrl+V)하고 보냅니다 — 질문·결론·앞선 맥락이 한 번에 전달됩니다.\n\n파일로도 저장했습니다:\n${r.path}\n(Claude 앱의 Code 쪽에서는 "이 파일 읽고 이어서 해줘"라고 해도 됩니다)`,
+        `\n\n1. Open the Claude desktop app and start a new chat.\n2. Paste (Ctrl+V) and send — the question, conclusion and earlier context go in at once.\n\nAlso saved as a file:\n${r.path}\n(In the app's Code view you can also say "read this file and continue")`)));
+  const open = (url) => { const a = document.createElement('a'); a.href = url; document.body.append(a); a.click(); a.remove(); };
+  modal(T('Claude 앱으로 가져가기', 'Take to Claude app'), body, [
+    { label:T('다시 복사', 'Copy again'), keep:true, onClick: () => copyText(r.text) },
+    { label:T('파일 경로 복사', 'Copy file path'), keep:true, onClick: () => copyText(r.path) },
+    { label:T('웹에서 열기', 'Open on the web'), onClick: () => window.open('https://claude.ai/new', '_blank') },
+    { label:T('Claude 앱 열기', 'Open Claude app'), primary:true, onClick: () => open('claude://claude.ai/new') }]);
+}
 // 🖥 Claude 데스크톱 앱에서 이어서: claude://resume?session=<ID> (앱이 CLI 세션을 가져와 엽니다)
 // 공식 문서에 없는 링크라 안 열릴 수 있어, 터미널 명령을 복사하고 데스크톱 앱 /resume 방법도 함께 안내합니다.
 function openInClaudeApp(item) {

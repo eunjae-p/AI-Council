@@ -582,6 +582,20 @@ dn = get("/api/conversation?id="+cb)["items"][-1]["cmd_denials"][0]
 ok(not dn.get("still_blocked") and dn["prefixes"]==["cp"], "not-yet-allowed command still gets the normal approval card")
 html_ = (pathlib.Path(w.__file__).parent/"web"/"index.html").read_text(encoding="utf-8")
 ok("function stillBlockedCard" in html_ and "S.rootOk" in html_, "UI: still-blocked card and drive-root warning")
+# 대화 모드 → Claude 앱으로 가져가기: 질문·결론·1차 의견·앞선 맥락을 한 문서로 (+ exports/handoff 파일)
+cx = post("/api/conversations")["id"]
+post("/api/chat", {"question":"앞선 질문 맥락용","conversation_id":cx,"target":"claude"}, raw=True)
+post("/api/chat", {"question":"가져갈 토론 질문","conversation_id":cx,"target":"both"}, raw=True)
+its = get("/api/conversation?id="+cx)["items"]; council = next(i for i in its if i["model"]=="Council")
+r = post("/api/handoff/export", {"conversation_id":cx, "item_id":council["id"]})
+ok("AI Council" in r["text"] and "가져갈 토론 질문" in r["text"] and council["content"][:15] in r["text"] and "1차 의견" in r["text"]
+   and "앞선 질문 맥락용" in r["text"] and pathlib.Path(r["path"]).read_text(encoding="utf-8")==r["text"] and "handoff" in r["path"], "chat discussion exported for the Claude app")
+single = next(i for i in its if i["model"]=="Claude" and not i.get("round"))
+r = post("/api/handoff/export", {"conversation_id":cx, "item_id":single["id"]})
+ok("앞선 질문 맥락용" in r["text"] and "## 답변 (Claude)" in r["text"] and "가져갈 토론 질문" not in r["text"], "single chat answer exported (only up to that answer)")
+ok(post("/api/handoff/export", {"conversation_id":cx, "item_id":"nope"})[0]==400, "export needs a real answer")
+html_ = (pathlib.Path(w.__file__).parent/"web"/"index.html").read_text(encoding="utf-8")
+ok("takeToClaudeApp" in html_ and "/api/handoff/export" in html_, "UI: take chat to Claude app button")
 import council_commands as _ccm, json as _js
 _mf = tmp/"oldcmd"; _mf.mkdir(); (_mf/"cmd_settings.json").write_text(_js.dumps({"allowed":["ls","npm install"]}), encoding="utf-8")
 _al = _ccm.CommandStore(_mf).allowed(); ok("npm install" in _al and "sha1sum" in _al and "grep" in _al, "existing allowlist gets new read-only defaults once")

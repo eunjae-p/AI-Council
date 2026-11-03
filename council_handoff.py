@@ -206,3 +206,79 @@ def status(workdir: Path) -> dict:
         except OSError:
             pass
     return {"claude_md": claude.exists(), "rule": has_rule, "handoff": (p / HANDOFF_NAME).exists()}
+
+
+# ---------- 대화 모드 → Claude 앱으로 가져가기 ----------
+# 대화 모드는 Claude Code 세션을 남기지 않으므로, 질문·결론·앞선 맥락을 한 문서로 묶어
+# 클립보드에 복사하고(Claude 앱 새 대화에 붙여넣기) exports/handoff/ 에 파일로도 저장한다.
+EXPORT_MAX_CHARS = 40_000
+ROUND_EXCERPT = 2_500
+
+EXPORT_TEXT = {
+    "ko": {
+        "lead": "다음은 AI Council(GPT·Claude 가 함께 답하고 토론하는 앱)에서 나눈 대화와 결론입니다. 이 내용을 바탕으로 이어서 작업하고 싶습니다.\n"
+                "먼저 아래 내용을 짧게 확인하고, 다음에 무엇을 하면 좋을지 제안해 주세요. 확인이 필요한 항목은 따로 짚어 주세요.",
+        "title": "# AI Council 대화 가져오기 · {title}",
+        "meta": "- 내보낸 시각: {time}\n- 대화 ID: {cid}",
+        "context": "## 앞선 대화 맥락",
+        "question": "## 질문",
+        "attachments": "## 첨부 파일 요약",
+        "final_discussion": "## 최종 결론 (GPT·Claude 토론 → 중립 정리)",
+        "final_single": "## 답변 ({model})",
+        "rounds": "## 토론 과정 요약 (각 모델의 1차 의견, 일부)",
+        "cut": "… (길어서 일부 생략)",
+    },
+    "en": {
+        "lead": "Below is a conversation and its conclusion from AI Council (an app where GPT and Claude answer and debate together). "
+                "I want to continue working from it.\nFirst briefly confirm the key points, then suggest what to do next. Call out anything that needs verification.",
+        "title": "# AI Council conversation export · {title}",
+        "meta": "- Exported at: {time}\n- Conversation ID: {cid}",
+        "context": "## Earlier context",
+        "question": "## Question",
+        "attachments": "## Attachment summaries",
+        "final_discussion": "## Final conclusion (GPT·Claude discussion → neutral synthesis)",
+        "final_single": "## Answer ({model})",
+        "rounds": "## Discussion summary (each model's round-1 opinion, excerpt)",
+        "cut": "… (trimmed)",
+    },
+}
+
+
+def _clip(text: str, limit: int, cut: str) -> str:
+    text = str(text or "").strip()
+    return text if len(text) <= limit else text[:limit].rstrip() + "\n" + cut
+
+
+def build_export(lang: str, title: str, conversation_id: str, items: list[dict], target_index: int, context: str) -> str:
+    """items[target_index] 의 답변(또는 Council 결론)을 중심으로 Claude 앱에 붙여넣을 문서를 만든다."""
+    t = EXPORT_TEXT[_lang(lang)]
+    target = items[target_index]
+    q_index = next((i for i in range(target_index, -1, -1) if items[i].get("role") == "user"), None)
+    question = items[q_index] if q_index is not None else {}
+    turn = items[(q_index or 0) + 1: target_index + 1] if q_index is not None else [target]
+    parts = [t["lead"], "", t["title"].format(title=title or "-"),
+             t["meta"].format(time=time.strftime("%Y-%m-%d %H:%M"), cid=conversation_id)]
+    if context and context.strip() and context.strip() != "(new conversation)":
+        parts += ["", t["context"], _clip(context, 12_000, t["cut"])]
+    parts += ["", t["question"], str(question.get("content") or "-").strip()]
+    atts = [a for a in question.get("attachments") or [] if a.get("summary")]
+    if atts:
+        parts += ["", t["attachments"]] + [f"### {a.get('name')}\n{_clip(a['summary'], 3000, t['cut'])}" for a in atts]
+    if target.get("model") == "Council":
+        firsts = [x for x in turn if x.get("round") == 1 and x.get("model") in ("GPT", "Claude")]
+        if firsts:
+            parts += ["", t["rounds"]] + [f"### {x['model']}\n{_clip(x.get('content'), ROUND_EXCERPT, t['cut'])}" for x in firsts]
+        parts += ["", t["final_discussion"], str(target.get("content") or "").strip()]
+    else:
+        parts += ["", t["final_single"].format(model=target.get("model") or "-"), str(target.get("content") or "").strip()]
+    text = "\n".join(parts).strip() + "\n"
+    return _clip(text, EXPORT_MAX_CHARS, t["cut"])
+
+
+def save_export(export_dir: Path, title: str, text: str) -> Path:
+    folder = Path(export_dir) / "handoff"
+    folder.mkdir(parents=True, exist_ok=True)
+    safe = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", title or "conversation").strip().rstrip(". ")[:60] or "conversation"
+    path = folder / f"{time.strftime('%Y-%m-%d_%H%M%S')}_{safe}.md"
+    path.write_text(text, encoding="utf-8", newline="\n")
+    return path

@@ -55,7 +55,7 @@ from council_mcp import McpStore, valid_tool
 import council_commands
 import council_image
 
-VERSION = "0.21.2"
+VERSION = "0.22.0"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -456,6 +456,25 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("명령 접두어가 올바르지 않습니다.")
                 cmd_store.set_allowed(prefix, bool(body.get("allowed", True)))
                 self.send_json(cmd_store.state())
+            elif path == "/api/handoff/export":
+                # 대화 모드 답변·토론 결론 → Claude 앱에 붙여넣을 문서 (클립보드용 본문 + exports/handoff/ 파일)
+                conversation_id = store.check_id(str(body.get("conversation_id", "")))
+                items = store.load_messages(conversation_id)
+                ref = str(body.get("item_id", ""))
+                index = next((i for i, x in enumerate(items) if x.get("id") == ref and x.get("role") == "assistant"), None)
+                if index is None:
+                    raise ValueError("가져갈 답변을 찾을 수 없습니다.")
+                meta = store.get_meta(conversation_id)
+                q_index = next((i for i in range(index, -1, -1) if items[i].get("role") == "user"), 0)
+                # 질문 이전까지의 맥락 (장기 요약 + 최근 대화, 짧게)
+                from council_context import COMPACT_BUDGET_CHARS as _CB, mark_skipped, select_recent
+                marked = mark_skipped(items[:q_index])
+                blocks, _ = select_recent(marked, min(int(meta.get("summarized_through") or 0), len(marked)), _CB * 2)
+                summary = (meta.get("summary") or "").strip()
+                context = "\n\n".join(([summary] if summary else []) + blocks)
+                text = council_handoff.build_export(self.lang, meta.get("title", ""), conversation_id, items, index, context)
+                saved = council_handoff.save_export(store.export_dir, meta.get("title", ""), text)
+                self.send_json({"text": text, "path": str(saved), "chars": len(text)})
             elif path == "/api/handoff/setup":
                 # CLAUDE.md 만들기(없으면 틀) / 인수인계 규칙 덧붙이기 — 사용자가 버튼을 누른 경우만
                 self.send_json(council_handoff.setup(check_workdir(str(body.get("workdir", ""))), self.lang))
