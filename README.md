@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.24.1** (2026-11-04) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.25.0** (2026-11-04) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.25.0](CHANGELOG.md#v0250-2026-11-04) | 11-04 | 🛠 작업 모드 **📁＋ 추가 폴더** — 작업 폴더 말고도 여러 폴더를 함께 읽고 고치기 |
 | [V0.24.1](CHANGELOG.md#v0241-2026-11-04) | 11-04 | 응답 중 **연결 끊김(network error)** 대처 — 서버 꺼짐/작업 계속 중 안내·자동 표시, 연결 유지 신호, Council 종료 방지 |
 | [V0.24.0](CHANGELOG.md#v0240-2026-11-04) | 11-04 | **🎨 대화 중 이미지** — 대화 모드에서 GPT 가 이미지를 만들어 보여 주고 이어서 고치기, 빈 빨간 띠 수정 |
 | [V0.23.0](CHANGELOG.md#v0230-2026-11-03) | 11-03 | 🔒 요청 출처 검사(Host·Origin·JSON) + 작업 모드 **⚠ 전체 권한 모드**(대화별, 기본 꺼짐) |
 | [V0.22.0](CHANGELOG.md#v0220-2026-11-03) | 11-03 | 대화 모드 답변·토론 결론에 **🖥 Claude 앱으로 가져가기** (질문·결론·맥락을 한 문서로 복사 + 파일 저장) |
-| [V0.21.2](CHANGELOG.md#v0212-2026-11-02) | 11-02 | 허용했는데도 막힌 명령은 같은 카드 반복 대신 **⚠ 이유·해결 방법**, 드라이브 전체 작업 폴더 경고 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -144,6 +144,8 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 
 **🛠 작업 모드 사용법**
 1. 입력창 위 **🛠 작업** → 작업 폴더 경로 입력 (예: `D:\my-project`) → 할 일을 적고 보내기.
+   다른 폴더도 함께 다루려면 작업 폴더 옆 **📁＋** → 추가 폴더 입력 (여러 개는 `;` 로 구분, 예: `D:\shared; E:\assets`, 최대 10개).
+   추가 폴더도 읽고 고칠 수 있고(GPT·Claude 모두), 명령 실행 위치·`HANDOFF.md`·Git 저장점은 첫 번째 작업 폴더 기준입니다.
 2. **명령 실행은 허용 목록 + 승인**: `mkdir`, `ls`, `git status` 같은 명령은 바로 실행됩니다.
    목록에 없는 명령(예: `npm install`, `python app.py`)은 실행하지 않고 답변 아래에 **🛡 승인 카드**가 뜹니다 →
    **이번만 허용하고 다시 실행 / 항상 허용하고 다시 실행 / 허용 안 함**.
@@ -342,7 +344,7 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.24.1** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.25.0** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
@@ -410,6 +412,7 @@ Clone with `git` (not ZIP) so the built-in updater works.
 ## 🧭 Using it
 
 - **Mode**: 💬 Chat (no file access) · 🛠 Work (reads, creates and edits files and runs commands in the working folder)
+- **📁＋ Additional folders** (Work mode): click 📁＋ next to the working folder to add more folders to read and edit (separate with `;`, up to 10; `--add-dir` for Claude and Codex). Commands, `HANDOFF.md` and the Git checkpoint still use the main working folder.
 - **Target**: GPT · Claude · Discussion (both debate → neutral conclusion; *Show debate rounds* expands each round)
 - **Work mode**: if a command is blocked even though it is allowed (Claude Code's own safety checks: paths outside the working folder, a whole drive as the working folder, protected folders), Council shows the reason instead of repeating the same approval card; use a project folder (e.g. `D:\VQC`) rather than a whole drive. The approval card offers **🧰 Allow all dev commands / file copy/move and run again** when the blocked command belongs to one of those groups, so you get asked less next time. When a command or MCP tool is blocked, Claude **pauses right there** (⏸, nothing after it runs) and a 🛡 card appears — **Allow once and run again** / **Always allow and run again** resumes the same Claude session from that step (also for the executor step in Discussion + Work, without rerunning the discussion). Approve soon: within about an hour the earlier history is read from cache. Time limit: Claude keeps going while it reports progress; it stops after 15 minutes with no progress or 60 minutes in total, and **↪ Continue** resumes the same session (work is not thrown away). Manage the allowlist with **🛡** next to the folder. In a Git repository you can review changes and **✅ Commit** or **↩ Revert**; with uncommitted changes you choose **Create checkpoint and start** or **Continue without**.
 - **💰 Saver on/off** (fewer tokens: see Features), **Web search on/off**, **Claude MCP / GPT MCP on/off** (⚙ manages Claude's always-allowed tools), **Run: Claude / Run: GPT** in Discussion + Work, **Models ▾** to pin model versions

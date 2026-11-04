@@ -32,6 +32,7 @@ from council_core import (
     token_usage,
     call_model,
     check_workdir,
+    check_extra_dirs,
     codex_default_model,
     ROOT,
     SETUP_NAME,
@@ -56,7 +57,7 @@ from council_mcp import McpStore, valid_tool
 import council_commands
 import council_image
 
-VERSION = "0.24.1"
+VERSION = "0.25.0"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -145,6 +146,15 @@ You can read, create and modify files under this folder and run shell commands t
 - Long-running processes (dev servers, watchers): start them in the background so they keep running after you
   finish, and report how to open or stop them. Do not wait on them in the foreground.
 - End with a short summary: files created or changed, commands run, and anything left for the user to do.
+"""
+
+EXTRA_DIRS_NOTE = """
+## Additional folders
+The user also gave you these folders for this task:
+{dirs}
+{access}
+The working folder above stays the main folder: shell commands start there, and use full paths for files in the
+additional folders.
 """
 
 SAVER_NOTE = """
@@ -704,6 +714,8 @@ class Handler(BaseHTTPRequestHandler):
                 workdir = council_image.default_output_dir(store.data_dir)  # 저장 폴더를 비우면 exports/images/<날짜>
             else:
                 workdir = check_workdir(str(body.get("workdir", ""))) if mode in FOLDER_MODES else None
+            # 🛠 작업 모드의 추가 폴더 (선택): 기준은 작업 폴더(실행 위치·HANDOFF·저장점), 추가 폴더는 --add-dir
+            self.extra_dirs = check_extra_dirs(body.get("extra_dirs"), workdir) if mode == "work" else []
             ratio = str(body.get("image_ratio", "square"))
             self.image_opts = {"ratio": ratio if ratio in council_image.SIZES else "square",
                                "count": max(1, min(council_image.MAX_COUNT, int(body.get("image_count") or 1)))}
@@ -853,6 +865,7 @@ class Handler(BaseHTTPRequestHandler):
                 track_git = False
         user_item = store.append_message(conversation_id, "user", question, "사용자", target=target,
                                          mode=mode, workdir=str(workdir) if workdir else None, web=web or None,
+                                         extra_dirs=[str(d) for d in getattr(self, "extra_dirs", None) or []] or None,
                                          mcp=mcp or None, mcp_gpt=mcp_gpt or None, allow_once=allow_once or None,
                                          executor=executor if (mode == "work" and target == "both") else None,
                                          allow_cmds_once=cmd_once or None,
@@ -874,6 +887,12 @@ class Handler(BaseHTTPRequestHandler):
             if mode == "work":
                 note = PLAN_NOTE if phase == "plan" else READ_NOTE if phase == "review" else WORK_NOTE
                 prompt += note.format(workdir=workdir)
+                extra = getattr(self, "extra_dirs", None) or []
+                if extra:
+                    prompt += EXTRA_DIRS_NOTE.format(
+                        dirs="\n".join(f"- {d}" for d in extra),
+                        access="In this round you can only read them." if phase in ("plan", "review")
+                        else "You can read, create and modify files in them, the same as in the working folder.")
             selected = model_label(name, model) or (codex_default_model() if which == "gpt" else "")
             if selected:
                 prompt += MODEL_NOTE.format(model=selected, source="selected in the app" if model_label(name, model) else "from the CLI default config")
@@ -912,7 +931,8 @@ class Handler(BaseHTTPRequestHandler):
                                     images=images, image_dir=image_dir, web=web,
                                     mcp_allow=mcp_allow if which == "claude" else None, cmd_allow=cmd_allow,
                                     codex_mcp=mcp_gpt and which == "gpt", resume=resume if which == "claude" else None,
-                                    full_access=fa, mcp_ask=mcp_ask if fa else None, settings_dir=store.data_dir)
+                                    full_access=fa, mcp_ask=mcp_ask if fa else None, settings_dir=store.data_dir,
+                                    extra_dirs=getattr(self, "extra_dirs", None) if call_mode in ("work", "edit", "read") else None)
             except Cancelled:
                 raise
             except CliFailure as exc:
@@ -923,6 +943,9 @@ class Handler(BaseHTTPRequestHandler):
             real = actual_model(which, run_info)
             tokens = token_usage(which, run_info)
             cli_state.record(which, model, real, tokens.get("total", 0))
+            if run_info.get("extra_dirs_dropped"):
+                self.emit("warning", text=f"{label} CLI가 추가 폴더(--add-dir)를 지원하지 않아 작업 폴더만 사용했습니다. "
+                                          "왼쪽 아래에서 CLI를 업데이트하세요.")
             if run_info.get("web_fallback"):
                 self.emit("warning", text=f"{label} CLI가 웹 검색을 지원하지 않아 검색 없이 답했습니다. "
                                           "왼쪽 아래에서 CLI를 업데이트하세요.")
@@ -1086,7 +1109,8 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 folder = None
             debate.write_log(folder, "질문.md", "질문", question + (f"\n\n(첨부: {', '.join(a['name'] for a in attached)})" if attached else "")
-                             + ("\n\n- 웹 검색: 사용" if web else "") + (f"\n- 작업 폴더: {workdir}" if workdir else ""))
+                             + ("\n\n- 웹 검색: 사용" if web else "") + (f"\n- 작업 폴더: {workdir}" if workdir else "")
+                             + "".join(f"\n- 추가 폴더: {d}" for d in getattr(self, "extra_dirs", None) or []))
             # 1라운드: 서로의 답을 보지 않고 동시에
             self.emit("stage", step=1, text="1라운드 · GPT와 Claude가 각자 독립적으로 답변하는 중" + (" (웹 검색 사용)" if web else ""))
             first = run_parallel({w: base_prompt(w, "plan") + debate.ROUND1_NOTE for w in ("gpt", "claude")}, 1,

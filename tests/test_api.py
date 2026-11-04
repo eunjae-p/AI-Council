@@ -172,6 +172,24 @@ log = open(os.environ["FAKE_LOG"]).read()
 ok("'--tools', 'Read,Glob,Grep,Edit,Write,Bash'" in log and "CWD="+os.path.realpath(wd) in log and "Work mode" in log
    and "acceptEdits" in log and "Bash(mkdir:*)" in log and "bypassPermissions" not in log, "work mode: read/write/command tools, allowlist, cwd=workdir")
 its = get("/api/conversation?id="+c6)["items"]; ok(its[-2].get("mode")=="work" and its[-2].get("workdir"), "mode saved on message")
+# 📁＋ 추가 폴더: --add-dir (Claude·Codex), 프롬프트 안내, 기록 저장, 작업 폴더와 같은 폴더·중복은 제외
+ex1 = _tf.mkdtemp(dir=str(tmp)); ex2 = _tf.mkdtemp(dir=str(tmp))
+r = post("/api/chat", {"question":"작업","conversation_id":c6,"target":"claude","mode":"work","workdir":wd,"extra_dirs":["/nope/extra"]}); ok(r[0]==400, "extra folder must exist")
+r = post("/api/chat", {"question":"작업","conversation_id":c6,"target":"claude","mode":"work","workdir":wd,"extra_dirs":[ex1]*11}); ok(r[0]==400, "extra folders limited to 10")
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"추가 폴더 작업","conversation_id":c6,"target":"claude","mode":"work","workdir":wd,"extra_dirs":[ex1, ex2, ex1, wd]}, raw=True)
+log = open(os.environ["FAKE_LOG"]).read()
+ok(log.count("'--add-dir'")==2 and os.path.realpath(ex1) in log and os.path.realpath(ex2) in log and "Additional folders" in log
+   and "CWD="+os.path.realpath(wd) in log, "extra folders: claude --add-dir x2 (dedupe, workdir skipped), cwd stays workdir")
+its = get("/api/conversation?id="+c6)["items"]; ok(its[-2].get("extra_dirs")==[os.path.realpath(ex1), os.path.realpath(ex2)], "extra folders saved on message")
+open(os.environ["FAKE_LOG"],"w").close()
+cx = post("/api/conversations")["id"]
+post("/api/chat", {"question":"추가 폴더 GPT 작업","conversation_id":cx,"target":"gpt","mode":"work","workdir":wd,"extra_dirs":ex1+"; "+ex2}, raw=True)
+log = open(os.environ["FAKE_LOG"]).read()
+ok(log.count("'--add-dir'")==2 and "workspace-write" in log, "extra folders: codex --add-dir in work mode (string with ;)")
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"대화","conversation_id":cx,"target":"claude","extra_dirs":[ex1]}, raw=True)
+ok("--add-dir" not in open(os.environ["FAKE_LOG"]).read(), "extra folders ignored outside work mode")
 os.environ["FAKE_OLD"]="1"
 ev = post("/api/chat", {"question":"구버전","conversation_id":c6,"target":"claude"}, raw=True)
 ok([e["type"] for e in ev].count("answer")==1, "fallback when CLI lacks flags"); del os.environ["FAKE_OLD"]

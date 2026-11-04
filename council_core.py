@@ -444,12 +444,41 @@ def check_workdir(workdir: str) -> Path:
     return path.resolve()
 
 
+MAX_EXTRA_DIRS = 10
+
+
+def check_extra_dirs(value, workdir: Path | None) -> list[Path]:
+    """작업 모드의 추가 폴더 (선택). 목록 또는 ';'·줄바꿈으로 구분한 문자열.
+    작업 폴더 자신·그 안의 폴더·중복은 빼고, 없는 폴더는 오류. 기준(실행 위치·HANDOFF·저장점)은 작업 폴더 그대로."""
+    if isinstance(value, str):
+        raw = re.split(r"[;\r\n]+", value)
+    elif isinstance(value, (list, tuple)):
+        raw = [str(x) for x in value]
+    else:
+        raw = []
+    items = [x.strip().strip('"').strip() for x in raw]
+    items = [x for x in items if x]
+    if len(items) > MAX_EXTRA_DIRS:
+        raise ValueError(f"추가 폴더는 최대 {MAX_EXTRA_DIRS}개까지 지정할 수 있습니다.")
+    out: list[Path] = []
+    for item in items:
+        path = Path(item).expanduser()
+        if not path.is_dir():
+            raise ValueError(f"추가 폴더를 찾을 수 없습니다: {path}")
+        path = path.resolve()
+        if workdir is not None and (path == workdir or workdir in path.parents):
+            continue  # 작업 폴더 안이면 이미 접근 가능
+        if path not in out:
+            out.append(path)
+    return out
+
+
 def call_model(which: str, model: str, prompt: str, mode: str = "chat", workdir: Path | None = None,
                timeout: int = TIMEOUT_SECONDS, info: dict | None = None, cancel: CancelToken | None = None,
                images: list[str] | None = None, image_dir: Path | None = None, web: bool = False,
                mcp_allow: list[str] | None = None, cmd_allow: list[str] | None = None, codex_mcp: bool = False,
                resume: str | None = None, full_access: bool = False, mcp_ask: list[str] | None = None,
-               settings_dir: Path | None = None) -> str:
+               settings_dir: Path | None = None, extra_dirs: list | None = None) -> str:
     """which: gpt | claude.  mode: chat(도구 없음, 빈 폴더) | work(작업 폴더 읽기 전용).
     images: 모델에 보여줄 이미지 파일 경로 (GPT: --image, Claude: 파일 읽기 도구).
     web: 웹 검색 허용 (GPT: codex --search, Claude: WebSearch·WebFetch 도구).
@@ -460,10 +489,12 @@ def call_model(which: str, model: str, prompt: str, mode: str = "chat", workdir:
     codex_mcp: GPT(Codex) 에 등록된 MCP 서버(블렌더 등)를 켠다. 끄면 이번 실행에서 모두 끈다.
     resume: Claude 작업 모드에서 승인 후 이어서 실행할 세션 ID (--resume). info["claude_session"] 에 새 세션 ID.
     full_access: 전체 권한 모드 (사용자가 그 대화에서 켠 경우만). Claude 작업 실행(work)에만 --permission-mode bypassPermissions.
-                 mcp_ask: 그때도 승인 카드로 묻게 할 MCP 도구(ask 규칙), settings_dir 에 설정 파일을 만들어 --settings 로 넘긴다."""
+                 mcp_ask: 그때도 승인 카드로 묻게 할 MCP 도구(ask 규칙), settings_dir 에 설정 파일을 만들어 --settings 로 넘긴다.
+    extra_dirs: 작업 모드의 추가 폴더 (--add-dir). Claude 는 작업·읽기 단계 모두, Codex 는 쓰기 샌드박스(work)일 때만.
+                Codex CLI 가 --add-dir 을 모르면 추가 폴더 없이 다시 시도하고 info["extra_dirs_dropped"]=True."""
     try:
         return _call_model_web(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, web,
-                               mcp_allow, cmd_allow, codex_mcp, resume, full_access, mcp_ask, settings_dir)
+                               mcp_allow, cmd_allow, codex_mcp, resume, full_access, mcp_ask, settings_dir, extra_dirs)
     except Cancelled:
         raise
     except CliFailure as exc:
@@ -479,15 +510,16 @@ def call_model(which: str, model: str, prompt: str, mode: str = "chat", workdir:
             time.sleep(0.5)
             waited += 0.5
         return _call_model_web(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, web,
-                               mcp_allow, cmd_allow, codex_mcp, resume, full_access, mcp_ask, settings_dir)
+                               mcp_allow, cmd_allow, codex_mcp, resume, full_access, mcp_ask, settings_dir, extra_dirs)
 
 
 def _call_model_web(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, web,
-                    mcp_allow, cmd_allow, codex_mcp, resume, full_access=False, mcp_ask=None, settings_dir=None) -> str:
+                    mcp_allow, cmd_allow, codex_mcp, resume, full_access=False, mcp_ask=None, settings_dir=None,
+                    extra_dirs=None) -> str:
     if web:
         try:
             return _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, True, mcp_allow,
-                               cmd_allow, codex_mcp, resume, full_access, mcp_ask, settings_dir)
+                               cmd_allow, codex_mcp, resume, full_access, mcp_ask, settings_dir, extra_dirs)
         except Cancelled:
             raise
         except CliFailure as exc:
@@ -496,15 +528,16 @@ def _call_model_web(which, model, prompt, mode, workdir, timeout, info, cancel, 
             if info is not None:
                 info["web_fallback"] = True
     return _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, False, mcp_allow,
-                       cmd_allow, codex_mcp, resume, full_access, mcp_ask, settings_dir)
+                       cmd_allow, codex_mcp, resume, full_access, mcp_ask, settings_dir, extra_dirs)
 
 
 def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, images, image_dir, web,
                 mcp_allow=None, cmd_allow=None, codex_mcp=False, resume=None, full_access=False, mcp_ask=None,
-                settings_dir=None) -> str:
+                settings_dir=None, extra_dirs=None) -> str:
     from council_commands import rules as command_rules
     images = [str(p) for p in images or []]
     cwd = workdir if mode in FOLDER_MODES and workdir else chat_dir()
+    extra_dirs = [str(d) for d in extra_dirs or []] if mode in FOLDER_MODES and mode != "image" and workdir else []
     if which == "gpt":
         disabled = [] if codex_mcp else codex_mcp_servers()
         if codex_mcp:
@@ -516,6 +549,9 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
         extra: list[str] = []  # read-only 샌드박스는 기본 인수에 포함
         for path in images:  # 이미지는 재시도 때도 빠지지 않도록 기본 인수에 넣는다
             base += ["--image", path]
+        if mode in WRITE_MODES:  # 추가 폴더도 쓰기 가능 (읽기 전용 샌드박스는 원래 어디든 읽을 수 있음)
+            for d in extra_dirs:
+                extra += ["--add-dir", d]
     else:
         disabled = []
         persist = mode in WRITE_MODES
@@ -541,6 +577,8 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
             extra = ["--tools", ",".join(builtin)]  # 기본 도구는 읽기·웹 검색만 (빈 문자열이면 없음)
             if mode in FOLDER_MODES and image_dir:  # 첨부 이미지·풀린 ZIP 폴더 읽기
                 extra += ["--add-dir", str(image_dir)]
+            for d in extra_dirs:  # 작업 모드의 추가 폴더 (작업 단계: 읽기·쓰기, 토론 계획·검토: 읽기)
+                extra += ["--add-dir", d]
             approved = (WEB_TOOLS.split(",") if web else []) + [t for t in (mcp_allow or []) if t.startswith("mcp__")]
             if mode in WRITE_MODES:
                 approved += command_rules(cmd_allow or [])
@@ -596,6 +634,8 @@ def _call_model(which, model, prompt, mode, workdir, timeout, info, cancel, imag
                 out = run_cli(name, base + extra, prompt, timeout, cwd, info, cancel)
             elif extra and any(k in blob.lower() for k in _UNKNOWN_FLAG):
                 # 설치된 CLI 버전이 옵션을 모르면 기본 인수로 한 번만 다시 시도
+                if name == "codex" and "--add-dir" in extra and info is not None:
+                    info["extra_dirs_dropped"] = True  # 오래된 Codex: 추가 폴더 없이 작업 폴더만
                 out = run_cli(name, base, prompt, timeout, cwd, info, cancel)
             else:
                 raise
