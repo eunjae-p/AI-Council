@@ -663,10 +663,35 @@ post("/api/chat", {"question":"RUN_CMD: npm install lodash","conversation_id":cf
 lg = open(os.environ["FAKE_LOG"]).read(); ok("bypassPermissions" not in lg and "'acceptEdits'" in lg, "turned off: back to acceptEdits + allowlist")
 html_ = (pathlib.Path(w.__file__).parent/"web"/"index.html").read_text(encoding="utf-8")
 ok("setFullAccess" in html_ and "faBanner" in html_ and "confirm: on ? 'full-access'" in html_, "UI: per-chat toggle, confirmation and banner")
+ok(".fabanner[hidden]{display:none}" in html_, "full-access banner really hides when off")
+ok("chat_image: S.mode === 'chat'" in html_ and 'id="chatImageToggle"' in html_, "UI: images-in-chat toggle")
 import council_core as _cpw
 ok(_cpw._is_permission_block("cp with flags requires manual approval to ensure path safety. For security, Claude Code cannot automatically validate cp commands that use flags")
    and not _cpw._is_permission_block("cp: cannot create regular file 'x': Permission denied"), "real CLI denial text (cp with flags) is recognized, shell errors are not")
 ok(_cpw._PERMISSION_TEXT.search("cp with flags requires manual approval to ensure path safety") is not None, "manual approval phrase matched directly")
+# 🎨 대화 중 이미지: 대화 모드 + GPT 에서 요청하면 생성 → 화면 표시 + 저장, 이어서 고치기, Claude 가 보기
+ci = post("/api/conversations")["id"]
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"그냥 인사","conversation_id":ci,"target":"gpt","mode":"chat"}, raw=True)
+lg = open(os.environ["FAKE_LOG"]).read(); ok("CHAT_IMAGE_NOTE" not in lg and "'read-only'" in lg, "images off: normal read-only chat")
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"노을 진 바다 그려줘 IMG_REQ","conversation_id":ci,"target":"gpt","mode":"chat","chat_image":True}, raw=True)
+lg = open(os.environ["FAKE_LOG"]).read(); a = get("/api/conversation?id="+ci)["items"][-1]
+ok("CHAT_IMAGE_NOTE" in lg and "workspace-write" in lg and a.get("gen_images") and a.get("chat_image")
+   and pathlib.Path(a["saved_files"][0]).is_file() and "images" in a["save_dir"], f"chat image generated, shown and saved {a.get('save_dir')}")
+first = a["gen_images"][0]
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"하늘을 더 어둡게 IMG_REQ","conversation_id":ci,"target":"gpt","mode":"chat","chat_image":True}, raw=True)
+lg = open(os.environ["FAKE_LOG"]).read(); a2 = get("/api/conversation?id="+ci)["items"][-1]
+ok("'--image'" in lg and first in lg and "CHAT_IMAGE_REFS" in lg and a2.get("gen_images") and a2["gen_images"][0]!=first, "follow-up edits the image it just made")
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"방금 만든 이미지 구도 어때?","conversation_id":ci,"target":"claude","mode":"chat","chat_image":True}, raw=True)
+lg = open(os.environ["FAKE_LOG"]).read()
+ok("Image files to open with the Read tool" in lg and a2["gen_images"][0] in lg and "CHAT_IMAGE_NOTE" not in lg, "Claude can look at the generated image (no generation)")
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"다른 얘기: 파이썬 최신 버전?","conversation_id":ci,"target":"gpt","mode":"chat","chat_image":True}, raw=True)
+lg = open(os.environ["FAKE_LOG"]).read(); a3 = get("/api/conversation?id="+ci)["items"][-1]
+ok("'--image'" not in lg and not a3.get("gen_images"), "unrelated question: no image re-sent, nothing generated")
 import council_commands as _ccm, json as _js
 _mf = tmp/"oldcmd"; _mf.mkdir(); (_mf/"cmd_settings.json").write_text(_js.dumps({"allowed":["ls","npm install"]}), encoding="utf-8")
 _al = _ccm.CommandStore(_mf).allowed(); ok("npm install" in _al and "sha1sum" in _al and "grep" in _al, "existing allowlist gets new read-only defaults once")

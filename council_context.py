@@ -60,6 +60,9 @@ def message_block(item: dict) -> str:
         return ""
     who = speaker(item)
     text = f"[{PROMPT_LABELS.get(who, who)}]\n{item.get('content', '')}"
+    if item.get("gen_images"):
+        names = ", ".join(str(p).replace("\\", "/").rsplit("/", 1)[-1] for p in item["gen_images"][:6])
+        text += f"\n(이 답변에서 생성한 이미지 {len(item['gen_images'])}장: {names})"
     for att in item.get("attachments") or []:
         text += f"\n(첨부: {att.get('name')}, {att.get('size', 0):,}자)"
         if att.get("summary"):

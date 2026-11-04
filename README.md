@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.23.0** (2026-11-03) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.24.0** (2026-11-04) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.24.0](CHANGELOG.md#v0240-2026-11-04) | 11-04 | **🎨 대화 중 이미지** — 대화 모드에서 GPT 가 이미지를 만들어 보여 주고 이어서 고치기, 빈 빨간 띠 수정 |
 | [V0.23.0](CHANGELOG.md#v0230-2026-11-03) | 11-03 | 🔒 요청 출처 검사(Host·Origin·JSON) + 작업 모드 **⚠ 전체 권한 모드**(대화별, 기본 꺼짐) |
 | [V0.22.0](CHANGELOG.md#v0220-2026-11-03) | 11-03 | 대화 모드 답변·토론 결론에 **🖥 Claude 앱으로 가져가기** (질문·결론·맥락을 한 문서로 복사 + 파일 저장) |
 | [V0.21.2](CHANGELOG.md#v0212-2026-11-02) | 11-02 | 허용했는데도 막힌 명령은 같은 카드 반복 대신 **⚠ 이유·해결 방법**, 드라이브 전체 작업 폴더 경고 |
 | [V0.21.1](CHANGELOG.md#v0211-2026-11-02) | 11-02 | 승인 카드에 **🧰 묶음 모두 허용**(개발 명령·파일 복사·이동), 이어서 실행할 때 막힌 명령을 Claude 에게 알림 |
-| [V0.21.0](CHANGELOG.md#v0210-2026-11-02) | 11-02 | 토론·작업 **과정은 위(접힘), 🏁 최종 결과는 마지막**, 검토 후 자동 재수정 없앰 → **🔧 지적 반영하기** |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -190,6 +190,12 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 5. 앱에서 한 작업은 Council 대화에 들어오지 않습니다. Council 로 돌아올 때는 **"HANDOFF.md 마지막 항목 보고 이어서 해줘"**.
 - 같은 폴더를 Council 과 앱에서 **동시에** 작업시키지 마세요. Git 저장소면 넘기기 전에 ✅ 확정(커밋)해 두면 안전합니다.
 
+### 🎨 대화 중 이미지 (대화 모드)
+- 대화 모드 입력창 위 **🎨 이미지 켬** → 대상이 GPT 로 바뀌고, 대화하다가 "○○ 그려줘"라고 하면 GPT 가 바로 만들어 **이 대화에 보여 줍니다**.
+- 이어서 "하늘을 더 어둡게"처럼 말하면 **방금 만든 이미지를 보고 고칩니다**. Claude 로 바꿔 "방금 만든 이미지 어때?"라고 물으면 Claude 가 이미지를 보고 답합니다.
+- 저장 폴더는 🎨 이미지 모드와 같습니다 (비우면 `exports\images\날짜`). 이미지를 요청하지 않은 질문에는 평소처럼 답만 합니다.
+- 이미지 생성은 GPT(ChatGPT Plus 이상)만 됩니다. 장 수·비율을 정해서 여러 장 뽑을 때는 🎨 이미지 모드가 편합니다.
+
 ### 🎨 이미지 모드
 - 입력창 위 **🎨 이미지** → 비율(1:1 · 가로 · 세로)·장수(1~4) → **저장 폴더** 입력(비우면 Council 폴더의 `exports\images\날짜`) → 만들 이미지를 설명하고 보내기.
 - **GPT**: Codex CLI의 이미지 생성 도구로 바로 생성. **Claude / 토론**: Claude가 이미지 프롬프트를 다듬고 → GPT가 생성 (Claude에는 이미지 생성 모델이 없음).
@@ -335,7 +341,7 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.23.0** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.24.0** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
@@ -359,6 +365,7 @@ It drives the official **Codex CLI (GPT)** and **Claude Code CLI (Claude)** sign
 - **Command allowlist + approval** — allowlisted commands (`mkdir`, `ls`, `git status` …) run right away; any other command is blocked and shown below the answer with **Allow once / Always allow / Don't allow**. Codex runs in its `workspace-write` sandbox (writes inside the folder only; internet allowed for installs).
 - **Optional Git checkpoint** — if the folder is a Git repository, review the changed files and diff afterwards, then **commit** or **revert** with one click.
 - **🌐 Web search** toggle — both models search the web and cite sources
+- **🎨 Images in chat** — in Chat mode turn on **🎨 Images**: ask GPT for an image mid-conversation and it appears right in the chat; follow-ups like "make the sky darker" edit the image it just made, and Claude can look at it and comment. Saved to the Image-mode folder.
 - **🎨 Image mode** — GPT generates real images (Codex image tool, ChatGPT Plus or higher) and saves PNGs to the folder you choose; shown in the chat too. With Claude/Discussion, Claude writes the prompt and GPT generates.
 - **🔌 Claude MCP / GPT MCP** — use connected tools such as Blender with either model. Claude: only tools you allow run automatically, others ask first. GPT: all tools registered in Codex are enabled when on.
 - **Collaboration** — Discussion + Work: both plan → the model you pick (**Run: Claude / Run: GPT**) executes → the other reviews the actual result read-only and it stops there; **🔧 Apply review** continues the executor's Claude session only when you click it (no automatic second pass). The steps are collapsed above, and the **🏁 Final result** (or **🏁 Final conclusion** in a chat discussion) comes last.

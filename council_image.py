@@ -125,3 +125,15 @@ def extract_prompt(text: str) -> str:
             if j > i:
                 return body[i + len(fence):j].strip()
     return body.strip()
+
+
+CHAT_IMAGE_NOTE = """
+## Images in this chat
+The user turned on image generation for this chat. When the user asks for an image (or a change to an image you made
+earlier), create it with your built-in image generation tool — do not draw with code, SVG, HTML or canvas. Choose a
+sensible size (square unless the request suggests otherwise) and make 1 image unless asked for more.
+{refs}After generating, save each final image as a PNG file in the current working folder named {prefix}_1.png,
+{prefix}_2.png, … (copy it from where the tool saved it if needed). The user sees the images in the chat automatically,
+so do not paste file paths; reply briefly in the user's language about what you made and offer one or two next tweaks.
+If the user is only talking (no image requested), answer normally without generating anything.
+"""

@@ -56,7 +56,7 @@ from council_mcp import McpStore, valid_tool
 import council_commands
 import council_image
 
-VERSION = "0.23.0"
+VERSION = "0.24.0"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -703,6 +703,10 @@ class Handler(BaseHTTPRequestHandler):
             files = council_attach.validate(body.get("attachments"), store.data_dir, conversation_id)
             web = bool(body.get("web"))
             self.saver = bool(body.get("saver"))  # 💰 절약 모드
+            # 🎨 대화 중 이미지 생성 (대화 모드 + GPT 대상일 때만): 저장 폴더는 이미지 모드와 같은 폴더(비우면 exports/images/날짜)
+            self.chat_image = bool(body.get("chat_image")) and mode == "chat" and target == "gpt"
+            idir = str(body.get("image_dir") or "").strip() if self.chat_image else ""
+            self.chat_image_dir = (check_workdir(idir) if idir else council_image.default_output_dir(store.data_dir)) if self.chat_image else None
             self.handoff = bool(body.get("handoff"))  # 작업 모드가 끝나면 작업 폴더 HANDOFF.md 에 인수인계 기록
             mcp = bool(body.get("mcp_claude", body.get("mcp")))  # Claude MCP (예전 이름: mcp)
             mcp_gpt = bool(body.get("mcp_gpt"))                     # GPT(Codex) MCP
@@ -806,7 +810,7 @@ class Handler(BaseHTTPRequestHandler):
         timeout = ATTACH_TIMEOUT if (attached or images or mode in FOLDER_MODES) else TIMEOUT_SECONDS
         if mode == "work":
             timeout = max(timeout, WORK_TIMEOUT)
-        if mode == "image":
+        if mode == "image" or getattr(self, "chat_image", False):
             timeout = max(timeout, 600)  # 이미지 1장 30초~1분, 여러 장이면 더
         if web or mcp or mcp_gpt:
             timeout = max(timeout, WEB_TIMEOUT)
@@ -867,7 +871,7 @@ class Handler(BaseHTTPRequestHandler):
             return prompt
 
         def ask(which: str, prompt: str, round_no: int | None = None, call_mode: str | None = None,
-                post=None, resume: str | None = None) -> tuple[str, dict]:
+                post=None, resume: str | None = None, wd=None) -> tuple[str, dict]:
             """모델 1회 호출 + 기록. 성공하면 (답변, 저장된 항목). 실패하면 CliFailure."""
             label, name, model = models[which]
             started = time.time()
@@ -889,7 +893,7 @@ class Handler(BaseHTTPRequestHandler):
                 run_info["codex_effort"] = "low"  # 대화 모드에서만 적용 (council_core)
             call_mode = call_mode or mode
             try:
-                answer = call_model(which, model, prompt, call_mode, workdir, timeout=timeout, info=run_info, cancel=token,
+                answer = call_model(which, model, prompt, call_mode, wd or workdir, timeout=timeout, info=run_info, cancel=token,
                                     images=images, image_dir=image_dir, web=web,
                                     mcp_allow=mcp_allow if which == "claude" else None, cmd_allow=cmd_allow,
                                     codex_mcp=mcp_gpt and which == "gpt", resume=resume if which == "claude" else None,
@@ -1032,6 +1036,26 @@ class Handler(BaseHTTPRequestHandler):
                         note += "\nThe blocked command(s) were:\n" + "\n".join(f"- {c}" for c in blocked) + "\n"
                     self.emit("stage", step=1, text="승인한 내용으로 Claude가 이어서 작업하는 중")
                     answer, item = ask(which, note, resume=resume_id)
+                elif which == "gpt" and getattr(self, "chat_image", False):
+                    # 🎨 대화 중 이미지: 대화하다가 요청하면 GPT 가 이미지 생성 도구로 만든다 → 화면에 표시 + 저장 폴더
+                    out_dir = self.chat_image_dir
+                    prefix = "council_" + time.strftime("%Y%m%d_%H%M%S")
+                    watch = (council_image.codex_image_dir(), out_dir)
+                    before = council_image.snapshot(*watch)
+                    refs = ("The attached image(s) are the latest images in this chat (generated earlier or attached by the user). "
+                            "If the user asks to change \"it\", edit from them and keep what they did not ask to change.\n") if images else ""
+
+                    def collect_chat(_answer: str) -> dict:
+                        made = council_image.new_images(before, council_image.snapshot(*watch))
+                        saved = council_image.collect(made, out_dir, council_attach.attach_dir(store.data_dir, conversation_id)
+                                                      / "generated", prefix)
+                        if not saved:
+                            return {}
+                        return {"gen_images": [x["shown"] for x in saved], "saved_files": [x["saved"] for x in saved],
+                                "save_dir": str(out_dir), "chat_image": True}
+                    self.emit("stage", step=1, text="GPT가 답변하는 중 (이미지를 요청하면 생성, 장당 30초~1분)")
+                    answer, item = ask(which, base_prompt(which) + council_image.CHAT_IMAGE_NOTE.format(refs=refs, prefix=prefix),
+                                       None, "image", post=collect_chat, wd=out_dir)
                 else:
                     answer, item = ask(which, base_prompt(which))
                 answers[label] = answer

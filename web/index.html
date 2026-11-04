@@ -182,6 +182,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 .badge.final{background:var(--ok-bg, rgba(46,160,67,.15));color:var(--ok, #3fb950);border-color:transparent;font-weight:700}
 .reviewbar{margin:6px 0 10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px}
 .reviewbar details{margin:6px 0} .reviewbar .content{font-size:13px;max-height:420px;overflow:auto}
+.fabanner[hidden]{display:none}
 .fabanner{margin:0 0 8px;padding:8px 12px;border-radius:10px;background:#5c1515;color:#ffd7d7;border:1px solid #c0392b;font-size:13px;font-weight:600;display:flex;gap:10px;align-items:center}
 .fabanner button{margin-left:auto} .webtog.danger{background:#5c1515;color:#ffd7d7;border-color:#c0392b}
 .badge.danger{background:#5c1515;color:#ffd7d7;border-color:#c0392b}
@@ -277,6 +278,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
             <button data-v="gpt">GPT</button><button data-v="claude">Claude</button><button data-v="both" class="on tip" data-tip="⚠ 사용량 주의 — 토론은 GPT·Claude를 총 5번 호출합니다 (1차 의견 2 + 교차 검토 2 + 결론 1).&#10;단독 질문보다 구독 사용량이 약 5배, 시간도 더 걸립니다. 웹 검색까지 켜면 더 늘어납니다. 💰 절약 모드에서는 3번.&#10;간단한 질문·워크플로우 분석·프롬프트 작성은 GPT나 Claude 단독을, 판단이 필요한 주제에만 토론을 쓰세요." data-en-tip="⚠ Heavy usage — Discussion calls GPT/Claude 5 times in total (2 opinions + 2 cross reviews + 1 conclusion).&#10;About 5× the subscription usage of a single question, and slower. Web search adds more. 3 calls in 💰 Saver mode.&#10;Use GPT or Claude alone for simple questions, workflow analysis or prompt writing; use Discussion for judgment calls."><span data-en="Discussion">토론 (Discussion)</span> <span class="warn-ico">!</span></button>
           </div>
           <button class="webtog tip" id="saverToggle" data-tip="💰 절약 모드 — 구독 사용량(토큰)을 덜 씁니다.&#10;· 토론: 교차 검토(2라운드)를 건너뛰어 5번 → 3번 호출&#10;· 최근 대화는 짧게(약 1만 자), 첨부 원문도 짧게 넣음&#10;· 답변을 간결하게 요청 (출력 토큰이 가장 비쌈)&#10;· GPT 대화: 생각(추론) 강도 낮춤 — 작업 모드는 그대로&#10;복잡한 판단·긴 분석이 필요하면 끄세요." data-en-tip="💰 Saver mode — uses less of your subscription (tokens).&#10;· Discussion: skips the cross review (round 2), 5 → 3 calls&#10;· Shorter recent context (~10k chars) and shorter attachment excerpts&#10;· Asks for concise answers (output tokens cost the most)&#10;· GPT chat: lower reasoning effort — work mode unchanged&#10;Turn it off for complex judgment or long analysis.">💰 절약 끔</button>
+          <button class="webtog tip" id="chatImageToggle" data-tip="🎨 대화 중 이미지 — 켜고 GPT 에게 물으면, 대화하다가 이미지를 요청할 때 GPT 가 바로 만들어 이 대화에 보여 줍니다.&#10;'하늘을 더 어둡게'처럼 이어서 말하면 방금 만든 이미지를 보고 고칩니다. 저장 폴더는 🎨 이미지 모드와 같습니다 (비우면 Council 폴더의 exports\images\날짜).&#10;이미지 생성은 GPT(ChatGPT Plus 이상)만 됩니다. Claude 는 만든 이미지를 보고 의견을 줄 수 있습니다." data-en-tip="🎨 Images in chat — when on and you ask GPT, GPT creates images right in this chat whenever you ask for one.&#10;Say things like 'make the sky darker' to edit the image it just made. Saved to the same folder as 🎨 Image mode (empty = exports\images\<date> in the Council folder).&#10;Only GPT (ChatGPT Plus or higher) can generate. Claude can look at the images and comment.">🎨 이미지 끔</button>
           <button class="webtog" id="webToggle" title="켜면 GPT·Claude가 웹을 검색해 근거를 확인합니다 (시간·사용량 증가)" data-en-title="When on, GPT/Claude search the web to check facts (slower, more usage)">🌐 웹 검색 끔</button>
           <span class="mcpgrp"><button class="webtog tip" id="mcpToggle" data-tip="🔌 Claude MCP — Claude 계정·Claude Code에 연결된 도구(예: Blender, Higgsfield, Notion)를 씁니다.&#10;'항상 허용'한 도구만 바로 실행되고, 나머지는 실행 전에 답변 아래에서 허용 여부를 묻습니다. ⚙에서 도구를 관리하세요." data-en-tip="🔌 Claude MCP — use tools connected to your Claude account / Claude Code (e.g. Blender, Higgsfield, Notion).&#10;Only tools you marked 'Always allow' run right away; others ask for approval below the answer. Manage tools with ⚙.">🔌 Claude MCP 끔</button><button class="webtog tip" id="mcpGptToggle" data-tip="🔌 GPT MCP — GPT(Codex)에 등록된 도구(Codex 데스크톱 앱에서 연결한 Blender 등, ~/.codex/config.toml)를 씁니다.&#10;Codex는 도구별 허용을 고를 수 없어, 켜면 Codex에 연결된 도구가 모두 켜집니다." data-en-tip="🔌 GPT MCP — use tools registered in GPT (Codex) (e.g. Blender connected in the Codex desktop app, ~/.codex/config.toml).&#10;Codex cannot allow tools one by one, so turning this on enables all of Codex's connected tools.">🔌 GPT MCP 끔</button><button class="webtog gear" id="mcpManage" title="MCP 도구 관리" data-en-title="Manage MCP tools">⚙</button></span>
           <button class="ghost small" id="modelToggle" data-en="Models ▾">모델 설정 ▾</button>
@@ -332,7 +334,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.23.0'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.24.0'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -1171,6 +1173,13 @@ function renderUsage() {
 document.querySelectorAll('#target button').forEach(b => b.onclick = () => setTarget(b.dataset.v));
 function setWeb(on) { S.web = !!on; store.set('councilWeb', S.web ? '1' : ''); const b = $('#webToggle'); b.classList.toggle('on', S.web); b.textContent = S.web ? T('🌐 웹 검색 켬', '🌐 Web search on') : T('🌐 웹 검색 끔', '🌐 Web search off'); }
 $('#webToggle').onclick = () => setWeb(!S.web);
+function setChatImage(on) {
+  S.chatImage = !!on; store.set('councilChatImage', S.chatImage ? '1' : '');
+  const b = $('#chatImageToggle'); b.classList.toggle('on', S.chatImage);
+  b.textContent = S.chatImage ? T('🎨 이미지 켬', '🎨 Images on') : T('🎨 이미지 끔', '🎨 Images off');
+}
+$('#chatImageToggle').onclick = () => { setChatImage(!S.chatImage);
+  if (S.chatImage && S.target !== 'gpt') { setTarget('gpt'); toast(T('이미지는 GPT 가 만들어서 대상을 GPT 로 바꿨습니다', 'Images are made by GPT, so the target is now GPT')); } };
 function setSaver(on) { S.saver = !!on; store.set('councilSaver', S.saver ? '1' : ''); const b = $('#saverToggle'); b.classList.toggle('on', S.saver); b.textContent = S.saver ? T('💰 절약 켬', '💰 Saver on') : T('💰 절약 끔', '💰 Saver off'); }
 $('#saverToggle').onclick = () => setSaver(!S.saver);
 // ---------- 화면 테마 (다크 / 라이트 / 시스템 설정 따르기) ----------
@@ -1298,7 +1307,7 @@ function setMode(m) { if (!['work', 'image'].includes(m)) m = 'chat';
   const key = x => x === 'image' ? 'councilImageDir' : 'councilWorkdir';
   if (S.mode && S.mode !== m && S.mode !== 'chat') store.set(key(S.mode), $('#workdir').value.trim());
   if (m !== 'chat' && S.mode !== m) $('#workdir').value = store.get(key(m)) || '';
-  S.mode = m; store.set('councilMode', m); document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.m === m)); $('#workdir').classList.toggle('show', m !== 'chat'); $('#cmdManage').hidden = m !== 'work'; if (typeof updateFullAccessUI === 'function' && $('#fullAccessBtn')) setTimeout(updateFullAccessUI); $('#handoffToggle').hidden = m !== 'work'; $('#claudeMdBtn').hidden = m !== 'work'; $('#imgOpts').hidden = m !== 'image'; if ($('#executor')) syncExecutor(); $('#workdir').placeholder = m === 'image' ? T('저장 폴더 (예: D:\\images) — 비우면 Council 폴더의 exports\\images\\날짜', 'Output folder (e.g. D:\\images) — empty = exports\\images\\<date> in the Council folder') : T('작업 폴더 (예: D:\\my-project) — 이 폴더에서 파일을 만들고 고치고 명령을 실행합니다', 'Working folder (e.g. D:\\my-project) — files are created/edited and commands run here'); $('#q').placeholder = m === 'image' ? T('만들 이미지를 설명해 주세요 — 예: 노을 지는 해변의 영화 포스터, 시네마틱 (📎 참고 이미지 첨부 가능)', 'Describe the image — e.g. a cinematic movie poster of a beach at sunset (attach references with 📎)') : m === 'work' ? T('할 일을 적어 주세요 — 예: 이 폴더에 Flask 서버를 만들고 실행해줘 (Enter 보내기 · Shift+Enter 줄바꿈)', 'Describe the task — e.g. create a Flask server in this folder and run it (Enter to send · Shift+Enter for a new line)') : T('질문을 입력하세요 · 📎·끌어다 놓기·Ctrl+V로 JSON·이미지·영상 첨부 (Enter 보내기 · Shift+Enter 줄바꿈)', 'Ask anything · attach JSON, images or video with 📎, drag & drop or Ctrl+V (Enter to send · Shift+Enter for a new line)'); }
+  S.mode = m; store.set('councilMode', m); document.querySelectorAll('#mode button').forEach(b => b.classList.toggle('on', b.dataset.m === m)); $('#workdir').classList.toggle('show', m !== 'chat'); $('#cmdManage').hidden = m !== 'work'; if ($('#chatImageToggle')) $('#chatImageToggle').hidden = m !== 'chat'; if (typeof updateFullAccessUI === 'function' && $('#fullAccessBtn')) setTimeout(updateFullAccessUI); $('#handoffToggle').hidden = m !== 'work'; $('#claudeMdBtn').hidden = m !== 'work'; $('#imgOpts').hidden = m !== 'image'; if ($('#executor')) syncExecutor(); $('#workdir').placeholder = m === 'image' ? T('저장 폴더 (예: D:\\images) — 비우면 Council 폴더의 exports\\images\\날짜', 'Output folder (e.g. D:\\images) — empty = exports\\images\\<date> in the Council folder') : T('작업 폴더 (예: D:\\my-project) — 이 폴더에서 파일을 만들고 고치고 명령을 실행합니다', 'Working folder (e.g. D:\\my-project) — files are created/edited and commands run here'); $('#q').placeholder = m === 'image' ? T('만들 이미지를 설명해 주세요 — 예: 노을 지는 해변의 영화 포스터, 시네마틱 (📎 참고 이미지 첨부 가능)', 'Describe the image — e.g. a cinematic movie poster of a beach at sunset (attach references with 📎)') : m === 'work' ? T('할 일을 적어 주세요 — 예: 이 폴더에 Flask 서버를 만들고 실행해줘 (Enter 보내기 · Shift+Enter 줄바꿈)', 'Describe the task — e.g. create a Flask server in this folder and run it (Enter to send · Shift+Enter for a new line)') : T('질문을 입력하세요 · 📎·끌어다 놓기·Ctrl+V로 JSON·이미지·영상 첨부 (Enter 보내기 · Shift+Enter 줄바꿈)', 'Ask anything · attach JSON, images or video with 📎, drag & drop or Ctrl+V (Enter to send · Shift+Enter for a new line)'); }
 $('#workdir').addEventListener('input', () => store.set(S.mode === 'image' ? 'councilImageDir' : 'councilWorkdir', $('#workdir').value.trim()));
 document.querySelectorAll('#imgOpts button').forEach(b => b.onclick = () => { S.imgRatio = b.dataset.r; store.set('councilImgRatio', b.dataset.r);
   document.querySelectorAll('#imgOpts button').forEach(x => x.classList.toggle('on', x === b)); });
@@ -1363,7 +1372,7 @@ async function send() {
   let gotUser = false, wasStopped = false;
   try {
     const res = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json', 'X-Lang':LANG},
-      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, web:!!S.web, saver:!!S.saver, handoff:!!S.handoff, mcp:!!S.mcp, mcp_claude:!!S.mcp, mcp_gpt:!!S.mcpGpt, executor:S.executor || 'claude', allow_once: allowOnceSent || [], allow_cmds_once: cmdsOnceSent, approved_names: approvedNames, blocked_cmds: blockedCmds, resume: resumeSent, resume_reason: resumeReason, review_ref: reviewRef, image_ratio:S.imgRatio || 'square', image_count:Number($('#imgCount').value) || 1, workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => f.upload ? ({ name:f.name, upload:f.upload }) : ({ name:f.name, content:f.content })) }) });
+      body: JSON.stringify({ question, conversation_id:convId, target:S.target, gpt_model:gpt, claude_model:claude, mode:S.mode, web:!!S.web, saver:!!S.saver, handoff:!!S.handoff, chat_image: S.mode === 'chat' && !!S.chatImage, image_dir: (S.mode === 'chat' && S.chatImage) ? (store.get('councilImageDir') || '') : '', mcp:!!S.mcp, mcp_claude:!!S.mcp, mcp_gpt:!!S.mcpGpt, executor:S.executor || 'claude', allow_once: allowOnceSent || [], allow_cmds_once: cmdsOnceSent, approved_names: approvedNames, blocked_cmds: blockedCmds, resume: resumeSent, resume_reason: resumeReason, review_ref: reviewRef, image_ratio:S.imgRatio || 'square', image_count:Number($('#imgCount').value) || 1, workdir:$('#workdir').value.trim(), attachments: sentFiles.map(f => f.upload ? ({ name:f.name, upload:f.upload }) : ({ name:f.name, content:f.content })) }) });
     if (!res.ok) { let m = T('요청 실패', 'Request failed'); try { m = (await res.json()).error || m; } catch {} throw new Error(m); }
     const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
     for (;;) {
@@ -1694,6 +1703,7 @@ window.addEventListener('hashchange', () => { const id = (location.hash.match(/^
   applyTheme(store.get('councilTheme') || 'dark');
   setWeb(store.get('councilWeb') === '1');
   setSaver(store.get('councilSaver') === '1');
+  setChatImage(store.get('councilChatImage') === '1');
   setHandoff(store.get('councilHandoff') !== '0');  // 기본 켬
   loadCmdState().then(() => { if (S.items && S.items.length) renderThread(); });
   setMcp(store.get('councilMcp') === '1'); setMcpGpt(store.get('councilMcpGpt') === '1'); setExecutor(store.get('councilExecutor') || 'claude');

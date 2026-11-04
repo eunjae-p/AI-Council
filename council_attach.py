@@ -263,6 +263,7 @@ def history_records(items: list[dict]) -> list[dict]:
 
 
 MEDIA_WORDS = re.compile(r"이미지|사진|그림|영상|동영상|비디오|프레임|화면|캡처|캡쳐|스샷|스크린샷|썸네일|첨부|장면|컷|색감|구도|"
+                         r"생성한|만든 거|방금 거|배경|하늘|조명|색|톤|스타일|포스터|로고|"
                          r"image|photo|picture|video|frame|screenshot|thumbnail|attach|scene|shot", re.IGNORECASE)
 
 
@@ -272,6 +273,15 @@ def recent_media(messages: list[dict], question: str | None = None, window: int 
     question=None 이면 조건 없이 (예전 동작)."""
     user_seen = 0
     for item in reversed(messages[-window:]):
+        if item.get("role") == "assistant" and item.get("gen_images"):
+            # 이 대화에서 GPT 가 만든 이미지도 다시 보여 준다 (바로 다음 질문이거나 질문이 이미지를 가리킬 때)
+            if question is not None and user_seen > 0 and not MEDIA_WORDS.search(question):
+                return []
+            shown = [p for p in item["gen_images"] if Path(p).is_file()][:4]
+            if shown:
+                return [{"name": Path(p).name, "kind": "image", "content": "", "images": [p],
+                         "summary": "이 대화에서 GPT 가 생성한 이미지", "generated": True} for p in shown]
+            continue
         if item.get("role") != "user":
             continue
         user_seen += 1
