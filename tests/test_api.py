@@ -537,7 +537,11 @@ ok("const canResume" in html_ and "[3, 5].includes(item.round)" in html_, "appro
 _old_t = (w.ATTACH_TIMEOUT, w.WORK_TIMEOUT, w.WORK_HARD_LIMIT)
 w.ATTACH_TIMEOUT, w.WORK_TIMEOUT, w.WORK_HARD_LIMIT = 3, 3, 60
 ct2 = post("/api/conversations")["id"]
-post("/api/chat", {"question":"PROGRESS_LOOP 작업","conversation_id":ct2,"target":"claude","mode":"work","workdir":str(cw)}, raw=True)
+w.HEARTBEAT_SECONDS = 1
+evhb = post("/api/chat", {"question":"PROGRESS_LOOP 작업","conversation_id":ct2,"target":"claude","mode":"work","workdir":str(cw)}, raw=True)
+ok(sum(e["type"]=="ping" for e in evhb) >= 5, "heartbeat pings keep the stream alive during long work")
+w.HEARTBEAT_SECONDS = 15
+ok(get("/api/conversation?id="+ct2).get("busy") is False, "conversation reports busy=False when idle")
 a = get("/api/conversation?id="+ct2)["items"][-1]
 ok(a["role"]=="assistant" and "오래 걸린 작업 완료" in a["content"] and a["elapsed"] > 10, f"progress keeps the run alive past the idle limit ({a.get('elapsed')}s)")
 w.WORK_HARD_LIMIT = 5
@@ -692,6 +696,11 @@ open(os.environ["FAKE_LOG"],"w").close()
 post("/api/chat", {"question":"다른 얘기: 파이썬 최신 버전?","conversation_id":ci,"target":"gpt","mode":"chat","chat_image":True}, raw=True)
 lg = open(os.environ["FAKE_LOG"]).read(); a3 = get("/api/conversation?id="+ci)["items"][-1]
 ok("'--image'" not in lg and not a3.get("gen_images"), "unrelated question: no image re-sent, nothing generated")
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"작업 안내 확인","conversation_id":post("/api/conversations")["id"],"target":"claude","mode":"work","workdir":str(cw)}, raw=True)
+ok("taskkill /IM python.exe" in open(os.environ["FAKE_LOG"]).read(), "work note forbids killing all python processes (Council runs on Python)")
+html_ = (pathlib.Path(w.__file__).parent/"web"/"index.html").read_text(encoding="utf-8")
+ok("async function connectionLost" in html_ and "err instanceof TypeError && gotUser" in html_, "UI: dropped connection is diagnosed (server down vs still running)")
 import council_commands as _ccm, json as _js
 _mf = tmp/"oldcmd"; _mf.mkdir(); (_mf/"cmd_settings.json").write_text(_js.dumps({"allowed":["ls","npm install"]}), encoding="utf-8")
 _al = _ccm.CommandStore(_mf).allowed(); ok("npm install" in _al and "sha1sum" in _al and "grep" in _al, "existing allowlist gets new read-only defaults once")

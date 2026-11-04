@@ -334,7 +334,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.24.0'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.24.1'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -1283,7 +1283,11 @@ async function setFullAccess(on) {
     const r = await api('/api/conversation/full-access', { id:S.current, enabled:!!on, confirm: on ? 'full-access' : '' });
     S.meta = r.meta; updateFullAccessUI();
     toast(on ? T('이 대화에서 전체 권한 모드를 켰습니다', 'Full access mode is on for this chat') : T('전체 권한 모드를 껐습니다', 'Full access mode is off'), on);
-  } catch (e) { toast(e.message, true); }
+  } catch (e) {
+    modal(T('전체 권한 모드를 바꾸지 못했습니다', 'Could not change full access mode'), (e instanceof TypeError
+      ? T('Council 서버에 연결할 수 없습니다. "1_AI Council 실행"으로 다시 켠 뒤 시도하세요.', 'Cannot reach the Council server. Start it with "1_AI Council 실행" and try again.')
+      : e.message) + T('\n\n(이 대화가 아직 작업 중이면 끝난 뒤, 또는 ■ 중지 후에 바꿀 수 있습니다)', '\n\n(If this chat is still working, change it after it finishes or after ■ Stop)'));
+  }
 }
 $('#fullAccessBtn').onclick = () => setFullAccess(!(S.meta && S.meta.full_access));
 function setHandoff(on) { S.handoff = !!on; store.set('councilHandoff', S.handoff ? '1' : '0'); const b = $('#handoffToggle'); b.classList.toggle('on', S.handoff); b.textContent = S.handoff ? T('📝 인수인계 켬', '📝 Handoff on') : T('📝 인수인계 끔', '📝 Handoff off'); }
@@ -1399,6 +1403,10 @@ async function send() {
     notifyDone(convId, wasStopped ? 'stopped' : 'done', question);
   } catch (err) {
     pend.remove();
+    if (err instanceof TypeError && gotUser) {  // 응답 도중 연결이 끊김 (network error): 서버 상태를 확인해 정확히 안내
+      const lost = await connectionLost(convId);
+      if (lost) { $('#status').textContent = lost; notifyDone(convId, 'error', question); return; }
+    }
     if (!gotUser && !q.value) { q.value = draft; autoGrow(); }
     if (!gotUser && !S.files.length) { S.files = sentFiles; renderChips(); } // 저장 전 실패면 첨부도 되돌림 // 질문이 저장되지 않았으면 입력창에 되돌림
     if (here()) { try { await openConversation(convId); } catch {} const last = S.items[S.items.length - 1];
@@ -1410,6 +1418,24 @@ async function send() {
     setBusy(false, $('#status').textContent); $('#send').disabled = false;
     loadList().catch(() => {});
   }
+}
+// 응답 도중 연결이 끊겼을 때: ① Council 서버가 꺼졌는지 ② 작업은 서버에서 계속 중인지 확인해 알려 준다
+async function connectionLost(convId) {
+  let alive = true; try { await api('/api/status'); } catch { alive = false; }
+  if (!alive) {
+    modal(T('Council 서버에 연결할 수 없습니다', 'Cannot reach the Council server'), T(
+      'Council 서버가 꺼졌습니다. 작업 중 실행한 명령이 Council 을 함께 종료했을 수 있습니다 (예: python 프로세스를 모두 종료하는 명령).\n\n· "1_AI Council 실행"으로 다시 켜세요.\n· 작업 폴더에서 이미 만든·고친 파일은 그대로 있습니다. 다시 켠 뒤 "이어서 해줘"라고 보내면 됩니다.',
+      'The Council server has stopped. A command run during the task may have shut it down too (e.g. one that kills all python processes).\n\n· Start it again with "1_AI Council 실행".\n· Files already created or changed in the working folder are still there. After restarting, say "continue".'));
+    return T('Council 서버가 꺼짐', 'Council server stopped');
+  }
+  let d; try { d = await api('/api/conversation?id=' + encodeURIComponent(convId)); } catch { return ''; }
+  if (!d.busy) { if (S.current === convId) await openConversation(convId); return T('연결이 끊겼지만 작업은 끝났습니다', 'Connection dropped, but the task finished'); }
+  toast(T('화면 연결이 끊겼지만 작업은 서버에서 계속 진행 중입니다. 끝나면 자동으로 보여 드립니다.', 'The screen lost its connection, but the task keeps running on the server. It will show up here when done.'));
+  (async () => { for (let i = 0; i < 720; i++) {  // 최대 1시간, 5초마다 확인
+      await new Promise(r => setTimeout(r, 5000));
+      try { const x = await api('/api/conversation?id=' + encodeURIComponent(convId)); if (!x.busy) { if (S.current === convId) await openConversation(convId); toast(T('끊겼던 작업이 끝났습니다', 'The task finished')); notifyDone(convId, 'done', ''); return; } } catch {}
+    } })();
+  return T('연결 끊김 · 작업은 계속 중', 'Disconnected · task still running');
 }
 $('#send').onclick = () => S.running ? stopRun('button') : send();
 async function stopRun(reason) {

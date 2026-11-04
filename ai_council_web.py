@@ -56,13 +56,14 @@ from council_mcp import McpStore, valid_tool
 import council_commands
 import council_image
 
-VERSION = "0.24.0"
+VERSION = "0.24.1"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
 MAX_BODY = 12_000_000
 ATTACH_TIMEOUT = 300  # 첨부·작업 모드는 분석량이 많아 제한 시간을 늘림
 WEB_TIMEOUT = 480     # 웹 검색을 켜면 검색·페이지 읽기 시간이 더 걸림
+HEARTBEAT_SECONDS = 15  # 응답 스트림 유지 신호 간격 (출력 없는 긴 작업 중 연결이 끊기지 않게)
 WORK_TIMEOUT = 900    # 작업 모드: 이 시간(초) 동안 진행 상황이 전혀 없을 때만 멈춤 (진행 중이면 계속)
 WORK_HARD_LIMIT = 3600  # 작업 모드: 진행 중이어도 넘지 않는 전체 상한. 넘으면 멈추고 '이어서 진행' 가능
 _emit_lock = threading.Lock()  # 토론 모드는 두 모델이 동시에 결과를 보냄
@@ -138,6 +139,9 @@ You can read, create and modify files under this folder and run shell commands t
   inline scripts (python -c, node -e): those are hard to approve and often fail in the shell. To run a script,
   write it to a file first, then run the file.
 - Keep each step small and check progress as you go; avoid re-reading large files you already read.
+- Never stop processes by name for a whole program (e.g. taskkill /IM python.exe, taskkill /IM node.exe, pkill python,
+  Stop-Process -Name python): AI Council itself runs on Python on this PC and would be shut down. Stop only the
+  specific process by its PID or by the port it listens on.
 - Long-running processes (dev servers, watchers): start them in the background so they keep running after you
   finish, and report how to open or stop them. Do not wait on them in the foreground.
 - End with a short summary: files created or changed, commands run, and anything left for the user to do.
@@ -372,7 +376,10 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("잘못된 목록 범위입니다.")
                 self.send_json({"items": store.list(scope)})
             elif parsed.path == "/api/conversation":
-                self.send_json(store.detail(store.check_id(arg("id"))))
+                cid_ = store.check_id(arg("id"))
+                with _busy_lock:
+                    running = cid_ in _busy
+                self.send_json({**store.detail(cid_), "busy": running})  # busy: 연결이 끊겨도 작업이 계속 중인지
             elif parsed.path == "/api/history":  # V0.5 호환
                 self.send_json({"items": store.load_messages(store.check_id(arg("conversation_id")))})
             elif parsed.path == "/api/search":
@@ -740,14 +747,22 @@ class Handler(BaseHTTPRequestHandler):
                 return
             _busy.add(conversation_id)
             self.cancel = _tokens[conversation_id] = CancelToken()
+        beat = threading.Event()
         try:
             self.start_stream()
+
+            def heartbeat() -> None:
+                # 출력 없이 오래 작업할 때 회사 보안 프로그램·프록시가 '쉬는 연결'로 보고 끊지 않도록 15초마다 신호
+                while not beat.wait(HEARTBEAT_SECONDS):
+                    self.emit("ping")
+            threading.Thread(target=heartbeat, daemon=True).start()
             try:
                 self.run_chat(conversation_id, question, target, gpt_model, claude_model, mode, workdir, files, web,
                               mcp, allow_once, cmd_once, mcp_gpt, executor)
             except Exception as exc:  # 예상 못 한 오류도 화면에 정확히 보이게
                 self.emit("error", text=f"서버 내부 오류: {type(exc).__name__}: {exc}")
         finally:
+            beat.set()
             with _busy_lock:
                 _busy.discard(conversation_id)
                 _tokens.pop(conversation_id, None)
