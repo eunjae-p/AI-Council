@@ -10,6 +10,7 @@ T = str(HERE)  # fake_bin, fixtures 위치
 tmp = pathlib.Path(tempfile.mkdtemp())
 os.environ["AI_COUNCIL_DATA_DIR"] = str(tmp/"data"); os.environ["AI_COUNCIL_EXPORT_DIR"] = str(tmp/"exports")
 os.environ["FAKE_LOG"] = str(tmp/"claude.log")
+os.environ["AI_COUNCIL_IMAGE_DIR"] = str(tmp/"image")  # 기본 이미지 저장 폴더 (실제로는 Council 폴더의 image)
 os.environ["PATH"] = str(HERE/"fake_bin") + os.pathsep + os.environ["PATH"]
 os.environ["T"] = str(tmp)
 sys.path.insert(0, str(ROOT))
@@ -700,7 +701,8 @@ open(os.environ["FAKE_LOG"],"w").close()
 post("/api/chat", {"question":"노을 진 바다 그려줘 IMG_REQ","conversation_id":ci,"target":"gpt","mode":"chat","chat_image":True}, raw=True)
 lg = open(os.environ["FAKE_LOG"]).read(); a = get("/api/conversation?id="+ci)["items"][-1]
 ok("CHAT_IMAGE_NOTE" in lg and "workspace-write" in lg and a.get("gen_images") and a.get("chat_image")
-   and pathlib.Path(a["saved_files"][0]).is_file() and "images" in a["save_dir"], f"chat image generated, shown and saved {a.get('save_dir')}")
+   and pathlib.Path(a["saved_files"][0]).is_file() and a["save_dir"]==str(tmp/"image"), f"chat image generated, shown and saved to default folder {a.get('save_dir')}")
+ok("MARK:RATIO=16:9" in lg, "default ratio 16:9")
 first = a["gen_images"][0]
 open(os.environ["FAKE_LOG"],"w").close()
 post("/api/chat", {"question":"하늘을 더 어둡게 IMG_REQ","conversation_id":ci,"target":"gpt","mode":"chat","chat_image":True}, raw=True)
@@ -766,27 +768,37 @@ last = get("/api/conversation?id="+cp_)["items"][-1]
 ok(last["content"] and last.get("activity") and last["activity"][-1]["kind"]=="tool", "answer parsed from stream + activity saved")
 ev = post("/api/chat", {"question":"그냥 대화","conversation_id":cp_,"target":"claude"}, raw=True)
 ok(not [e for e in ev if e["type"]=="progress"] and get("/api/conversation?id="+cp_)["items"][-1]["content"], "plain chat stays non-streaming")
-# 🎨 이미지 모드: GPT 가 Codex 이미지 도구로 만들고, Council 이 저장 폴더·화면용으로 복사
-ci = post("/api/conversations")["id"]; outd = tmp/"imgout"; outd.mkdir()
-os.environ["CODEX_HOME"] = str(tmp/"nocodex"); open(os.environ["FAKE_LOG"],"w").close()
-ev = post("/api/chat", {"question":"노을 지는 바다","conversation_id":ci,"target":"gpt","mode":"image","workdir":str(outd),"image_ratio":"landscape","image_count":2}, raw=True)
+# 🎨 대화 중 이미지: 비율·장수, ⚙ 저장 폴더 설정, 다운로드, 예전 이미지 모드 요청 호환
+ci = post("/api/conversations")["id"]; outd = tmp/"imgout"
+os.environ["CODEX_HOME"] = str(tmp/"nocodex")
+st = get("/api/settings"); ok(st["image_dir"]==str(tmp/"image") and not st["image_dir_custom"], f"settings default image folder {st}")
+ok(post("/api/settings", {"image_dir":"relative/path"})[0]==400, "settings: image folder must be a full path")
+st = post("/api/settings", {"image_dir":str(outd)}); ok(st["image_dir_custom"] and outd.is_dir(), "settings: custom image folder created and saved")
+ok(json.loads((w.store.data_dir/"settings.json").read_text(encoding="utf-8"))["image_dir"]==str(outd.resolve()), "settings stored in data/settings.json")
+open(os.environ["FAKE_LOG"],"w").close()
+ev = post("/api/chat", {"question":"노을 지는 바다 IMG_REQ","conversation_id":ci,"target":"gpt","mode":"chat","chat_image":True,"image_ratio":"9:16","image_count":2}, raw=True)
 it = get("/api/conversation?id="+ci)["items"][-1]
 saved = sorted(outd.glob("council_*.png"))
-ok(len(saved)==2 and it.get("saved_files") and len(it["gen_images"])==2 and all(pathlib.Path(x).is_file() for x in it["gen_images"]), f"image saved to folder + gallery {saved} {it.get('saved_files')}")
-lg = open(os.environ["FAKE_LOG"]).read()
-ok("workspace-write" in lg, "codex called with write sandbox")
+ok(len(saved)==2 and len(it["gen_images"])==2 and it["save_dir"]==str(outd.resolve()) and it.get("image_ratio")=="9:16", f"saved to settings folder, 2 images {saved}")
+ok(it.get("gen_sizes")==["1×1","1×1"], f"pixel size recorded {it.get('gen_sizes')}")
+pr = open(os.environ["FAKE_LOG"]).read()
+ok("workspace-write" in pr and "MARK:RATIO=9:16" in pr, "codex called with write sandbox and chosen ratio")
+open(os.environ["FAKE_LOG"],"w").close()
+post("/api/chat", {"question":"포스터 하나","conversation_id":ci,"target":"gpt","mode":"chat","chat_image":True,"image_ratio":"ask"}, raw=True)
+ok("MARK:RATIO=ASK" in open(os.environ["FAKE_LOG"]).read(), "ratio 'ask': GPT asks before generating")
 rel = it["gen_images"][0].replace("\\","/").split("/attachments/"+ci+"/")[1]
-ok(urllib.request.urlopen(B+"/api/attachment?conversation_id="+ci+"&file="+urllib.parse.quote(rel)).status==200, "generated image served to UI")
-ev = post("/api/chat", {"question":"고양이 일러스트","conversation_id":ci,"target":"claude","mode":"image","workdir":str(outd)}, raw=True)
-its = get("/api/conversation?id="+ci)["items"]
-ok(its[-2]["model"]=="Claude" and its[-1]["model"]=="GPT" and its[-1].get("gen_images"), "claude writes prompt, GPT generates")
-r = post("/api/folder/open", {"conversation_id":ci,"index":len(its)-1}); ok(r["path"]==str(outd.resolve()) or r["path"]==str(outd), f"open folder returns saved dir {r}")
+r_ = urllib.request.urlopen(B+"/api/attachment?conversation_id="+ci+"&file="+urllib.parse.quote(rel)+"&download=1")
+ok(r_.status==200 and r_.headers["Content-Disposition"].startswith("attachment; filename*=UTF-8''council_"), "generated image downloadable")
+ok("Content-Disposition" not in urllib.request.urlopen(B+"/api/attachment?conversation_id="+ci+"&file="+urllib.parse.quote(rel)).headers, "normal view is inline")
+its = get("/api/conversation?id="+ci)["items"]; gi = max(k for k, x in enumerate(its) if x.get("save_dir"))
+r = post("/api/folder/open", {"conversation_id":ci,"index":gi}); ok(r["path"]==str(outd.resolve()) or r["path"]==str(outd), f"open folder returns saved dir {r}")
 ok(post("/api/folder/open", {"conversation_id":ci,"index":0})[0]==400, "folder open only for saved image dirs")
-ev = post("/api/chat", {"question":"빈 폴더 기본값","conversation_id":ci,"target":"gpt","mode":"image","workdir":""}, raw=True)
-ok("exports" in (get("/api/conversation?id="+ci)["items"][-1].get("save_dir") or ""), "empty folder -> exports/images/<date>")
-os.environ["FAKE_NO_IMAGE"]="1"
-ev = post("/api/chat", {"question":"실패","conversation_id":ci,"target":"gpt","mode":"image","workdir":str(outd)}, raw=True); del os.environ["FAKE_NO_IMAGE"]
-ok(any(e["type"]=="warning" and "이미지 파일" in e["text"] for e in ev), "no image -> warning")
+ok(post("/api/settings/open", {})["path"]==str(outd.resolve()), "settings: open image folder")
+# 예전 이미지 모드 요청 → 대화 + 이미지(GPT)로 처리
+ev = post("/api/chat", {"question":"고양이 일러스트","conversation_id":ci,"target":"claude","mode":"image","image_ratio":"landscape"}, raw=True)
+its = get("/api/conversation?id="+ci)["items"]
+ok(its[-1]["model"]=="GPT" and its[-2].get("mode")=="chat", "legacy image mode request -> chat + GPT image")
+st = post("/api/settings", {"image_dir":""}); ok(not st["image_dir_custom"] and st["image_dir"]==str(tmp/"image"), "settings: reset to default")
 # 긴 대화: 수동 압축 · 새 대화로 이어가기 (원문은 그대로, 새 대화는 요약을 맥락으로)
 cl = post("/api/conversations")["id"]
 for k in range(4): post("/api/chat", {"question":f"긴 대화 {k} " + "가"*50,"conversation_id":cl,"target":"claude"}, raw=True)

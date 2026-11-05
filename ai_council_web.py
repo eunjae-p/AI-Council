@@ -56,8 +56,9 @@ from council_state import CliState
 from council_mcp import McpStore, valid_tool
 import council_commands
 import council_image
+from council_settings import Settings
 
-VERSION = "0.25.0"
+VERSION = "0.26.0"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -73,6 +74,18 @@ store = ConversationStore()
 cli_state = CliState(store.data_dir)
 mcp_store = McpStore(store.data_dir)
 cmd_store = council_commands.CommandStore(store.data_dir)
+settings = Settings(store.data_dir)  # ⚙ 환경설정 (이미지 저장 폴더 등)
+
+
+def open_folder(folder: Path) -> bool:
+    """탐색기(Windows)·Finder(Mac)로 폴더를 연다. 그 밖의 OS 는 열지 않고 False."""
+    if os.name == "nt":
+        os.startfile(str(folder))  # noqa: S606
+        return True
+    if sys.platform == "darwin":
+        subprocess.Popen(["open", str(folder)])
+        return True
+    return False
 _busy: set[str] = set()
 _cli_updating: set[str] = set()  # 업데이트 중인 CLI (그동안 새 질문을 받지 않음)
 _tokens: dict[str, CancelToken] = {}  # 대화 ID → 진행 중인 작업의 중지 토큰
@@ -368,8 +381,10 @@ class Handler(BaseHTTPRequestHandler):
                     "setup": SETUP_NAME,
                 })
             elif parsed.path == "/api/attachment":
-                self.send_attachment(arg("conversation_id"), arg("file"))
+                self.send_attachment(arg("conversation_id"), arg("file"), download=arg("download") == "1")
                 return
+            elif parsed.path == "/api/settings":
+                self.send_json(settings.state())
             elif parsed.path == "/api/update/check":
                 self.send_json(council_update.check(VERSION, force=arg("refresh") == "1"))
             elif parsed.path == "/api/commands":
@@ -466,6 +481,10 @@ class Handler(BaseHTTPRequestHandler):
                     subprocess.Popen(["open", str(target)])  # Finder 로 열기
                     opened = True
                 self.send_json({"opened": opened, "path": str(target)})
+            elif path == "/api/settings":
+                if "image_dir" in body:
+                    settings.set_image_dir(str(body.get("image_dir") or ""))
+                self.send_json(settings.state())
             elif path == "/api/folder/open":
                 # 🎨 이미지 저장 폴더를 탐색기로 연다 (대화 기록에 저장된 폴더만)
                 items = store.load_messages(cid())
@@ -474,14 +493,10 @@ class Handler(BaseHTTPRequestHandler):
                 folder = Path(saved) if saved else None
                 if not folder or not folder.is_dir():
                     raise ValueError("저장 폴더를 찾을 수 없습니다.")
-                opened = False
-                if os.name == "nt":
-                    os.startfile(str(folder))  # noqa: S606
-                    opened = True
-                elif sys.platform == "darwin":
-                    subprocess.Popen(["open", str(folder)])
-                    opened = True
-                self.send_json({"opened": opened, "path": str(folder)})
+                self.send_json({"opened": open_folder(folder), "path": str(folder)})
+            elif path == "/api/settings/open":  # ⚙ 환경설정의 이미지 저장 폴더 열기
+                folder = settings.image_dir()
+                self.send_json({"opened": open_folder(folder), "path": str(folder)})
             elif path == "/api/edit/status":
                 self.send_json(council_edit.status(check_workdir(str(body.get("workdir", "")))))
             elif path == "/api/edit/checkpoint":
@@ -662,7 +677,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.send_json(info)
 
-    def send_attachment(self, conversation_id: str, rel: str) -> None:
+    def send_attachment(self, conversation_id: str, rel: str, download: bool = False) -> None:
         """대화에 첨부된 이미지·영상 프레임을 화면에 보여주기 위한 읽기 전용 엔드포인트."""
         try:
             base = council_attach.attach_dir(store.data_dir, store.check_id(conversation_id)).resolve()
@@ -680,6 +695,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(size))
         self.send_header("Cache-Control", "private, max-age=3600")
+        if download:  # ⬇ 다운로드: 파일 이름 그대로 저장 (한글 이름은 RFC 5987)
+            from urllib.parse import quote
+            self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{quote(path.name)}")
         self.end_headers()
         try:
             with path.open("rb") as fh:
@@ -710,22 +728,21 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("지원하지 않는 모드입니다.")
             if mode == "edit":
                 mode = "work"  # 예전 수정 모드 = 작업 모드
-            if mode == "image" and not str(body.get("workdir", "")).strip():
-                workdir = council_image.default_output_dir(store.data_dir)  # 저장 폴더를 비우면 exports/images/<날짜>
-            else:
-                workdir = check_workdir(str(body.get("workdir", ""))) if mode in FOLDER_MODES else None
+            legacy_image = mode == "image"
+            if legacy_image:  # 예전 🎨 이미지 모드 = 대화 모드 + 🎨 대화 중 이미지 (GPT)
+                mode, target = "chat", "gpt"
+            workdir = check_workdir(str(body.get("workdir", ""))) if mode in FOLDER_MODES else None
             # 🛠 작업 모드의 추가 폴더 (선택): 기준은 작업 폴더(실행 위치·HANDOFF·저장점), 추가 폴더는 --add-dir
             self.extra_dirs = check_extra_dirs(body.get("extra_dirs"), workdir) if mode == "work" else []
-            ratio = str(body.get("image_ratio", "square"))
-            self.image_opts = {"ratio": ratio if ratio in council_image.SIZES else "square",
+            self.image_opts = {"ratio": council_image.norm_ratio(body.get("image_ratio")),
                                "count": max(1, min(council_image.MAX_COUNT, int(body.get("image_count") or 1)))}
             files = council_attach.validate(body.get("attachments"), store.data_dir, conversation_id)
             web = bool(body.get("web"))
             self.saver = bool(body.get("saver"))  # 💰 절약 모드
-            # 🎨 대화 중 이미지 생성 (대화 모드 + GPT 대상일 때만): 저장 폴더는 이미지 모드와 같은 폴더(비우면 exports/images/날짜)
-            self.chat_image = bool(body.get("chat_image")) and mode == "chat" and target == "gpt"
-            idir = str(body.get("image_dir") or "").strip() if self.chat_image else ""
-            self.chat_image_dir = (check_workdir(idir) if idir else council_image.default_output_dir(store.data_dir)) if self.chat_image else None
+            # 🎨 대화 중 이미지 생성 (대화 모드 + GPT 대상일 때만)
+            # 저장 폴더는 ⚙ 환경설정 (기본 = Council 폴더의 image)
+            self.chat_image = (bool(body.get("chat_image")) or legacy_image) and mode == "chat" and target == "gpt"
+            self.chat_image_dir = settings.image_dir() if self.chat_image else None
             self.handoff = bool(body.get("handoff"))  # 작업 모드가 끝나면 작업 폴더 HANDOFF.md 에 인수인계 기록
             mcp = bool(body.get("mcp_claude", body.get("mcp")))  # Claude MCP (예전 이름: mcp)
             mcp_gpt = bool(body.get("mcp_gpt"))                     # GPT(Codex) MCP
@@ -1003,53 +1020,7 @@ class Handler(BaseHTTPRequestHandler):
                 t.join()
             return results
 
-        if mode == "image":
-            # 🎨 이미지: (Claude 를 고르면 Claude 가 프롬프트를 다듬고) GPT 가 Codex 이미지 생성 도구로 만든다 → 저장 폴더에 저장
-            opts = getattr(self, "image_opts", {"ratio": "square", "count": 1})
-            request = question
-            if target in ("claude", "both"):
-                self.emit("stage", step=1, text="Claude가 이미지 프롬프트를 쓰는 중")
-                try:
-                    text, item = ask("claude", base_prompt("claude") + council_image.PROMPT_WRITER_NOTE, None, "chat")
-                    answers["Claude"] = text
-                    self.emit("answer", item=item)
-                    request = council_image.extract_prompt(text) + f"\n\n(Original request from the user: {question})"
-                except Cancelled:
-                    stopped = True
-                except CliFailure as exc:
-                    errors["Claude"] = exc.details()
-                    self.emit("model_error", model="Claude", text=errors["Claude"])
-            if not token.cancelled:
-                self.emit("stage", step=2, text="GPT가 이미지를 생성하는 중 (장당 30초~1분)")
-                prefix = "council_" + time.strftime("%Y%m%d_%H%M%S")
-                watch = (council_image.codex_image_dir(), workdir)
-                before = council_image.snapshot(*watch)
-                refs = "Use the attached image(s) as reference: keep what the request asks to keep.\n" if images else ""
-                gen_prompt = (CHAT_PROMPT.format(me="GPT", context=context, question=question, attachments=attach_block)
-                              + council_image.GENERATE_NOTE.format(count=opts["count"], size=council_image.SIZES[opts["ratio"]],
-                                                                   ratio=opts["ratio"], refs=refs, prefix=prefix, request=request))
-
-                def collect(_answer: str) -> dict:
-                    made = council_image.new_images(before, council_image.snapshot(*watch))
-                    saved = council_image.collect(made, workdir, council_attach.attach_dir(store.data_dir, conversation_id)
-                                                  / "generated", prefix)
-                    self.image_result = saved
-                    return {"gen_images": [x["shown"] for x in saved] or None,
-                            "saved_files": [x["saved"] for x in saved] or None, "save_dir": str(workdir)}
-                try:
-                    self.image_result = []
-                    answer, item = ask("gpt", gen_prompt, None, "image", post=collect)
-                    answers["GPT"] = answer
-                    self.emit("answer", item=item)
-                    if not self.image_result:
-                        self.emit("warning", text="이미지 파일이 만들어지지 않았습니다. GPT가 이미지 생성 도구를 쓰지 못했을 수 있습니다 "
-                                                  "(ChatGPT Plus 이상 구독, Codex CLI 최신 버전 필요). 왼쪽 아래에서 Codex를 업데이트한 뒤 다시 시도하세요.")
-                except Cancelled:
-                    stopped = True
-                except CliFailure as exc:
-                    errors["GPT"] = exc.details()
-                    self.emit("model_error", model="GPT", text=errors["GPT"])
-        elif not discussion:
+        if not discussion:
             which = target
             label = models[which][0]
             self.emit("stage", step=1, text=f"{label}가 답변하는 중" + (" (웹 검색 사용)" if web else ""))
@@ -1090,9 +1061,13 @@ class Handler(BaseHTTPRequestHandler):
                         if not saved:
                             return {}
                         return {"gen_images": [x["shown"] for x in saved], "saved_files": [x["saved"] for x in saved],
-                                "save_dir": str(out_dir), "chat_image": True}
+                                "gen_sizes": [x["dims"] for x in saved] if any(x["dims"] for x in saved) else None,
+                                "save_dir": str(out_dir), "chat_image": True,
+                                "image_ratio": opts["ratio"]}
+                    opts = getattr(self, "image_opts", {"ratio": council_image.DEFAULT_RATIO, "count": 1})
                     self.emit("stage", step=1, text="GPT가 답변하는 중 (이미지를 요청하면 생성, 장당 30초~1분)")
-                    answer, item = ask(which, base_prompt(which) + council_image.CHAT_IMAGE_NOTE.format(refs=refs, prefix=prefix),
+                    answer, item = ask(which, base_prompt(which) + council_image.CHAT_IMAGE_NOTE.format(
+                                           refs=refs, prefix=prefix, count=opts["count"], ratio_rule=council_image.ratio_rule(opts["ratio"])),
                                        None, "image", post=collect_chat, wd=out_dir)
                 else:
                     answer, item = ask(which, base_prompt(which))

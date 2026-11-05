@@ -50,6 +50,8 @@ PAIRS: list[tuple[str, str]] = [
     ("작업 모드에서는 작업 폴더를 입력하세요.", "Enter a working folder for this mode."),
     ("작업 폴더를 찾을 수 없습니다: {x}", "Working folder not found: {x}"),
     ("추가 폴더를 찾을 수 없습니다: {x}", "Additional folder not found: {x}"),
+    ("이미지 저장 폴더는 전체 경로로 입력하세요 (예: D:\\images).", "Enter the full path of the image folder (e.g. D:\\images)."),
+    ("이미지 저장 폴더를 만들 수 없습니다: {x}", "Cannot create the image folder: {x}"),
     ("추가 폴더는 최대 {x}개까지 지정할 수 있습니다.", "You can add up to {x} additional folders."),
     ("{x} CLI가 추가 폴더(--add-dir)를 지원하지 않아 작업 폴더만 사용했습니다. 왼쪽 아래에서 CLI를 업데이트하세요.",
      "{x} CLI does not support additional folders (--add-dir), so only the working folder was used. Update the CLI at the bottom left."),

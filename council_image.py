@@ -1,11 +1,12 @@
-"""🎨 이미지 모드: GPT(Codex CLI)의 이미지 생성 도구로 이미지를 만들어 원하는 폴더에 저장한다.
+"""🎨 대화 중 이미지: GPT(Codex CLI)의 이미지 생성 도구로 이미지를 만들어 저장 폴더(⚙ 환경설정)에 저장한다.
 
 흐름
 - CLI 는 화면에 이미지를 띄울 수 없으므로, Codex 가 만든 이미지 파일을 Council 이 찾아 저장 폴더로 복사한다.
   · Codex 는 생성한 이미지를 CODEX_HOME(기본 ~/.codex)/generated_images 아래에 남긴다.
   · 모델이 저장 폴더에 직접 저장했으면 그 파일을 쓴다.
 - 채팅 화면에서 보이도록 같은 파일을 대화 첨부 폴더(data/attachments/<대화>/generated/)에도 복사한다.
-- Claude 에는 이미지 생성 모델이 없다. Claude 를 고르면 Claude 가 프롬프트를 다듬고 생성은 GPT 가 한다.
+- Claude 에는 이미지 생성 모델이 없다. 생성은 GPT 만, Claude 는 만든 이미지를 보고 의견을 줄 수 있다.
+- 비율: 기본 16:9, 또는 '생성 전에 묻기'. 장수 1~4.
 - 구독(ChatGPT Plus 이상) 사용량으로 생성하며 API 키는 쓰지 않는다.
 """
 from __future__ import annotations
@@ -16,7 +17,9 @@ import time
 from pathlib import Path
 
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
-SIZES = {"square": "1024x1024", "landscape": "1536x1024", "portrait": "1024x1536"}
+RATIOS = ("ask", "16:9", "1:1", "9:16", "4:3", "3:4")
+DEFAULT_RATIO = "16:9"
+LEGACY_RATIOS = {"square": "1:1", "landscape": "16:9", "portrait": "9:16"}  # 예전 이미지 모드 값
 MAX_COUNT = 4
 SCAN_LIMIT = 5000
 
@@ -26,12 +29,46 @@ def codex_image_dir() -> Path:
     return Path(home) / "generated_images"
 
 
-def default_output_dir(data_dir: Path) -> Path:
-    """저장 폴더를 비워 두면 Council 폴더의 exports/images/<날짜>"""
-    export = Path(os.environ.get("AI_COUNCIL_EXPORT_DIR") or (Path(data_dir).parent / "exports"))
-    path = export / "images" / time.strftime("%Y-%m-%d")
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+def norm_ratio(value: object) -> str:
+    v = LEGACY_RATIOS.get(str(value or ""), str(value or ""))
+    return v if v in RATIOS else DEFAULT_RATIO
+
+
+def pixel_size(path: Path) -> tuple[int, int] | None:
+    """PNG·JPEG·WebP 의 가로×세로 (표준 라이브러리만, 머리 부분만 읽음)."""
+    import struct
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(64 * 1024)
+    except OSError:
+        return None
+    if head[:8] == b"\x89PNG\r\n\x1a\n" and len(head) >= 24:
+        return struct.unpack(">II", head[16:24])
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP" and len(head) >= 30:
+        kind = head[12:16]
+        if kind == b"VP8X":
+            return 1 + int.from_bytes(head[24:27], "little"), 1 + int.from_bytes(head[27:30], "little")
+        if kind == b"VP8 ":
+            w, h = struct.unpack("<HH", head[26:30])
+            return w & 0x3FFF, h & 0x3FFF
+        if kind == b"VP8L":
+            b = int.from_bytes(head[21:25], "little")
+            return (b & 0x3FFF) + 1, ((b >> 14) & 0x3FFF) + 1
+    if head[:2] == b"\xff\xd8":
+        i = 2
+        while i + 9 < len(head):
+            if head[i] != 0xFF:
+                i += 1
+                continue
+            marker = head[i + 1]
+            if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+                h, w = struct.unpack(">HH", head[i + 5:i + 9])
+                return w, h
+            if marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7:
+                i += 2
+                continue
+            i += 2 + int.from_bytes(head[i + 2:i + 4], "big")
+    return None
 
 
 def snapshot(*folders: Path) -> dict[str, float]:
@@ -89,51 +126,32 @@ def collect(created: list[str], output_dir: Path, gallery_dir: Path, prefix: str
             shutil.copy2(src_path, saved)
         shown = _unique(gallery_dir / saved.name)
         shutil.copy2(saved, shown)
-        results.append({"saved": str(saved), "shown": str(shown), "name": saved.name, "size": saved.stat().st_size})
+        dims = pixel_size(saved)
+        results.append({"saved": str(saved), "shown": str(shown), "name": saved.name, "size": saved.stat().st_size,
+                        "dims": f"{dims[0]}×{dims[1]}" if dims else ""})
     return results
-
-
-PROMPT_WRITER_NOTE = """
-## Image prompt writing
-The user wants an image. You cannot generate images yourself; GPT will generate it with an image model from the
-prompt you write. Write the best possible image-generation prompt for the user's request (subject, composition,
-style, lighting, colors, mood, text to render if any, what to avoid). If reference images are attached, describe
-what to keep from them. Reply with a short note in the user's language, then the final prompt in English inside a
-fenced block ```prompt ... ```. Do not ask questions; make reasonable choices.
-"""
-
-GENERATE_NOTE = """
-## Image generation task
-Use your built-in image generation tool to create {count} image(s) for the request below. Do not draw images with
-code, SVG, HTML or canvas — use the image generation tool. Size: {size} ({ratio}).
-{refs}After generating, save each final image as a PNG file in the current working folder named {prefix}_1.png,
-{prefix}_2.png, … (copy it from where the tool saved it if needed). Then reply briefly in the user's language with
-what you made and the file names.
-
-### Request
-{request}
-"""
-
-
-def extract_prompt(text: str) -> str:
-    """Claude 답변에서 ```prompt 블록을 꺼낸다. 없으면 전체."""
-    body = text or ""
-    for fence in ("```prompt", "```Prompt", "```"):
-        i = body.find(fence)
-        if i >= 0:
-            j = body.find("```", i + len(fence))
-            if j > i:
-                return body[i + len(fence):j].strip()
-    return body.strip()
 
 
 CHAT_IMAGE_NOTE = """
 ## Images in this chat
 The user turned on image generation for this chat. When the user asks for an image (or a change to an image you made
-earlier), create it with your built-in image generation tool — do not draw with code, SVG, HTML or canvas. Choose a
-sensible size (square unless the request suggests otherwise) and make 1 image unless asked for more.
+earlier), create it with your built-in image generation tool — do not draw with code, SVG, HTML or canvas.
+{ratio_rule}
+Make {count} image(s) per request unless the user asks for a different number.
 {refs}After generating, save each final image as a PNG file in the current working folder named {prefix}_1.png,
 {prefix}_2.png, … (copy it from where the tool saved it if needed). The user sees the images in the chat automatically,
 so do not paste file paths; reply briefly in the user's language about what you made and offer one or two next tweaks.
 If the user is only talking (no image requested), answer normally without generating anything.
 """
+
+RATIO_FIXED = ("Aspect ratio for new images: {ratio} — use the image tool's size option for it, or the closest size the tool "
+               "supports. If the user asks for another ratio in the message, follow the user. Edits keep the image's ratio "
+               "unless the user asks to change it.")
+
+RATIO_ASK = ("Aspect ratio: ask first. Before generating a NEW image, if the user has not said which aspect ratio they want "
+             "(in this message or earlier in this chat), do not generate yet: ask in one short question which ratio they want "
+             "(e.g. 16:9, 1:1, 9:16, 4:3, 3:4) and stop. Edits of an image you made keep its ratio unless the user asks to change it.")
+
+
+def ratio_rule(ratio: str) -> str:
+    return RATIO_ASK if ratio == "ask" else RATIO_FIXED.format(ratio=ratio)

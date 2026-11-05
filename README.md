@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.25.0** (2026-11-04) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.26.0** (2026-11-04) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,10 +11,10 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.26.0](CHANGELOG.md#v0260-2026-11-04) | 11-04 | 🎨 **이미지 모드 → 대화 모드로 통합** — 비율(기본 16:9·묻기)·장수, ⚙ 환경설정(저장 폴더, 기본 `image`), ⬇ 다운로드 |
 | [V0.25.0](CHANGELOG.md#v0250-2026-11-04) | 11-04 | 🛠 작업 모드 **📁＋ 추가 폴더** — 작업 폴더 말고도 여러 폴더를 함께 읽고 고치기 |
 | [V0.24.1](CHANGELOG.md#v0241-2026-11-04) | 11-04 | 응답 중 **연결 끊김(network error)** 대처 — 서버 꺼짐/작업 계속 중 안내·자동 표시, 연결 유지 신호, Council 종료 방지 |
 | [V0.24.0](CHANGELOG.md#v0240-2026-11-04) | 11-04 | **🎨 대화 중 이미지** — 대화 모드에서 GPT 가 이미지를 만들어 보여 주고 이어서 고치기, 빈 빨간 띠 수정 |
-| [V0.23.0](CHANGELOG.md#v0230-2026-11-03) | 11-03 | 🔒 요청 출처 검사(Host·Origin·JSON) + 작업 모드 **⚠ 전체 권한 모드**(대화별, 기본 꺼짐) |
 | [V0.22.0](CHANGELOG.md#v0220-2026-11-03) | 11-03 | 대화 모드 답변·토론 결론에 **🖥 Claude 앱으로 가져가기** (질문·결론·맥락을 한 문서로 복사 + 파일 저장) |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
@@ -175,7 +175,7 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 - ⚠ **운영 중인 서비스 폴더는 복사본에서** 작업하고 확인 후 반영하는 것을 권장합니다.
 - **⚠ 전체 권한 모드** (작업 폴더 옆 **🔓 전체 권한 끔/켬**, 대화별, 기본 꺼짐): 켜면 이 대화의 Claude 작업 실행이 명령·파일 수정·**작업 폴더 밖 접근**(다른 드라이브, `Z:` 등)을
   묻지 않고 실행합니다 (Claude Code `bypassPermissions`). 켤 때 위험 안내·확인 창이 뜨고, 켜져 있는 동안 입력창 위에 빨간 띠가 보입니다.
-  - 적용: Claude 단독 작업, 승인·시간 제한 후 이어서, 토론의 구현·지적 반영 단계. 그대로: 대화·이미지 모드, 토론의 계획·검토, GPT 샌드박스.
+  - 적용: Claude 단독 작업, 승인·시간 제한 후 이어서, 토론의 구현·지적 반영 단계. 그대로: 대화 모드(🎨 이미지 포함), 토론의 계획·검토, GPT 샌드박스.
   - MCP 도구는 전체 권한에서도 **항상 허용한 것만** 바로 실행되고, 나머지는 지금처럼 승인 카드가 뜹니다.
   - 그 대화에만 적용 — 새 대화·새 대화로 이어가기·다른 PC 로 넘어가지 않습니다. 운영 서버 작업 전에는 백업을 먼저 하세요.
 
@@ -193,17 +193,17 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 - 같은 폴더를 Council 과 앱에서 **동시에** 작업시키지 마세요. Git 저장소면 넘기기 전에 ✅ 확정(커밋)해 두면 안전합니다.
 
 ### 🎨 대화 중 이미지 (대화 모드)
+예전 🎨 이미지 모드는 V0.26.0 에서 대화 모드로 합쳐졌습니다 (모드 버튼은 💬 대화 · 🛠 작업 두 개).
 - 대화 모드 입력창 위 **🎨 이미지 켬** → 대상이 GPT 로 바뀌고, 대화하다가 "○○ 그려줘"라고 하면 GPT 가 바로 만들어 **이 대화에 보여 줍니다**.
+- 켜면 옆에 **비율**(**16:9** 기본 · 1:1 · 9:16 · 4:3 · 3:4 · **묻기**)과 **장수**(1~4장)가 나타납니다.
+  **묻기**를 고르면 비율을 말하지 않은 새 이미지는 GPT 가 만들기 전에 어떤 비율로 할지 먼저 물어봅니다.
+  실제 크기는 이미지 모델이 지원하는 크기 중 가장 가까운 것으로 만들어지며, 이미지 아래에 픽셀 크기(예: `1536×1024`)가 표시됩니다.
 - 이어서 "하늘을 더 어둡게"처럼 말하면 **방금 만든 이미지를 보고 고칩니다**. Claude 로 바꿔 "방금 만든 이미지 어때?"라고 물으면 Claude 가 이미지를 보고 답합니다.
-- 저장 폴더는 🎨 이미지 모드와 같습니다 (비우면 `exports\images\날짜`). 이미지를 요청하지 않은 질문에는 평소처럼 답만 합니다.
-- 이미지 생성은 GPT(ChatGPT Plus 이상)만 됩니다. 장 수·비율을 정해서 여러 장 뽑을 때는 🎨 이미지 모드가 편합니다.
-
-### 🎨 이미지 모드
-- 입력창 위 **🎨 이미지** → 비율(1:1 · 가로 · 세로)·장수(1~4) → **저장 폴더** 입력(비우면 Council 폴더의 `exports\images\날짜`) → 만들 이미지를 설명하고 보내기.
-- **GPT**: Codex CLI의 이미지 생성 도구로 바로 생성. **Claude / 토론**: Claude가 이미지 프롬프트를 다듬고 → GPT가 생성 (Claude에는 이미지 생성 모델이 없음).
-- 결과는 저장 폴더에 `council_날짜_시각_1.png …`로 저장되고, 채팅 화면에도 표시됩니다 (**📁 폴더 열기**). 📎로 이미지를 첨부하면 참고 이미지로 씁니다.
-- ChatGPT **Plus 이상** 구독 필요 (구독 사용량, API 키 없음). 장당 30초~1분, 텍스트 질문보다 사용량이 큽니다.
-- 이미지가 안 만들어지면 경고가 뜹니다 → 왼쪽 아래에서 Codex CLI를 최신으로 업데이트한 뒤 다시 시도하세요.
+- **⬇ 다운로드**: 이미지마다 아래에 다운로드 버튼. **📁 폴더 열기**로 저장 폴더를 엽니다. 📎로 이미지를 첨부하면 참고 이미지로 씁니다.
+- **저장 폴더**: 기본은 Council 폴더의 `image` (예: `D:\AI-Council\image`, GitHub 제외). 왼쪽 위 **⚙ 환경설정**에서 바꿀 수 있습니다 (기본값으로 · 📁 폴더 열기).
+  파일 이름은 `council_날짜_시각_1.png …`.
+- 이미지를 요청하지 않은 질문에는 평소처럼 답만 합니다. 이미지 생성은 GPT(ChatGPT **Plus 이상**, 구독 사용량)만 되고, 장당 30초~1분 걸립니다.
+- 이미지가 안 만들어지면 왼쪽 아래에서 Codex CLI를 최신으로 업데이트한 뒤 다시 시도하세요.
 
 ### 토론 (Discussion) ⚠
 1. **1라운드 독립 의견** — GPT·Claude가 서로의 답을 보지 않고 동시에 답합니다.
@@ -301,9 +301,11 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 | `data/trash/` | 삭제한 대화 (복구 가능, 영구 삭제 시 첨부·토론 기록도 삭제) |
 | `data/cli_state.json` | 사용 횟수, 계정 기본 모델 이름 |
 | `data/mcp_settings.json`, `data/mcp_state.json` | MCP "항상 허용" 도구, 마지막으로 확인한 도구 목록 |
+| `data/settings.json` | ⚙ 환경설정 (이미지 저장 폴더) |
+| `image/` | 🎨 대화 중 이미지 기본 저장 폴더 (⚙ 환경설정에서 변경) |
 | `exports/` | Markdown 내보내기 |
 
-- `data/` 와 `exports/` 는 **GitHub에 올라가지 않습니다** (`.gitignore`).
+- `data/`, `exports/`, `image/` 는 **GitHub에 올라가지 않습니다** (`.gitignore`).
 - ⚠ CLI를 쓰더라도 모델은 클라우드에서 돌아갑니다. 질문·첨부는 **OpenAI·Anthropic 서버로 전송**되므로 반출이 제한된 자료는 회사 규정을 확인하세요.
 
 ## 💻 개발자용
@@ -327,7 +329,8 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 | `council_mcp.py` | MCP 도구 목록 확인, 항상 허용 목록 |
 | `council_commands.py` | 작업 모드 명령 허용 목록·승인 |
 | `council_edit.py` | 작업 모드 Git 저장점·변경 확인·확정/되돌리기 |
-| `council_image.py` | 🎨 이미지 생성 결과 저장 |
+| `council_image.py` | 🎨 대화 중 이미지: 생성 결과 저장·비율 안내·픽셀 크기 |
+| `council_settings.py` | ⚙ 환경설정 (`data/settings.json`: 이미지 저장 폴더) |
 | `council_i18n.py` | 서버 안내·오류 영어 번역 |
 | `council_versions.py` | CLI 버전 확인·버튼 업데이트·로그인 |
 | `council_update.py` | Council 자체 업데이트 (`Update.cmd` 가 화면 없이 실행) |
@@ -344,7 +347,7 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.25.0** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.26.0** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
@@ -368,8 +371,7 @@ It drives the official **Codex CLI (GPT)** and **Claude Code CLI (Claude)** sign
 - **Command allowlist + approval** — allowlisted commands (`mkdir`, `ls`, `git status` …) run right away; any other command is blocked and shown below the answer with **Allow once / Always allow / Don't allow**. Codex runs in its `workspace-write` sandbox (writes inside the folder only; internet allowed for installs).
 - **Optional Git checkpoint** — if the folder is a Git repository, review the changed files and diff afterwards, then **commit** or **revert** with one click.
 - **🌐 Web search** toggle — both models search the web and cite sources
-- **🎨 Images in chat** — in Chat mode turn on **🎨 Images**: ask GPT for an image mid-conversation and it appears right in the chat; follow-ups like "make the sky darker" edit the image it just made, and Claude can look at it and comment. Saved to the Image-mode folder.
-- **🎨 Image mode** — GPT generates real images (Codex image tool, ChatGPT Plus or higher) and saves PNGs to the folder you choose; shown in the chat too. With Claude/Discussion, Claude writes the prompt and GPT generates.
+- **🎨 Images in chat** — in Chat mode turn on **🎨 Images**: ask GPT for an image mid-conversation and it appears right in the chat; follow-ups like "make the sky darker" edit the image it just made, and Claude can look at it and comment. Pick the ratio (**16:9** by default, 1:1, 9:16, 4:3, 3:4, or **Ask** = GPT asks the ratio first) and count (1–4); each image has **⬇ Download** and its pixel size. Saved to the `image` folder inside the Council folder by default — change it in **⚙ Settings** (top left). The old 🎨 Image mode was merged into this in V0.26.0.
 - **🔌 Claude MCP / GPT MCP** — use connected tools such as Blender with either model. Claude: only tools you allow run automatically, others ask first. GPT: all tools registered in Codex are enabled when on.
 - **Collaboration** — Discussion + Work: both plan → the model you pick (**Run: Claude / Run: GPT**) executes → the other reviews the actual result read-only and it stops there; **🔧 Apply review** continues the executor's Claude session only when you click it (no automatic second pass). The steps are collapsed above, and the **🏁 Final result** (or **🏁 Final conclusion** in a chat discussion) comes last.
 - **Attachments** — text/JSON, images, video (12 frames via ffmpeg), ZIP (safely extracted: file list, text/code contents, up to 8 images; in work mode the extracted folder can be opened); drag & drop or Ctrl+V. ComfyUI workflow JSON is pre-summarized (nodes, models, color-coded required inputs)
@@ -423,7 +425,7 @@ Clone with `git` (not ZIP) so the built-in updater works.
 
 ## 🔒 Privacy
 
-- Everything is stored locally in `data/` (conversations, attachments, debate logs) and `exports/`. Both are git-ignored and never uploaded to GitHub.
+- Everything is stored locally in `data/` (conversations, attachments, debate logs, settings), `exports/` and `image/` (generated images). All are git-ignored and never uploaded to GitHub.
 - The models still run in the cloud: your questions and attachments are sent to **OpenAI / Anthropic** under your own account's terms.
 - AI Council never uses API keys and never falls back to an API when a CLI fails.
 

@@ -43,7 +43,7 @@
 - PC 폴더의 Git 기록은 Council 업데이트 버튼이 맞춰 줍니다(내용이 같으면 기록만 정리).
 
 ## 금지 / 주의
-- `data/`(대화 기록·첨부 원본), `exports/` 는 절대 커밋하지 않습니다 (`.gitignore` 유지).
+- `data/`(대화 기록·첨부 원본·환경설정), `exports/`, `image/`(생성 이미지) 는 절대 커밋하지 않습니다 (`.gitignore` 유지).
 - `git reset --hard`, 사용자 파일에 대한 `git checkout --` 등 되돌릴 수 없는 명령은 사용자 확인 없이 쓰지 않습니다.
 - 대화 원문 JSONL을 다시 쓰는 마이그레이션 금지 (추가만 함).
 - 작업 모드의 명령 실행은 기본적으로 **허용 목록(`council_commands.py`) + 화면 승인**으로 합니다. `Bash(*)` 같은 전체 허용 규칙은 쓰지 않습니다. 허용 규칙 접두어에 따옴표·`&`·`|` 등 특수문자 금지 (Windows cmd 경유 실행).
@@ -51,7 +51,7 @@
   - 대화별 켜기/끄기, **기본 꺼짐**. 켤 때 화면에서 위험 안내·확인을 거치고(서버는 `confirm: "full-access"` 없으면 거절), 켜져 있는 동안 빨간 띠와 답변 표시.
   - 상태는 그 대화의 정보(`data/`, Git 제외)에만 저장 — 새 대화·"새 대화로 이어가기"·다른 PC 로 넘어가지 않음. 서버는 요청 값이 아니라 저장된 대화 설정을 따른다.
   - 적용 대상은 **Claude 작업 실행(work)**뿐: Claude 단독 작업, 승인·시간 제한 후 이어서 실행, 토론의 구현·지적 반영 단계.
-    대화·이미지 모드, 토론의 계획·검토(read) 단계, GPT(Codex) 샌드박스는 바꾸지 않습니다 (`danger-full-access` 금지 유지).
+    대화 모드(🎨 대화 중 이미지 포함), 토론의 계획·검토(read) 단계, GPT(Codex) 샌드박스는 바꾸지 않습니다 (`danger-full-access` 금지 유지).
   - MCP 는 전체 권한에서도 '항상 허용'한 도구만 바로 실행: 나머지는 ask 규칙(`council_mcp.ask_rules`, `--settings`)으로 거절 → 승인 카드.
   - 꺼져 있을 때의 acceptEdits·허용 목록·승인 카드는 그대로. 모든 요청은 Host·Origin·Content-Type 검사(`check_request`)를 통과해야 합니다.
 - `.cmd` 파일 **내용**은 영문(ASCII)만 씁니다 (cmd.exe 가 시스템 코드 페이지로 읽어 한글이 깨짐). 한글은 파일 이름에만.
@@ -76,7 +76,8 @@
 | `council_mcp.py` | MCP 도구 목록·"항상 허용" 목록 (`data/mcp_*.json`). 전체 권한 모드에서도 허용하지 않은 MCP 도구는 ask 규칙으로 승인 카드 (`ask_rules`) |
 | `council_edit.py` | 작업 모드의 선택 기능: Git 저장점·변경 내용(diff)·확정(커밋)/되돌리기 |
 | `council_commands.py` | 작업 모드 명령 허용 목록(`data/cmd_settings.json`)·명령 → 허용 접두어 변환. Claude 는 Read·Edit·Write·Bash + acceptEdits + 허용 규칙 (그 대화에서 전체 권한 모드를 켠 경우만 bypassPermissions), Codex 는 workspace-write + 인터넷 허용 (`danger-full-access`·Codex 승인 우회 옵션은 쓰지 않음) |
-| `council_image.py` | 🎨 이미지 모드: Codex 이미지 생성 결과(`~/.codex/generated_images`)를 찾아 저장 폴더·화면용으로 복사, 프롬프트 |
+| `council_image.py` | 🎨 대화 중 이미지 (V0.26.0 에서 이미지 모드를 대화 모드로 통합): Codex 이미지 생성 결과(`~/.codex/generated_images`)를 찾아 저장 폴더·화면용으로 복사, 비율(기본 16:9·묻기)·장수 안내, 픽셀 크기. 예전 `mode: "image"` 요청은 대화 + 이미지(GPT)로 처리 |
+| `council_settings.py` | ⚙ 환경설정 (`data/settings.json`): 이미지 저장 폴더 (기본 = Council 폴더의 `image/`, Git 제외) |
 | `council_i18n.py` | 서버 안내·오류 문구 영어 번역표(`PAIRS`), `X-Lang: en` 요청이면 응답 직전에 번역 (기록 원문은 그대로) |
 | `council_versions.py` | Codex/Claude CLI 버전·로그인 상태 |
 | `council_update.py` | Council 자체 업데이트 (GitHub → PC, 안전 검사, 재시작) · `Update.cmd` 가 화면 없이 실행 |
