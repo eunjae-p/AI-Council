@@ -179,25 +179,16 @@ if ($claude) {
     }
 }
 
-# 바탕화면 바로가기 ------------------------------------------------------
-try {
-    $desktop = [Environment]::GetFolderPath('Desktop')
-    $shell = New-Object -ComObject WScript.Shell
-    $lnk = $shell.CreateShortcut((Join-Path $desktop 'AI Council.lnk'))
-    # 창 없이 실행: pythonw 를 직접 실행 (없으면 .cmd 를 최소화 창으로)
-    $pyw = Find-Command 'pythonw'
-    if ($pyw) {
-        $lnk.TargetPath = $pyw.Source
-        $lnk.Arguments = '"' + (Join-Path $Root 'ai_council_web.py') + '"'
-        $lnk.IconLocation = $pyw.Source + ',0'
+# 실행 바로가기 (바탕화면 + 시작 메뉴, Council 아이콘, 앱 창으로 열림) ---------
+$py = Find-Command 'python'
+if ($py) {
+    $out = & $py.Source (Join-Path $Root 'council_app.py') --shortcuts 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Write-Ok (T "바탕화면과 시작 메뉴에 'AI Council' 바로가기를 만들었습니다. 작업 표시줄에 두려면 시작 메뉴에서 오른쪽 클릭 → '작업 표시줄에 고정'." "Created 'AI Council' shortcuts on the Desktop and in the Start menu. To keep it on the taskbar, right-click it in the Start menu → 'Pin to taskbar'.")
     } else {
-        $lnk.TargetPath = Join-Path $Root 'AI-Council_Web.cmd'
-        $lnk.WindowStyle = 7
+        Write-Warn ((T "바로가기를 만들지 못했습니다: " "Could not create the shortcut: ") + (($out | Out-String).Trim()))
     }
-    $lnk.WorkingDirectory = $Root
-    $lnk.Save()
-    Write-Ok (T "바탕화면에 'AI Council' 바로가기를 만들었습니다." "Created an 'AI Council' shortcut on your Desktop.")
-} catch { Write-Warn ((T "바로가기를 만들지 못했습니다: " "Could not create the shortcut: ") + $_.Exception.Message) }
+} else { Write-Warn (T "Python 이 없어 바로가기를 만들지 못했습니다." "Python not found, so no shortcut was created.") }
 
 # 요약 ---------------------------------------------------------------
 Write-Host ""

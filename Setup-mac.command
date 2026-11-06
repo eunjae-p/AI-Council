@@ -119,6 +119,10 @@ cat > "$LAUNCH" <<LAUNCHER
 exec "$ROOT/AI-Council.command"
 LAUNCHER
 chmod +x "$LAUNCH" && ok "$(t "바탕화면에 'AI Council' 실행 아이콘을 만들었습니다." "Created an 'AI Council' launcher on your Desktop.")"
+# 앱 아이콘: ~/Applications/AI Council.app (Dock 에 끌어다 놓기, 앱 창으로 열림)
+if [ -n "${PY:-}" ] && "$PY" "$ROOT/council_app.py" --shortcuts >/dev/null 2>&1; then
+  ok "$(t "응용 프로그램 폴더에 'AI Council' 앱을 만들었습니다. Dock 에 끌어다 놓으면 아이콘으로 켤 수 있습니다." "Created the 'AI Council' app in ~/Applications. Drag it to the Dock to launch it from there.")"
+fi
 
 echo
 echo "============ $(t '설치 결과' 'Setup results') ============"

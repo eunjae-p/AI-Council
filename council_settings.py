@@ -1,11 +1,13 @@
 """⚙ 환경설정 (이 PC 에만 저장: data/settings.json, Git 제외).
 
 - image_dir: 🎨 대화 중 이미지 저장 폴더. 비우면 기본값 = Council 폴더의 image (예: D:\\AI-Council\\image)
+- window_mode: 🖥 Council 을 열 때 app(앱 창, 기본) | browser(브라우저 탭)
 """
 from __future__ import annotations
 
 import json
 import os
+import sys
 import threading
 from pathlib import Path
 
@@ -42,10 +44,23 @@ class Settings:
         path.mkdir(parents=True, exist_ok=True)
         return path
 
+    def window_mode(self) -> str:
+        return "browser" if self._load().get("window_mode") == "browser" else "app"
+
+    def set_window_mode(self, value: str) -> None:
+        with _lock:
+            data = self._load()
+            data["window_mode"] = "browser" if value == "browser" else "app"
+            self._save(data)
+
     def state(self) -> dict:
+        from council_app import find_app_browser
         custom = str(self._load().get("image_dir") or "").strip()
+        exe = find_app_browser()
         return {"image_dir": custom or str(default_image_dir()), "image_dir_default": str(default_image_dir()),
-                "image_dir_custom": bool(custom)}
+                "image_dir_custom": bool(custom), "window_mode": self.window_mode(),
+                "app_browser": Path(exe).stem if exe else "",
+                "shortcuts_supported": os.name == "nt" or sys.platform == "darwin"}
 
     def set_image_dir(self, value: str) -> dict:
         text = str(value or "").strip().strip('"').strip()

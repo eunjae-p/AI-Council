@@ -14,7 +14,6 @@ import subprocess
 import sys
 import threading
 import time
-import webbrowser
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
@@ -57,8 +56,9 @@ from council_mcp import McpStore, valid_tool
 import council_commands
 import council_image
 from council_settings import Settings
+import council_app
 
-VERSION = "0.26.0"
+VERSION = "0.27.0"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -371,6 +371,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 self.wfile.write(content)
+            elif parsed.path in ("/favicon.png", "/favicon.ico"):  # 앱 창·탭 아이콘
+                content = council_app.ICON_PNG.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "image/png")
+                self.send_header("Content-Length", str(len(content)))
+                self.send_header("Cache-Control", "max-age=86400")
+                self.end_headers()
+                self.wfile.write(content)
             elif parsed.path == "/api/status":
                 self.send_json({
                     "ok": True, "version": VERSION, "model": ACCOUNT_DEFAULT,
@@ -484,7 +492,15 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/api/settings":
                 if "image_dir" in body:
                     settings.set_image_dir(str(body.get("image_dir") or ""))
+                if "window_mode" in body:
+                    settings.set_window_mode(str(body.get("window_mode") or ""))
                 self.send_json(settings.state())
+            elif path == "/api/shortcuts":  # 🖥 실행 바로가기 만들기 (Windows: 바탕화면·시작 메뉴, Mac: 응용 프로그램)
+                try:
+                    made = council_app.install_shortcuts()
+                except RuntimeError as exc:
+                    raise ValueError(f"바로가기를 만들지 못했습니다: {exc}") from None
+                self.send_json({"paths": made})
             elif path == "/api/folder/open":
                 # 🎨 이미지 저장 폴더를 탐색기로 연다 (대화 기록에 저장된 폴더만)
                 items = store.load_messages(cid())
@@ -1225,8 +1241,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def open_browser() -> None:
+    """앱 창(Edge/Chrome --app, 기본) 또는 브라우저 탭 — ⚙ 환경설정의 '창 열기'."""
     time.sleep(0.8)
-    webbrowser.open(f"http://{HOST}:{PORT}")
+    council_app.open_window(f"http://{HOST}:{PORT}", settings.window_mode())
 
 
 def stop_old_server() -> str:
@@ -1335,9 +1352,9 @@ def main() -> None:
     try:
         run(log)
     except AlreadyRunning:
-        print("이미 실행 중 → 브라우저만 엽니다.", flush=True)
+        print("이미 실행 중 → 창만 엽니다.", flush=True)
         if not os.environ.get("AI_COUNCIL_NO_BROWSER"):
-            webbrowser.open(f"http://{HOST}:{PORT}")
+            council_app.open_window(f"http://{HOST}:{PORT}", settings.window_mode())
     except SystemExit as exc:
         if log is not None and exc.code not in (None, 0):
             show_error(str(exc.code))

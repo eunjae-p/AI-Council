@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.26.0** (2026-11-04) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.27.0** (2026-11-06) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.27.0](CHANGELOG.md#v0270-2026-11-06) | 11-06 | 🖥 **앱처럼 실행** — 아이콘을 누르면 주소창 없는 **앱 창**으로 열림, 바탕화면·시작 메뉴(Mac: 응용 프로그램) 바로가기 |
 | [V0.26.0](CHANGELOG.md#v0260-2026-11-04) | 11-04 | 🎨 **이미지 모드 → 대화 모드로 통합** — 비율(기본 16:9·묻기)·장수, ⚙ 환경설정(저장 폴더, 기본 `image`), ⬇ 다운로드 |
 | [V0.25.0](CHANGELOG.md#v0250-2026-11-04) | 11-04 | 🛠 작업 모드 **📁＋ 추가 폴더** — 작업 폴더 말고도 여러 폴더를 함께 읽고 고치기 |
 | [V0.24.1](CHANGELOG.md#v0241-2026-11-04) | 11-04 | 응답 중 **연결 끊김(network error)** 대처 — 서버 꺼짐/작업 계속 중 안내·자동 표시, 연결 유지 신호, Council 종료 방지 |
 | [V0.24.0](CHANGELOG.md#v0240-2026-11-04) | 11-04 | **🎨 대화 중 이미지** — 대화 모드에서 GPT 가 이미지를 만들어 보여 주고 이어서 고치기, 빈 빨간 띠 수정 |
-| [V0.22.0](CHANGELOG.md#v0220-2026-11-03) | 11-03 | 대화 모드 답변·토론 결론에 **🖥 Claude 앱으로 가져가기** (질문·결론·맥락을 한 문서로 복사 + 파일 저장) |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -119,8 +119,12 @@ Council에는 별도 로그인 화면이 없습니다. 그 PC의 Codex CLI와 Cl
 
 ## ▶ 실행 · 종료
 
-- **실행**: 바탕화면 **AI Council** (또는 폴더의 **`1_AI Council 실행 (Windows).cmd`**). 창 없이 백그라운드로 켜지고 브라우저에서 `http://127.0.0.1:8765` 가 열립니다. 이 PC에서만 접속됩니다.
-- **종료**: 화면 왼쪽 아래 **앱 종료**. 브라우저 탭만 닫으면 서버는 계속 켜져 있고, 바로가기를 다시 누르면 화면만 다시 열립니다.
+- **실행**: 바탕화면·시작 메뉴의 **AI Council** 아이콘 (Mac: 응용 프로그램의 **AI Council** 앱, 또는 폴더의 **`1_AI Council 실행`**).
+  서버가 창 없이 백그라운드로 켜지고, Council 이 **앱 창**(주소창·탭 없는 독립 창, Edge/Chrome 사용)으로 열립니다. 이미 켜져 있으면 창만 다시 엽니다. 이 PC에서만 접속됩니다.
+  - **아이콘 만들기**: 처음 설치 때 자동으로 만들어집니다. 이미 설치한 PC 는 **⚙ 환경설정 → 바로가기 만들기**.
+  - **작업 표시줄에 고정**(Windows): 시작 메뉴의 AI Council 을 오른쪽 클릭 → **작업 표시줄에 고정**. Mac 은 응용 프로그램의 AI Council 을 Dock 에 끌어다 놓기.
+  - 앱 창 대신 브라우저 탭으로 열고 싶으면 **⚙ 환경설정 → 창 열기: 브라우저 탭**. Edge·Chrome 이 없으면 자동으로 브라우저 탭으로 엽니다.
+- **종료**: 화면 왼쪽 아래 **앱 종료**. 앱 창(또는 탭)만 닫으면 서버는 계속 켜져 있고, 아이콘을 다시 누르면 화면만 다시 열립니다.
 - **문제 확인용 실행**: `AI-Council_Debug.cmd` (콘솔 창에 서버 메시지 표시). 백그라운드 기록은 `data/logs/server.log`.
 
 ## 🔄 Council 업데이트
@@ -301,7 +305,7 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 | `data/trash/` | 삭제한 대화 (복구 가능, 영구 삭제 시 첨부·토론 기록도 삭제) |
 | `data/cli_state.json` | 사용 횟수, 계정 기본 모델 이름 |
 | `data/mcp_settings.json`, `data/mcp_state.json` | MCP "항상 허용" 도구, 마지막으로 확인한 도구 목록 |
-| `data/settings.json` | ⚙ 환경설정 (이미지 저장 폴더) |
+| `data/settings.json` | ⚙ 환경설정 (이미지 저장 폴더, 창 열기 방식) |
 | `image/` | 🎨 대화 중 이미지 기본 저장 폴더 (⚙ 환경설정에서 변경) |
 | `exports/` | Markdown 내보내기 |
 
@@ -330,7 +334,8 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 | `council_commands.py` | 작업 모드 명령 허용 목록·승인 |
 | `council_edit.py` | 작업 모드 Git 저장점·변경 확인·확정/되돌리기 |
 | `council_image.py` | 🎨 대화 중 이미지: 생성 결과 저장·비율 안내·픽셀 크기 |
-| `council_settings.py` | ⚙ 환경설정 (`data/settings.json`: 이미지 저장 폴더) |
+| `council_settings.py` | ⚙ 환경설정 (`data/settings.json`: 이미지 저장 폴더, 창 열기 방식) |
+| `council_app.py` | 🖥 앱 창(Edge/Chrome `--app`)으로 열기, 실행 바로가기 만들기 (Windows 바탕화면·시작 메뉴, Mac `~/Applications/AI Council.app`) · 아이콘 `assets/` |
 | `council_i18n.py` | 서버 안내·오류 영어 번역 |
 | `council_versions.py` | CLI 버전 확인·버튼 업데이트·로그인 |
 | `council_update.py` | Council 자체 업데이트 (`Update.cmd` 가 화면 없이 실행) |
@@ -347,7 +352,7 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.26.0** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.27.0** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
@@ -407,9 +412,9 @@ Clone with `git` (not ZIP) so the built-in updater works.
 
 ## ▶ Run · update · stop
 
-- **Run**: desktop shortcut (or `1_AI Council 실행 (Windows).cmd` / `(Mac).command` — "start"; same as `AI-Council_Web.cmd` / `AI-Council.command`). The server starts in the background and opens `http://127.0.0.1:8765` — reachable from this computer only.
+- **Run**: the **AI Council** icon on the Desktop / in the Start menu (Mac: the **AI Council** app in ~/Applications; or `1_AI Council 실행 (Windows).cmd` / `(Mac).command`). The server starts in the background and Council opens in an **app window** (no address bar or tabs, via Edge/Chrome) at `http://127.0.0.1:8765` — reachable from this computer only. Existing installs: **⚙ Settings → Create shortcut**. Pin it from the Start menu (right-click → Pin to taskbar) or drag the Mac app to the Dock. Prefer a tab? **⚙ Settings → Open Council in: Browser tab**.
 - **Update**: when a new version exists, a yellow **⬆ Update** appears at the bottom left → **Update now**. Or run `2_업데이트 (Windows).cmd` / `(Mac).command` ("update"; same as `Update.cmd` / `Update-mac.command`). Your conversations are kept.
-- **Stop**: **Quit app** at the bottom left. Closing the browser tab leaves the server running.
+- **Stop**: **Quit app** at the bottom left. Closing the window (or tab) leaves the server running.
 
 ## 🧭 Using it
 

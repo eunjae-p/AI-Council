@@ -799,6 +799,24 @@ ev = post("/api/chat", {"question":"고양이 일러스트","conversation_id":ci
 its = get("/api/conversation?id="+ci)["items"]
 ok(its[-1]["model"]=="GPT" and its[-2].get("mode")=="chat", "legacy image mode request -> chat + GPT image")
 st = post("/api/settings", {"image_dir":""}); ok(not st["image_dir_custom"] and st["image_dir"]==str(tmp/"image"), "settings: reset to default")
+# 🖥 앱 창: 창 열기 방식 설정, 아이콘, 바로가기, 앱 창 실행 인수
+ok(get("/api/settings")["window_mode"]=="app", "window mode defaults to app window")
+ok(post("/api/settings", {"window_mode":"browser"})["window_mode"]=="browser" and w.settings.window_mode()=="browser", "window mode: browser tab saved")
+ok(post("/api/settings", {"window_mode":"weird"})["window_mode"]=="app", "window mode: unknown -> app")
+fav = urllib.request.urlopen(B+"/favicon.png"); ok(fav.headers["Content-Type"]=="image/png" and fav.read()[:8]==b"\x89PNG\r\n\x1a\n", "favicon served")
+if os.name != "nt" and sys.platform != "darwin":
+    r = post("/api/shortcuts", {}); ok(r[0]==400 and "Windows" in r[1].get("error",""), "shortcuts: unsupported OS message")
+import council_app
+calls = []
+_popen, _wb, _find = council_app.subprocess.Popen, council_app.webbrowser.open, council_app.find_app_browser
+council_app.subprocess.Popen = lambda args, **kw: calls.append(("popen", args))
+council_app.webbrowser.open = lambda url: calls.append(("tab", url))
+council_app.find_app_browser = lambda: "/fake/msedge"
+ok(council_app.open_window("http://127.0.0.1:8765", "app")=="app" and calls[-1]==("popen", ["/fake/msedge", "--app=http://127.0.0.1:8765", "--window-size=1400,900"]), "app window: --app launch")
+ok(council_app.open_window("http://127.0.0.1:8765", "browser")=="browser" and calls[-1]==("tab", "http://127.0.0.1:8765"), "browser mode: normal tab")
+council_app.find_app_browser = lambda: None
+ok(council_app.open_window("http://x", "app")=="browser", "no Edge/Chrome -> browser tab")
+council_app.subprocess.Popen, council_app.webbrowser.open, council_app.find_app_browser = _popen, _wb, _find
 # 긴 대화: 수동 압축 · 새 대화로 이어가기 (원문은 그대로, 새 대화는 요약을 맥락으로)
 cl = post("/api/conversations")["id"]
 for k in range(4): post("/api/chat", {"question":f"긴 대화 {k} " + "가"*50,"conversation_id":cl,"target":"claude"}, raw=True)

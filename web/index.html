@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI Council</title>
+<link rel="icon" type="image/png" href="/favicon.png">
 <script>/* 화면 테마: 깜빡임 없이 처음부터 적용 (dark | light | system) */
 try { const t = localStorage.getItem('councilTheme') || 'dark';
   document.documentElement.dataset.theme = t === 'system' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : t;
@@ -62,7 +63,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--gpt);box-shadow:0 0 0
 .item .md .work{color:var(--warn)}
 .item .md .edit{color:var(--gpt)} .item .md .image{color:var(--council)}
 .media.gen img{height:220px;max-width:100%} .saved{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-top:6px;font-size:12.5px;color:var(--muted)} .saved code{font:12px ui-monospace,Consolas,monospace}
-.settings{display:flex;flex-direction:column;gap:8px;min-width:min(520px,80vw)} .settings label{font-weight:600} .settings input{padding:8px 10px;font-size:13.5px} .settings .hint{font-size:12.5px;color:var(--muted)} .modal .settings .row{display:flex;gap:8px;justify-content:flex-start;margin-top:0}
+.settings{display:flex;flex-direction:column;gap:8px;min-width:min(520px,80vw)} .settings label{font-weight:600} .settings input{padding:8px 10px;font-size:13.5px} .settings .seg{align-self:flex-start} .settings .seg button.on{background:var(--sel);color:var(--text)} .settings .hint{font-size:12.5px;color:var(--muted)} .modal .settings .row{display:flex;gap:8px;justify-content:flex-start;margin-top:0}
 .media.gen figure.genfig{margin:0;display:flex;flex-direction:column;gap:4px} .media.gen figcaption{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)} .media.gen .dlbtn{text-decoration:none;padding:3px 8px;border:1px solid var(--line2);border-radius:8px;color:var(--text)} .media.gen .dlbtn:hover{border-color:var(--info-line)}
 #imgOpts select{background:transparent;border:0;color:var(--muted);font-size:13px;padding:2px 4px}
 .item .ft{display:flex;align-items:center;gap:6px} .item .ft .s{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -336,7 +337,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.26.0'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.27.0'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -1695,9 +1696,31 @@ async function openSettings() {
   const def = el('button', 'ghost small', T('기본값으로', 'Default')); def.onclick = () => { inp.value = st.image_dir_default; };
   const op = el('button', 'ghost small', T('📁 폴더 열기', '📁 Open folder')); op.onclick = async () => { try { const r = await api('/api/settings/open', {}); if (!r.opened) { copyText(r.path); toast(T('폴더 경로를 복사했습니다: ', 'Folder path copied: ') + r.path); } } catch (e) { toast(e.message, true); } };
   row.append(def, op); body.append(lab, inp, hint, row);
+  // 🖥 창 열기 방식 · 실행 바로가기
+  const lab2 = el('label', '', T('🖥 창 열기', '🖥 Open Council in'));
+  const seg = el('div', 'seg'); let wm = st.window_mode || 'app';
+  [['app', T('앱 창', 'App window')], ['browser', T('브라우저 탭', 'Browser tab')]].forEach(([v, t]) => {
+    const b = el('button', v === wm ? 'on' : '', t); b.type = 'button';
+    b.onclick = () => { wm = v; seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); };
+    seg.append(b); });
+  const appName = ({ msedge:'Edge', chrome:'Chrome', 'microsoft-edge':'Edge', 'google-chrome':'Chrome', 'google-chrome-stable':'Chrome', 'Microsoft Edge':'Edge', 'Google Chrome':'Chrome' })[st.app_browser] || st.app_browser;
+  const hint2 = el('div', 'hint', st.app_browser
+    ? T(`앱 창: 주소창·탭 없는 Council 전용 창으로 엽니다 (${appName} 사용). 창을 닫아도 서버는 계속 실행되고, 종료는 왼쪽 아래 '앱 종료'.`,
+        `App window: a dedicated window without address bar or tabs (uses ${appName}). Closing it keeps the server running; quit with 'Quit app' at the bottom left.`)
+    : T('Edge·Chrome 을 찾지 못해 앱 창 대신 기본 브라우저 탭으로 엽니다.', 'Edge/Chrome not found, so Council opens in a normal browser tab.'));
+  body.append(lab2, seg, hint2);
+  if (st.shortcuts_supported) {
+    const lab3 = el('label', '', T('🖥 실행 바로가기', '🖥 Launcher shortcut'));
+    const mk = el('button', 'ghost small', T('바로가기 만들기', 'Create shortcut'));
+    const hint3 = el('div', 'hint', S.platform === 'mac'
+      ? T("'응용 프로그램' 폴더에 AI Council 앱을 만듭니다. Dock 에 끌어다 놓으면 아이콘으로 켤 수 있습니다.", "Creates the AI Council app in your Applications folder. Drag it to the Dock to launch it from there.")
+      : T("바탕화면과 시작 메뉴에 AI Council 아이콘을 만듭니다. 작업 표시줄에 두려면 시작 메뉴의 AI Council 을 오른쪽 클릭 → '작업 표시줄에 고정'.", "Creates AI Council icons on the Desktop and in the Start menu. To keep it on the taskbar, right-click AI Council in the Start menu → 'Pin to taskbar'."));
+    mk.onclick = async () => { mk.disabled = true; try { const r = await api('/api/shortcuts', {}); toast(T('바로가기를 만들었습니다: ', 'Shortcut created: ') + r.paths.join(' · ')); } catch (e) { toast(e.message, true); } mk.disabled = false; };
+    const row3 = el('div', 'row'); row3.append(mk); body.append(lab3, row3, hint3);
+  }
   const mm = modal(T('⚙ 환경설정', '⚙ Settings'), body, [{ label:T('닫기', 'Close') }, { label:T('저장', 'Save'), primary:true, keep:true, onClick: async () => {
     const v = inp.value.trim();
-    try { const r = await api('/api/settings', { image_dir: v === st.image_dir_default ? '' : v }); toast(T('저장했습니다: ', 'Saved: ') + r.image_dir); mm.remove(); }
+    try { const r = await api('/api/settings', { image_dir: v === st.image_dir_default ? '' : v, window_mode: wm }); toast(T('저장했습니다: ', 'Saved: ') + r.image_dir); mm.remove(); }
     catch (e) { toast(e.message, true); } } }]);
   setTimeout(() => inp.focus());
 }
