@@ -58,7 +58,7 @@ import council_image
 from council_settings import Settings
 import council_app
 
-VERSION = "0.27.0"
+VERSION = "0.27.1"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -1293,9 +1293,15 @@ class CouncilServer(ThreadingHTTPServer):
         super().server_bind()
 
 
+# aicouncil:// 링크로 켜짐 (council_app.register_link): 창을 열지 않고, 이미 켜진 Council 은 버전이 달라도 끄지 않는다
+FROM_LINK = any(a == "--from-link" or a.lower().startswith(council_app.LINK_SCHEME + ":") for a in sys.argv[1:])
+
+
 def bind_server() -> ThreadingHTTPServer:
     # 먼저 이미 켜진 Council 이 있는지 확인한다 (포트를 열 수 있는지로만 판단하면 Windows 에서 겹쳐 뜰 수 있음)
     running = running_version()
+    if running and FROM_LINK:
+        raise AlreadyRunning()
     if running == VERSION and not os.environ.get("AI_COUNCIL_NO_BROWSER"):
         raise AlreadyRunning()  # 같은 버전이 켜져 있으면 새로 띄우지 않고 브라우저만 연다
     if running:
@@ -1310,6 +1316,8 @@ def bind_server() -> ThreadingHTTPServer:
         try:
             return CouncilServer((HOST, PORT), Handler)
         except OSError:
+            if FROM_LINK and running_version():
+                raise AlreadyRunning()  # 링크를 여러 번 눌러 거의 동시에 켜진 경우: 먼저 뜬 쪽을 그대로 씀
             time.sleep(0.5)
     raise SystemExit(
         f"포트 {PORT}을(를) 사용할 수 없습니다. 다른 프로그램이 사용 중이거나 이전 서버가 응답하지 않습니다.\n"
@@ -1348,12 +1356,16 @@ def show_error(message: str) -> None:
 
 
 def main() -> None:
+    if FROM_LINK:
+        os.environ["AI_COUNCIL_NO_BROWSER"] = "1"  # 화면은 링크를 연 쪽(FlowX 등)이 보여 준다
     log = use_log_file()
     try:
         run(log)
     except AlreadyRunning:
-        print("이미 실행 중 → 창만 엽니다.", flush=True)
-        if not os.environ.get("AI_COUNCIL_NO_BROWSER"):
+        if os.environ.get("AI_COUNCIL_NO_BROWSER"):
+            print("이미 실행 중 → 그대로 둡니다.", flush=True)
+        else:
+            print("이미 실행 중 → 창만 엽니다.", flush=True)
             council_app.open_window(f"http://{HOST}:{PORT}", settings.window_mode())
     except SystemExit as exc:
         if log is not None and exc.code not in (None, 0):
@@ -1368,11 +1380,21 @@ def main() -> None:
         raise SystemExit(1)
 
 
+def _register_link() -> None:
+    """aicouncil:// 등록(Windows). 실패해도 Council 실행에는 영향 없음."""
+    try:
+        if council_app.register_link():
+            print("aicouncil:// 링크 등록 확인", flush=True)
+    except Exception as exc:
+        print(f"aicouncil:// 링크 등록 실패: {exc}", flush=True)
+
+
 def run(log: Path | None) -> None:
     if not INDEX.exists():
         raise SystemExit(f"Missing UI file: {INDEX}")
     server = bind_server()
     print(f"AI Council V{VERSION}: http://{HOST}:{PORT}  (종료: 화면의 '앱 종료' 또는 Ctrl+C)")
+    threading.Thread(target=_register_link, daemon=True).start()
     if not os.environ.get("AI_COUNCIL_NO_BROWSER"):  # 업데이트 후 재시작 때는 브라우저를 새로 열지 않음
         threading.Thread(target=open_browser, daemon=True).start()
     try:

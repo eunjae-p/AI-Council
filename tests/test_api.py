@@ -817,6 +817,9 @@ ok(council_app.open_window("http://127.0.0.1:8765", "browser")=="browser" and ca
 council_app.find_app_browser = lambda: None
 ok(council_app.open_window("http://x", "app")=="browser", "no Edge/Chrome -> browser tab")
 council_app.subprocess.Popen, council_app.webbrowser.open, council_app.find_app_browser = _popen, _wb, _find
+if os.name != "nt":
+    ok(council_app.register_link() is False, "aicouncil:// link registration is Windows only")
+ok(w.FROM_LINK is False, "normal start is not a link start")
 # 긴 대화: 수동 압축 · 새 대화로 이어가기 (원문은 그대로, 새 대화는 요약을 맥락으로)
 cl = post("/api/conversations")["id"]
 for k in range(4): post("/api/chat", {"question":f"긴 대화 {k} " + "가"*50,"conversation_id":cl,"target":"claude"}, raw=True)

@@ -78,7 +78,7 @@
 | `council_commands.py` | 작업 모드 명령 허용 목록(`data/cmd_settings.json`)·명령 → 허용 접두어 변환. Claude 는 Read·Edit·Write·Bash + acceptEdits + 허용 규칙 (그 대화에서 전체 권한 모드를 켠 경우만 bypassPermissions), Codex 는 workspace-write + 인터넷 허용 (`danger-full-access`·Codex 승인 우회 옵션은 쓰지 않음) |
 | `council_image.py` | 🎨 대화 중 이미지 (V0.26.0 에서 이미지 모드를 대화 모드로 통합): Codex 이미지 생성 결과(`~/.codex/generated_images`)를 찾아 저장 폴더·화면용으로 복사, 비율(기본 16:9·묻기)·장수 안내, 픽셀 크기. 예전 `mode: "image"` 요청은 대화 + 이미지(GPT)로 처리 |
 | `council_settings.py` | ⚙ 환경설정 (`data/settings.json`): 이미지 저장 폴더 (기본 = Council 폴더의 `image/`, Git 제외), 창 열기 방식(app/browser) |
-| `council_app.py` | 🖥 앱 창: Council 을 Edge/Chrome `--app` 창으로 열기(없으면 기본 브라우저 탭), 실행 바로가기 만들기 (Windows 바탕화면·시작 메뉴 `.lnk` = pythonw + `assets/council.ico`, Mac `~/Applications/AI Council.app`). 창을 닫아도 서버는 계속 실행 |
+| `council_app.py` | 🖥 앱 창: Council 을 Edge/Chrome `--app` 창으로 열기(없으면 기본 브라우저 탭), 실행 바로가기 만들기 (Windows 바탕화면·시작 메뉴 `.lnk` = pythonw + `assets/council.ico`, Mac `~/Applications/AI Council.app`). 창을 닫아도 서버는 계속 실행. Windows 는 켜질 때마다 `aicouncil://` 링크를 HKCU 에 등록(`register_link`) → `--from-link` 로 켜지면 창을 열지 않고, 이미 켜진 Council 은 끄지 않음 (FlowX '다시 연결'용) |
 | `council_i18n.py` | 서버 안내·오류 문구 영어 번역표(`PAIRS`), `X-Lang: en` 요청이면 응답 직전에 번역 (기록 원문은 그대로) |
 | `council_versions.py` | Codex/Claude CLI 버전·로그인 상태 |
 | `council_update.py` | Council 자체 업데이트 (GitHub → PC, 안전 검사, 재시작) · `Update.cmd` 가 화면 없이 실행 |

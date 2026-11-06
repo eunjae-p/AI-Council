@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.27.0** (2026-11-06) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.27.1** (2026-11-06) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.27.1](CHANGELOG.md#v0271-2026-11-06) | 11-06 | 🔗 `aicouncil://` 링크로 켜기 (Windows) — FlowX 의 AI Council 메뉴 '다시 연결'이 Council 을 창 없이 켬 |
 | [V0.27.0](CHANGELOG.md#v0270-2026-11-06) | 11-06 | 🖥 **앱처럼 실행** — 아이콘을 누르면 주소창 없는 **앱 창**으로 열림, 바탕화면·시작 메뉴(Mac: 응용 프로그램) 바로가기 |
 | [V0.26.0](CHANGELOG.md#v0260-2026-11-04) | 11-04 | 🎨 **이미지 모드 → 대화 모드로 통합** — 비율(기본 16:9·묻기)·장수, ⚙ 환경설정(저장 폴더, 기본 `image`), ⬇ 다운로드 |
 | [V0.25.0](CHANGELOG.md#v0250-2026-11-04) | 11-04 | 🛠 작업 모드 **📁＋ 추가 폴더** — 작업 폴더 말고도 여러 폴더를 함께 읽고 고치기 |
 | [V0.24.1](CHANGELOG.md#v0241-2026-11-04) | 11-04 | 응답 중 **연결 끊김(network error)** 대처 — 서버 꺼짐/작업 계속 중 안내·자동 표시, 연결 유지 신호, Council 종료 방지 |
-| [V0.24.0](CHANGELOG.md#v0240-2026-11-04) | 11-04 | **🎨 대화 중 이미지** — 대화 모드에서 GPT 가 이미지를 만들어 보여 주고 이어서 고치기, 빈 빨간 띠 수정 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -124,6 +124,9 @@ Council에는 별도 로그인 화면이 없습니다. 그 PC의 Codex CLI와 Cl
   - **아이콘 만들기**: 처음 설치 때 자동으로 만들어집니다. 이미 설치한 PC 는 **⚙ 환경설정 → 바로가기 만들기**.
   - **작업 표시줄에 고정**(Windows): 시작 메뉴의 AI Council 을 오른쪽 클릭 → **작업 표시줄에 고정**. Mac 은 응용 프로그램의 AI Council 을 Dock 에 끌어다 놓기.
   - 앱 창 대신 브라우저 탭으로 열고 싶으면 **⚙ 환경설정 → 창 열기: 브라우저 탭**. Edge·Chrome 이 없으면 자동으로 브라우저 탭으로 엽니다.
+  - **`aicouncil://` 링크** (Windows): Council 이 켜질 때마다 이 주소를 자기 위치로 등록합니다(현재 사용자 레지스트리, 관리자 권한 불필요).
+    웹 페이지(예: FlowX 의 AI Council 메뉴 → **다시 연결**)가 이 주소를 열면 Council 이 **창 없이** 켜지고, 이미 켜져 있으면 아무것도 하지 않습니다(작업 중인 Council 을 끄지 않음).
+    처음 한 번 브라우저가 "AI Council 열기"를 물으면 **항상 허용** 체크 후 열기. Mac 은 아직 지원하지 않습니다.
 - **종료**: 화면 왼쪽 아래 **앱 종료**. 앱 창(또는 탭)만 닫으면 서버는 계속 켜져 있고, 아이콘을 다시 누르면 화면만 다시 열립니다.
 - **문제 확인용 실행**: `AI-Council_Debug.cmd` (콘솔 창에 서버 메시지 표시). 백그라운드 기록은 `data/logs/server.log`.
 
@@ -352,7 +355,7 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.27.0** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.27.1** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
@@ -412,7 +415,7 @@ Clone with `git` (not ZIP) so the built-in updater works.
 
 ## ▶ Run · update · stop
 
-- **Run**: the **AI Council** icon on the Desktop / in the Start menu (Mac: the **AI Council** app in ~/Applications; or `1_AI Council 실행 (Windows).cmd` / `(Mac).command`). The server starts in the background and Council opens in an **app window** (no address bar or tabs, via Edge/Chrome) at `http://127.0.0.1:8765` — reachable from this computer only. Existing installs: **⚙ Settings → Create shortcut**. Pin it from the Start menu (right-click → Pin to taskbar) or drag the Mac app to the Dock. Prefer a tab? **⚙ Settings → Open Council in: Browser tab**.
+- **Run**: the **AI Council** icon on the Desktop / in the Start menu (Mac: the **AI Council** app in ~/Applications; or `1_AI Council 실행 (Windows).cmd` / `(Mac).command`). The server starts in the background and Council opens in an **app window** (no address bar or tabs, via Edge/Chrome) at `http://127.0.0.1:8765` — reachable from this computer only. Existing installs: **⚙ Settings → Create shortcut**. Pin it from the Start menu (right-click → Pin to taskbar) or drag the Mac app to the Dock. Prefer a tab? **⚙ Settings → Open Council in: Browser tab**. On Windows, Council also registers the `aicouncil://` link each time it starts: a web page (e.g. FlowX's AI Council menu → Reconnect) can open it to start Council without a window; if Council is already running, nothing happens. Not on Mac yet.
 - **Update**: when a new version exists, a yellow **⬆ Update** appears at the bottom left → **Update now**. Or run `2_업데이트 (Windows).cmd` / `(Mac).command` ("update"; same as `Update.cmd` / `Update-mac.command`). Your conversations are kept.
 - **Stop**: **Quit app** at the bottom left. Closing the window (or tab) leaves the server running.
 

@@ -121,6 +121,37 @@ def install_shortcuts() -> list[str]:
     raise RuntimeError("바로가기 만들기는 Windows·Mac 에서만 지원합니다.")
 
 
+LINK_SCHEME = "aicouncil"
+
+
+def register_link() -> bool:
+    """aicouncil:// 주소를 이 Council 로 연결한다. 웹 페이지(예: FlowX 의 'AI Council' 메뉴 → '다시 연결')가
+    이 주소를 열면 Windows 가 Council 을 창 없이 켠다(ai_council_web.py --from-link).
+    Windows 현재 사용자 레지스트리(HKCU, 관리자 권한 불필요)이며, 이미 같은 값이면 쓰지 않는다.
+    폴더를 옮겨도 다음 실행 때 새 경로로 고쳐진다. Windows 외에는 아무것도 하지 않는다(False)."""
+    if os.name != "nt":
+        return False
+    import winreg
+    target, _ = _pythonw()
+    cmd = f'"{target}" "{ROOT / "ai_council_web.py"}" --from-link "%1"'
+    key = rf"Software\Classes\{LINK_SCHEME}"
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key + r"\shell\open\command") as k:
+            if winreg.QueryValueEx(k, "")[0] == cmd:
+                return True
+    except OSError:
+        pass
+    try:
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key) as k:
+            winreg.SetValueEx(k, "", 0, winreg.REG_SZ, "URL:AI Council")
+            winreg.SetValueEx(k, "URL Protocol", 0, winreg.REG_SZ, "")
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key + r"\shell\open\command") as k:
+            winreg.SetValueEx(k, "", 0, winreg.REG_SZ, cmd)
+        return True
+    except OSError:
+        return False
+
+
 def _install_mac_app() -> Path:
     app = Path.home() / "Applications" / f"{APP_NAME}.app"
     macos = app / "Contents" / "MacOS"
