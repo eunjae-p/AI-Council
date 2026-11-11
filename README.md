@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.27.1** (2026-11-06) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.27.2** (2026-11-11) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.27.2](CHANGELOG.md#v0272-2026-11-11) | 11-11 | 🎨 대화 중 이미지가 **같은 이미지를 두 장씩** 저장·표시하던 문제 수정 |
 | [V0.27.1](CHANGELOG.md#v0271-2026-11-06) | 11-06 | 🔗 `aicouncil://` 링크로 켜기 (Windows) — FlowX 의 AI Council 메뉴 '다시 연결'이 Council 을 창 없이 켬 |
 | [V0.27.0](CHANGELOG.md#v0270-2026-11-06) | 11-06 | 🖥 **앱처럼 실행** — 아이콘을 누르면 주소창 없는 **앱 창**으로 열림, 바탕화면·시작 메뉴(Mac: 응용 프로그램) 바로가기 |
 | [V0.26.0](CHANGELOG.md#v0260-2026-11-04) | 11-04 | 🎨 **이미지 모드 → 대화 모드로 통합** — 비율(기본 16:9·묻기)·장수, ⚙ 환경설정(저장 폴더, 기본 `image`), ⬇ 다운로드 |
 | [V0.25.0](CHANGELOG.md#v0250-2026-11-04) | 11-04 | 🛠 작업 모드 **📁＋ 추가 폴더** — 작업 폴더 말고도 여러 폴더를 함께 읽고 고치기 |
-| [V0.24.1](CHANGELOG.md#v0241-2026-11-04) | 11-04 | 응답 중 **연결 끊김(network error)** 대처 — 서버 꺼짐/작업 계속 중 안내·자동 표시, 연결 유지 신호, Council 종료 방지 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -355,7 +355,7 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.27.1** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.27.2** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 

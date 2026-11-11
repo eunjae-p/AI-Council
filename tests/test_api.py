@@ -780,6 +780,12 @@ ev = post("/api/chat", {"question":"노을 지는 바다 IMG_REQ","conversation_
 it = get("/api/conversation?id="+ci)["items"][-1]
 saved = sorted(outd.glob("council_*.png"))
 ok(len(saved)==2 and len(it["gen_images"])==2 and it["save_dir"]==str(outd.resolve()) and it.get("image_ratio")=="9:16", f"saved to settings folder, 2 images {saved}")
+ok([x.name.rsplit("_",1)[-1] for x in saved]==["1.png","2.png"], f"no duplicates: GPT's copy and the tool original counted once {saved}")
+os.environ["FAKE_NO_COPY"] = "1"  # GPT 가 저장 폴더에 복사하지 않은 경우 → 도구 원본을 가져옴
+for x in outd.glob("*.png"): x.unlink()
+post("/api/chat", {"question":"한 장 더 IMG_REQ","conversation_id":ci,"target":"gpt","mode":"chat","chat_image":True}, raw=True)
+saved1 = sorted(outd.glob("council_*.png")); del os.environ["FAKE_NO_COPY"]
+ok(len(saved1)==1 and saved1[0].name.endswith("_1.png") and len(get("/api/conversation?id="+ci)["items"][-1]["gen_images"])==1, f"tool original copied when GPT did not save {saved1}")
 ok(it.get("gen_sizes")==["1×1","1×1"], f"pixel size recorded {it.get('gen_sizes')}")
 pr = open(os.environ["FAKE_LOG"]).read()
 ok("workspace-write" in pr and "MARK:RATIO=9:16" in pr, "codex called with write sandbox and chosen ratio")

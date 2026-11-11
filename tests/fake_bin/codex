@@ -25,7 +25,12 @@ if ("Image generation task" in p or ("Images in this chat" in p and "IMG_REQ" in
     d = pathlib.Path(os.environ.get("CODEX_HOME", os.path.expanduser("~/.codex"))) / "generated_images" / "sess1"
     d.mkdir(parents=True, exist_ok=True)
     n = 2 if ("create 2 image" in p or "Make 2 image" in p) else 1
-    for i in range(n): (d / ("ig_%d_%d.png" % (time.time_ns(), i))).write_bytes(png)
+    m = re.search(r"named (\S+)_1\.png", p)  # 진짜 GPT 처럼 작업 폴더에 prefix_N.png 로도 복사 (FAKE_NO_COPY 면 생략)
+    for i in range(n):
+        data = png + b"img%d" % i  # 장마다 내용이 다른 이미지
+        (d / ("ig_%d_%d.png" % (time.time_ns(), i))).write_bytes(data)
+        if m and not os.environ.get("FAKE_NO_COPY"):
+            pathlib.Path("%s_%d.png" % (m.group(1), i + 1)).write_bytes(data)
 if os.environ.get("FAKE_LOG"):
     open(os.environ["FAKE_LOG"],"a").write("=====CODEX "+repr(sys.argv[1:])+("\nMARK:CHAT_IMAGE_NOTE" if "Images in this chat" in p else "")
                                             +("\nMARK:CHAT_IMAGE_REFS" if "latest images in this chat" in p else "")

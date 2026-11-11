@@ -107,22 +107,50 @@ def _unique(path: Path) -> Path:
         n += 1
 
 
-def collect(created: list[str], output_dir: Path, gallery_dir: Path, prefix: str) -> list[dict]:
-    """새로 생긴 이미지를 저장 폴더로 모으고(이미 저장 폴더에 있으면 그대로), 화면 표시용 사본을 만든다."""
+def _digest(path: Path) -> str:
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def collect(created: list[str], output_dir: Path, gallery_dir: Path, prefix: str, expected: int = 0) -> list[dict]:
+    """새로 생긴 이미지를 저장 폴더로 모으고(이미 저장 폴더에 있으면 그대로), 화면 표시용 사본을 만든다.
+
+    GPT 는 이미지 도구 결과(~/.codex/generated_images)를 저장 폴더에 prefix_N.png 로 복사하므로 같은 이미지가 두 곳에 생긴다.
+    → 저장 폴더 쪽을 먼저 쓰고, 내용이 같은 이미지는 한 번만. 저장 폴더에 이미 요청 장수(expected)만큼 있으면
+      도구 원본 폴더 쪽은 (다시 인코딩돼 내용이 조금 달라도) 쓰지 않는다."""
     output_dir.mkdir(parents=True, exist_ok=True)
     gallery_dir.mkdir(parents=True, exist_ok=True)
     out_root = output_dir.resolve()
-    results = []
-    for i, src in enumerate(created, start=1):
+
+    def in_output(p: str) -> bool:
+        try:
+            return out_root in Path(p).resolve().parents
+        except OSError:
+            return False
+
+    ordered = [p for p in created if in_output(p)]
+    from_tool = [p for p in created if not in_output(p)]
+    if expected and len(ordered) >= expected:
+        from_tool = []
+    results, seen, n = [], set(), 0
+    for src in ordered + from_tool:
         src_path = Path(src)
         try:
-            in_output = out_root in src_path.resolve().parents
+            digest = _digest(src_path)
         except OSError:
-            in_output = False
-        if in_output:
+            continue
+        if digest in seen:
+            continue
+        seen.add(digest)
+        n += 1
+        if in_output(src):
             saved = src_path
         else:
-            saved = _unique(output_dir / f"{prefix}_{i}{src_path.suffix.lower() or '.png'}")
+            saved = _unique(output_dir / f"{prefix}_{n}{src_path.suffix.lower() or '.png'}")
             shutil.copy2(src_path, saved)
         shown = _unique(gallery_dir / saved.name)
         shutil.copy2(saved, shown)

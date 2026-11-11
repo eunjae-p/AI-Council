@@ -58,7 +58,7 @@ import council_image
 from council_settings import Settings
 import council_app
 
-VERSION = "0.27.1"
+VERSION = "0.27.2"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -1073,7 +1073,7 @@ class Handler(BaseHTTPRequestHandler):
                     def collect_chat(_answer: str) -> dict:
                         made = council_image.new_images(before, council_image.snapshot(*watch))
                         saved = council_image.collect(made, out_dir, council_attach.attach_dir(store.data_dir, conversation_id)
-                                                      / "generated", prefix)
+                                                      / "generated", prefix, expected=opts["count"])
                         if not saved:
                             return {}
                         return {"gen_images": [x["shown"] for x in saved], "saved_files": [x["saved"] for x in saved],
