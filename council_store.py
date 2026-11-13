@@ -50,10 +50,10 @@ _ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 _WIN_BAD = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 _WIN_RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 
-ROUND_NAMES = {1: "1차 의견", 2: "교차 검토"}
-SPEAKER_LABELS = {"user": "사용자", "GPT": "GPT", "Claude": "Claude", "Council": "Council 최종 결론", "오류": "오류 기록"}
-ROUND_NAMES_EN = {1: "Round 1 opinion", 2: "Cross review", 3: "Implementation"}
-SPEAKER_LABELS_EN = {"user": "User", "GPT": "GPT", "Claude": "Claude", "Council": "Council conclusion", "오류": "Error log",
+ROUND_NAMES = {1: "1차 의견", 2: "교차 검토", 6: "마지막 반박", 7: "쟁점 정리"}
+SPEAKER_LABELS = {"user": "사용자", "GPT": "GPT", "Claude": "Claude", "Council": "Council 최종 결론", "오류": "오류 기록", "Moderator": "사회자"}
+ROUND_NAMES_EN = {1: "Round 1 opinion", 2: "Cross review", 3: "Implementation", 6: "Final rebuttal", 7: "Disputed points"}
+SPEAKER_LABELS_EN = {"user": "User", "GPT": "GPT", "Claude": "Claude", "Council": "Council conclusion", "오류": "Error log", "Moderator": "Moderator",
                      "변경": "File changes"}
 
 

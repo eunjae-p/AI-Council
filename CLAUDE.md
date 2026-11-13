@@ -71,7 +71,7 @@
 | `council_handoff.py` | 작업 폴더 `HANDOFF.md` 인수인계 기록(작업 모드가 끝나면 덧붙임), `CLAUDE.md` 준비(틀·인수인계 규칙) |
 | `council_media.py` | 이미지 정보, 영상 프레임 추출 (ffmpeg/ffprobe) |
 | `council_workflow.py` | ComfyUI 워크플로우 JSON 요약 (색상 등급 규칙 포함) |
-| `council_debate.py` | 토론 모드 프롬프트(1라운드·2라운드·결론), 토론 기록 폴더 (`data/debates/`) |
+| `council_debate.py` | 토론 모드 (V0.28.0): 질문 분류(작성 → 초안·검토 / 토론), 1라운드·쟁점 정리(사회자, 합의면 바로 결론)·쟁점만 2라운드·미결이면 3라운드, 결론 카드(JSON → `card`, Markdown), 사회자 교대·이름 가림, 토론 기록 폴더 (`data/debates/`) |
 | `council_state.py` | 계정 기본 모델(실제 사용 모델) 기억, 날짜별 사용 횟수 (`data/cli_state.json`) |
 | `council_mcp.py` | MCP 도구 목록·"항상 허용" 목록 (`data/mcp_*.json`). 전체 권한 모드에서도 허용하지 않은 MCP 도구는 ask 규칙으로 승인 카드 (`ask_rules`) |
 | `council_edit.py` | 작업 모드의 선택 기능: Git 저장점·변경 내용(diff)·확정(커밋)/되돌리기 |

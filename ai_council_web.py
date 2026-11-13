@@ -58,7 +58,7 @@ import council_image
 from council_settings import Settings
 import council_app
 
-VERSION = "0.27.2"
+VERSION = "0.28.0"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -1102,54 +1102,157 @@ class Handler(BaseHTTPRequestHandler):
             debate.write_log(folder, "질문.md", "질문", question + (f"\n\n(첨부: {', '.join(a['name'] for a in attached)})" if attached else "")
                              + ("\n\n- 웹 검색: 사용" if web else "") + (f"\n- 작업 폴더: {workdir}" if workdir else "")
                              + "".join(f"\n- 추가 폴더: {d}" for d in getattr(self, "extra_dirs", None) or []))
-            # 1라운드: 서로의 답을 보지 않고 동시에
-            self.emit("stage", step=1, text="1라운드 · GPT와 Claude가 각자 독립적으로 답변하는 중" + (" (웹 검색 사용)" if web else ""))
-            first = run_parallel({w: base_prompt(w, "plan") + debate.ROUND1_NOTE for w in ("gpt", "claude")}, 1,
-                                 lambda w, a, it: debate.write_log(folder, f"1_{models[w][0]}.md", f"{models[w][0]} · 1차 의견", a, it.get("cli_model", "")))
-            for w, a in first.items():
-                answers[models[w][0]] = a
-            stopped = token.cancelled
-            second: dict[str, str] = {}
-            if len(first) == 2 and not token.cancelled and not saver:
-                # 2라운드: 상대의 1라운드 답을 읽고 교차 검토 (💰 절약 모드에서는 건너뜀)
-                self.emit("stage", step=2, text="2라운드 · 서로의 답변을 읽고 교차 검토하는 중")
-                jobs = {}
-                for w, other in (("gpt", "claude"), ("claude", "gpt")):
-                    jobs[w] = base_prompt(w, "plan") + debate.ROUND2_NOTE.format(
-                        other=models[other][0], mine=first[w], theirs=first[other])
-                second = run_parallel(jobs, 2,
-                                      lambda w, a, it: debate.write_log(folder, f"2_{models[w][0]}_검토.md", f"{models[w][0]} · 교차 검토", a, it.get("cli_model", "")))
-                stopped = token.cancelled
-            if len(first) == 2 and not token.cancelled:
-                self.emit("stage", step=3, text="토론 내용을 최종 결론으로 정리하는 중")
+            # ---- V0.28.0 토론: 작성 요청이면 초안 → 검토, 아니면 1라운드 → 쟁점 정리 → (쟁점만) 2·3라운드 → 결론 카드 ----
+            turn_no = sum(1 for x in previous if x.get("role") == "user")
+            moderator = "claude" if turn_no % 2 == 0 else "gpt"  # 사회자는 질문마다 교대
+            other_of = {"gpt": "claude", "claude": "gpt"}
+            attach_summary = ("\n\n".join(f"### {a['name']}\n{a['summary']}" for a in attached if a["summary"])
+                              or ("Attached: " + ", ".join(a["name"] for a in attached) if attached else "(none)"))
+            short_context = None
+
+            def mod_context() -> str:
+                nonlocal short_context
+                if short_context is None:  # 사회자는 두 답만 비교하면 되므로 맥락은 짧게
+                    short_context = build_context(store, conversation_id, COMPACT_BUDGET_CHARS, sticky=False)[0]
+                return short_context
+
+            def moderate(prompt: str, stage: str, step_no: int) -> str:
+                """사회자 호출. 이름을 가린(모델 A/B) 결과를 그대로 돌려준다 — 실제 이름으로는 호출한 쪽이 unblind. 실패하면 CliFailure."""
+                self.emit("stage", step=step_no, text=stage)
+                info: dict = {}
+                if saver and moderator == "gpt":
+                    info["codex_effort"] = "low"
+                label, name, model = models[moderator]
+                text = call_model(moderator, model, prompt, "chat", timeout=timeout, cancel=token, info=info)
+                tk = token_usage(moderator, info)
+                cli_state.record(moderator, model, actual_model(moderator, info), tk.get("total", 0))
+                mod_tokens.append(tk)
+                return text
+
+            mod_tokens: list[dict] = []
+
+            def save_conclusion(card: dict | None, raw: str, extra: dict | None = None, by: str = "") -> None:
+                label, name, model = models[moderator]
+                text = debate.card_markdown(card, self.lang) if card else raw
+                total = sum(t.get("total", 0) for t in mod_tokens)
+                item = store.append_message(
+                    conversation_id, "assistant", text, "Council",
+                    cli_model=by or (f"중립 정리(이름 가림) · {label}" + (f" · {model}" if model_label(name, model) else "")),
+                    debate_dir=str(folder.relative_to(store.data_dir)) if folder else None,
+                    tokens={"total": total} if total else None, card=card, **(extra or {}))
+                answers["Council"] = text
+                debate.write_log(folder, "결론.md", "Council 최종 결론", text)
+                self.emit("answer", item=item)
+
+            flow = debate.classify(question) if mode == "chat" else "discuss"
+            if flow == "write":
+                # ✍️ 작성 요청: 한 모델이 초안 → 다른 모델이 고친 최종본 (방향이 틀렸다고 하면 그때만 토론)
+                drafter = other_of[moderator]
+                reviewer = moderator
+                d_label, r_label = models[drafter][0], models[reviewer][0]
+                self.emit("stage", step=1, text=f"✍️ 작성 요청 · {d_label}가 초안을 쓰는 중")
                 try:
-                    synth_info: dict = {}
-                    # 정리 단계는 두 모델의 답만 비교하면 되므로 맥락은 짧게 (1·2라운드에서 이미 전체 맥락을 봄)
-                    synth_context = build_context(store, conversation_id, COMPACT_BUDGET_CHARS, sticky=False)[0]
-                    synth_prompt, mapping = debate.blind_synth_prompt(
-                        random.SystemRandom(), context=synth_context, question=question, gpt1=first["gpt"], claude1=first["claude"],
-                        gpt2=second.get("gpt", "(skipped: token saver mode)" if saver else "(교차 검토 실패 — 없음)"),
-                        claude2=second.get("claude", "(skipped: token saver mode)" if saver else "(교차 검토 실패 — 없음)"),
-                        attachments="\n\n".join(f"### {a['name']}\n{a['summary']}" for a in attached if a["summary"])
-                        or ("Attached: " + ", ".join(a["name"] for a in attached) if attached else "(none)"))
-                    final = debate.unblind(call_model("claude", claude_model, synth_prompt, "chat", timeout=timeout,
-                                                      cancel=token, info=synth_info), mapping)
-                    synth_tokens = token_usage("claude", synth_info)
-                    cli_state.record("claude", claude_model, actual_model("claude", synth_info), synth_tokens.get("total", 0))
-                    item = store.append_message(
-                        conversation_id, "assistant", final, "Council",
-                        cli_model="중립 정리(이름 가림) · Claude" + (f" · {claude_model}" if model_label("claude", claude_model) else ""),
-                        debate_dir=str(folder.relative_to(store.data_dir)) if folder else None,
-                        tokens=synth_tokens or None,
-                    )
-                    answers["Council"] = final
-                    debate.write_log(folder, "결론.md", "Council 최종 결론", final)
-                    self.emit("answer", item=item)
+                    draft, _ = ask(drafter, base_prompt(drafter) + debate.WRITE_DRAFT_NOTE.format(other=r_label), 1,
+                                   post=lambda a: {"flow": "write"})
+                    debate.write_log(folder, f"1_{d_label}_초안.md", f"{d_label} · 초안", draft)
+                    answers[d_label] = draft
+                    self.emit("answer", item=produced[-1])
+                    self.emit("stage", step=2, text=f"✍️ {r_label}가 초안을 검토하고 다듬는 중")
+                    review, _ = ask(reviewer, base_prompt(reviewer) + debate.WRITE_REVIEW_NOTE.format(other=d_label, draft=draft), 2,
+                                    post=lambda a: {"flow": "write"})
+                    debate.write_log(folder, f"2_{r_label}_검토.md", f"{r_label} · 검토·개선", review)
+                    answers[r_label] = review
+                    self.emit("answer", item=produced[-1])
+                    final_text, changes, verdict, issue = debate.parse_review(review)
+                    if verdict != "major" or token.cancelled:
+                        card = {"conclusion": (f"{d_label}의 초안을 {r_label}가 검토해 다듬은 최종본입니다." if self.lang != "en"
+                                               else f"Final version: {d_label}'s draft, reviewed and improved by {r_label}."),
+                                "confidence": "높음", "deliverable": final_text, "actions": [], "decisions": [], "checks": [],
+                                "agreed": changes, "disputed": []}
+                        save_conclusion(card, final_text, {"flow": "write"}, by=f"✍️ {d_label} 초안 → {r_label} 검토")
+                    else:
+                        # 방향이 갈림 → 초안 작성자가 답하고, 사회자가 고른다 (자연스럽게 토론으로)
+                        self.emit("stage", step=3, text=f"✍️ 방향이 갈려 {d_label}가 검토에 답하는 중")
+                        reply, _ = ask(drafter, base_prompt(drafter) + debate.WRITE_RESPOND_NOTE.format(
+                            other=r_label, issue=issue or "-", draft=draft, theirs=final_text), 6, post=lambda a: {"flow": "write"})
+                        debate.write_log(folder, f"3_{d_label}_답변.md", f"{d_label} · 검토에 대한 답변", reply)
+                        self.emit("answer", item=produced[-1])
+                        va, vb, mapping = debate._blind(random.SystemRandom(),
+                                                        reply if drafter == "gpt" else review, reply if drafter == "claude" else review)
+                        raw = debate.unblind(moderate(debate.WRITE_FINAL_PROMPT.format(context=mod_context(), question=question,
+                                                                                       a=debate.blind_names(va, mapping), b=debate.blind_names(vb, mapping)),
+                                                      "두 버전 중 더 나은 쪽으로 최종본을 정리하는 중", 4), mapping)
+                        save_conclusion(debate.parse_card(raw), raw, {"flow": "write"})
                 except Cancelled:
                     stopped = True
                 except CliFailure as exc:
-                    errors["Council"] = exc.details()
-                    self.emit("model_error", model="Council", text=errors["Council"])
+                    errors["작성"] = exc.details()
+                    self.emit("model_error", model="Council", text=errors["작성"])
+            else:
+                # 1라운드: 서로의 답을 보지 않고 동시에
+                self.emit("stage", step=1, text="1라운드 · GPT와 Claude가 각자 독립적으로 답변하는 중" + (" (웹 검색 사용)" if web else ""))
+                first = run_parallel({w: base_prompt(w, "plan") + debate.ROUND1_NOTE for w in ("gpt", "claude")}, 1,
+                                     lambda w, a, it: debate.write_log(folder, f"1_{models[w][0]}.md", f"{models[w][0]} · 1차 의견", a, it.get("cli_model", "")))
+                for w, a in first.items():
+                    answers[models[w][0]] = a
+                stopped = token.cancelled
+                if len(first) == 2 and not token.cancelled:
+                    try:
+                        # 쟁점 정리: 합의면 이 호출이 바로 결론 (절약 모드는 쟁점이 있어도 여기서 결론)
+                        prompt, mapping = debate.analyze_prompt(random.SystemRandom(), context=mod_context(), question=question,
+                                                                attachments=attach_summary, gpt1=first["gpt"], claude1=first["claude"],
+                                                                saver=saver)
+                        blind = moderate(prompt, "두 답변을 비교해 합의점과 쟁점을 정리하는 중", 2)
+                        raw = debate.unblind(blind, mapping)
+                        status, disputes_blind, _ = debate.parse_analysis(blind)
+                        _, disputes, card = debate.parse_analysis(raw)
+                        if status != "disputed" or saver or not disputes:
+                            # 합의(또는 절약 모드) → 결론. 형식이 틀렸으면 받은 글을 그대로 결론으로
+                            save_conclusion(card, raw, {"agreement": status or None})
+                        else:
+                            names = {"A": mapping["A"], "B": mapping["B"]}
+                            dtext = debate.disputes_text(disputes, names)
+                            ana = store.append_message(conversation_id, "assistant", dtext, "Moderator", round=7,
+                                                       cli_model=f"쟁점 정리 · {models[moderator][0]}", disputes=disputes,
+                                                       names=names)
+                            debate.write_log(folder, "쟁점.md", "쟁점 정리", dtext)
+                            self.emit("answer", item=ana)
+                            # 2라운드: 쟁점만 교차 반박
+                            self.emit("stage", step=3, text=f"2라운드 · 쟁점 {len(disputes)}개만 서로 반박하는 중")
+                            jobs = {w: base_prompt(w, "plan") + debate.ROUND2_NOTE.format(other=models[other_of[w]][0], disputes=dtext)
+                                    for w in ("gpt", "claude")}
+                            second = run_parallel(jobs, 2, lambda w, a, it: debate.write_log(
+                                folder, f"2_{models[w][0]}_반박.md", f"{models[w][0]} · 쟁점 반박", a, it.get("cli_model", "")))
+                            replies = {w: second.get(w, "(답변 실패)") for w in ("gpt", "claude")}
+                            left = debate.unresolved(second.get("gpt", ""), second.get("claude", ""), len(disputes)) if len(second) == 2 else []
+                            if left and not token.cancelled:
+                                # 3라운드: 둘 다 입장을 유지한 쟁점만 마지막 반박
+                                rest = [disputes[i - 1] for i in left]
+                                rtext = debate.disputes_text(rest, names)
+                                self.emit("stage", step=4, text=f"3라운드 · 아직 갈린 쟁점 {len(rest)}개만 마지막으로 반박하는 중")
+                                jobs = {w: base_prompt(w, "plan") + debate.ROUND3_NOTE.format(
+                                            other=models[other_of[w]][0], disputes=rtext, theirs=second[other_of[w]])
+                                        for w in ("gpt", "claude")}
+                                third = run_parallel(jobs, 6, lambda w, a, it: debate.write_log(
+                                    folder, f"3_{models[w][0]}_최종반박.md", f"{models[w][0]} · 마지막 반박", a, it.get("cli_model", "")))
+                                for w in ("gpt", "claude"):
+                                    if w in third:
+                                        replies[w] += "\n\n--- round 3 (final) ---\n" + third[w]
+                            if not token.cancelled:
+                                raw = moderate(debate.final_prompt(mapping, context=mod_context(), question=question,
+                                                                   attachments=attach_summary, gpt1=first["gpt"], claude1=first["claude"],
+                                                                   disputes=debate.disputes_text(disputes_blind),
+                                                                   gpt2=debate.blind_names(replies["gpt"], mapping),
+                                                                   claude2=debate.blind_names(replies["claude"], mapping)),
+                                               "토론 내용을 최종 결론으로 정리하는 중", 5)
+                                raw = debate.unblind(raw, mapping)
+                                save_conclusion(debate.parse_card(raw), raw, {"agreement": "disputed", "rounds": 3 if left else 2})
+                    except Cancelled:
+                        stopped = True
+                    except CliFailure as exc:
+                        errors["Council"] = exc.details()
+                        self.emit("model_error", model="Council", text=errors["Council"])
+                    stopped = stopped or token.cancelled
             if mode == "work" and "Council" in answers and not token.cancelled:
                 # 작업 모드 토론: 결론 → 한 모델이 실행 → 다른 모델이 결과를 검토 → 실행한 모델이 수정
                 # (두 모델이 같은 파일·같은 블렌더 씬을 동시에 고치면 충돌하므로 순서대로 주고받는다)

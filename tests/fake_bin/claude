@@ -91,5 +91,7 @@ if "USE_MCP" in p:
     if want in allowed: out("MCP 실행 결과: 생성 완료"); sys.exit(0)
     blocked(want, {"prompt":"고양이"}) if "acceptEdits" in sys.argv else _DENY.append({"tool_name":want,"tool_use_id":"t1","tool_input":{"prompt":"고양이"}})
     out("생성 도구 승인이 필요합니다"); sys.exit(0)
-if "Create one final answer" in p or "moderator of a discussion" in p: out("Council 결론입니다 · 모델 A 의견이 더 타당"); sys.exit(0)
+import fake_council
+_fc = fake_council.answer(p)
+if _fc is not None: out(_fc); sys.exit(0)
 out("Claude 답변 ✓ 한글")

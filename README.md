@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.27.2** (2026-11-11) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.28.0** (2026-11-13) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.28.0](CHANGELOG.md#v0280-2026-11-13) | 11-13 | ⚖️ **토론 개편** — 합의면 3번에 끝, 쟁점만 반박(미결이면 1번 더), ✍️ 작성 요청은 초안→검토 자동, 🏁 결론 카드(할 일 중심), 사회자 교대 |
 | [V0.27.2](CHANGELOG.md#v0272-2026-11-11) | 11-11 | 🎨 대화 중 이미지가 **같은 이미지를 두 장씩** 저장·표시하던 문제 수정 |
 | [V0.27.1](CHANGELOG.md#v0271-2026-11-06) | 11-06 | 🔗 `aicouncil://` 링크로 켜기 (Windows) — FlowX 의 AI Council 메뉴 '다시 연결'이 Council 을 창 없이 켬 |
 | [V0.27.0](CHANGELOG.md#v0270-2026-11-06) | 11-06 | 🖥 **앱처럼 실행** — 아이콘을 누르면 주소창 없는 **앱 창**으로 열림, 바탕화면·시작 메뉴(Mac: 응용 프로그램) 바로가기 |
 | [V0.26.0](CHANGELOG.md#v0260-2026-11-04) | 11-04 | 🎨 **이미지 모드 → 대화 모드로 통합** — 비율(기본 16:9·묻기)·장수, ⚙ 환경설정(저장 폴더, 기본 `image`), ⬇ 다운로드 |
-| [V0.25.0](CHANGELOG.md#v0250-2026-11-04) | 11-04 | 🛠 작업 모드 **📁＋ 추가 폴더** — 작업 폴더 말고도 여러 폴더를 함께 읽고 고치기 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -39,7 +39,7 @@
 |---|---|---|
 | **GPT** | 빠른 질문, 프롬프트 작성 | 1번 |
 | **Claude** | 빠른 질문, 워크플로우 분석 | 1번 |
-| **토론 (Discussion)** ⚠ | 설계 검토·의사결정처럼 정답이 하나가 아닌 주제 | 5번 (사용량 약 5배) |
+| **토론 (Discussion)** ⚠ | 설계 검토·의사결정, 프롬프트·글 작성(초안→검토 자동) | 작성 2번 · 합의 3번 · 쟁점 6번 · 미결 최대 8번 |
 
 - **ComfyUI 워크플로우 JSON 분석** — 노드·색상 등급(MUST/SHOULD)·모델 파일을 코드가 먼저 정리해 정확하게 분석
 - **이미지·영상 분석** — 끌어다 놓기·Ctrl+V 붙여넣기, 영상은 프레임 12장으로 분석
@@ -213,15 +213,35 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 - 이미지가 안 만들어지면 왼쪽 아래에서 Codex CLI를 최신으로 업데이트한 뒤 다시 시도하세요.
 
 ### 토론 (Discussion) ⚠
-1. **1라운드 독립 의견** — GPT·Claude가 서로의 답을 보지 않고 동시에 답합니다.
-2. **2라운드 교차 검토** — 각자 상대 답을 읽고 동의·반박·누락·입장 변화를 씁니다.
-3. **최종 결론** — **결론 / 합의된 점 / 의견이 갈린 점 / 확인이 필요한 항목** 으로 정리합니다.
+질문을 보고 **자동으로** 진행 방식을 고릅니다 (버튼 없음). 합의되면 일찍 끝나고, 의견이 갈린 점만 더 토론합니다.
+
+**✍️ 작성 요청** — "프롬프트 써줘 · 작성해줘 · 다듬어줘 · 번역해줘 · 요약해줘 · 메일 써줘 …" (대화 모드)
+1. 한 모델이 **초안** → 2. 다른 모델이 **검토하고 다듬은 최종본** — **2번 호출**로 끝.
+3. 검토자가 "방향 자체가 틀렸다"고 하면 그때만 초안 작성자가 답하고, 사회자가 더 나은 쪽을 고릅니다 (4번).
+- "어느 게 나아? · 비교 · 왜 · 추천 · 장단점"처럼 판단을 묻는 말이 섞이면 토론으로 갑니다.
+
+**⚖️ 판단·의사결정 질문** (그 밖의 질문, 작업 모드의 토론)
+1. **1라운드 독립 의견** — GPT·Claude가 서로의 답을 보지 않고 답하고, 끝에 **핵심 주장**(확신도 포함)을 정리합니다.
+2. **쟁점 정리** — 사회자가 두 답을 비교합니다. 표현 차이는 쟁점이 아닙니다.
+   - **합의** → 이 단계에서 바로 최종 결론 → **3번 호출로 끝** (💰 절약 모드와 관계없이).
+3. **2라운드 쟁점 반박** — 갈린 점만 서로 반박하고, 쟁점마다 입장(유지 / 부분 동의 / 양보)을 표시합니다 (총 6번).
+4. **3라운드 마지막 반박** — 둘 다 입장을 유지한 쟁점만 한 번 더. 새 근거가 없으면 무엇을 확인하면 결론이 나는지 씁니다 (총 8번, 최대).
+5. **최종 결론** — 그래도 미결이면 "⚖️ 정해 주셔야 할 것"으로 넘깁니다 (추천 포함).
+- 💰 절약 모드: 쟁점이 있어도 반박 라운드 없이 바로 결론 (항상 3번), 갈린 점은 "정해 주셔야 할 것"으로.
+
+**🏁 결론 카드** — 할 일이 맨 위, 근거는 접어 둡니다.
+- **✅ 결론** (3문장 이내) + **신뢰도 배지**(높음·보통·낮음)
+- **📄 결과물** — 요청한 프롬프트·글·코드 (복사 버튼)
+- **👉 다음에 할 일** — 최대 5개. 파일·명령이 필요한 일은 **🛠 작업 모드로** 버튼 → 작업 모드 입력창에 들어갑니다.
+- **⚖️ 정해 주셔야 할 것** · **🔍 직접 확인할 것** — 있을 때만
+- **근거 자세히 보기** (접힘) — 합의된 점 · 의견이 갈린 점
+
+**사회자 (중립)**: 질문마다 GPT·Claude가 **번갈아** 맡고, 두 답을 **이름을 가린 채**(모델 A/B, 무작위) 받아 핵심 주장 위주로 판단합니다.
+반박 글 속 'GPT'·'Claude'도 모델 A/B 로 바꿔 넘깁니다. 토론 참가자가 정리하므로 완전한 중립은 아니며, 제3 모델은 쓰지 않습니다.
 
 - **행동 지침**: 근거로만 판단하고(새 근거 없이 양보·반대 금지), 확신도를 밝히고, 둘 다 검증하지 않은 공통 가정을 따로 표시합니다.
-- **중립 정리**: 결론을 정리하는 Claude는 두 답변을 이름을 가린 채(모델 A/B, 무작위) 받아 자기 답을 편들지 못합니다.
-- 화면에는 결론이 먼저, **토론 과정 보기** 를 펼치면 라운드별 답변이 보입니다. 결론 위쪽의 **📁 토론 기록 폴더** 로 PC에 저장된 기록(`결론.md` 등)을 열고 경로도 복사합니다 — Claude 데스크톱 앱에 "이 폴더의 결론.md 읽고 구현해줘"로 붙여넣기.
-- **읽는 법**: 두 모델이 합의했다고 정답은 아닙니다. **"의견이 갈린 점"과 "확인이 필요한 항목"** 을 먼저 확인하세요.
-- 사용량이 단독의 약 5배입니다 (💰 절약 모드에서는 3번 호출). 간단한 질문·워크플로우 분석·프롬프트 작성은 단독 모델이 효율적입니다.
+- 화면에는 결론이 먼저, **토론 과정 보기**(✍️ 작성 과정 보기)를 펼치면 단계별 답변이 보입니다. **📁 토론 기록 폴더** 로 PC에 저장된 기록(`결론.md` 등)을 엽니다.
+- 다음 질문의 맥락에는 결론만 들어갑니다 (쟁점 정리·반박은 제외, 1라운드는 가장 최근 토론만).
 
 ### 💰 토큰(사용량) 절약
 구독 한도는 결국 **토큰**으로 줄어듭니다. 질문 하나마다 Council 이 보내는 것 = 대화 맥락 + 첨부 + 지시문이고, CLI 는 여기에 자기 시스템 프롬프트·도구 설명(MCP 를 켜면 그 도구 설명까지)을 붙입니다.
@@ -229,18 +249,19 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 
 자동으로 하는 것 (항상)
 - **맥락 앞부분 고정**: 최근 대화 창의 시작을 고정해 두고 넘칠 때만 옮깁니다 → 매 질문마다 프롬프트 앞부분이 같아 캐시가 맞습니다.
-- **지난 토론은 결론만**: 두 모델의 1라운드 답변은 가장 최근 토론에서만 맥락에 넣습니다 (교차 검토는 원래 제외).
-- **결론 정리는 짧은 맥락**: 토론 결론 단계는 최근 대화 약 6천 자만 봅니다 (두 모델 답이 이미 맥락을 반영).
+- **지난 토론은 결론만**: 두 모델의 1라운드 답변은 가장 최근 토론에서만 맥락에 넣습니다 (쟁점 정리·반박은 원래 제외).
+- **사회자는 짧은 맥락**: 쟁점 정리·결론 단계는 최근 대화 약 6천 자만 봅니다 (두 모델 답이 이미 맥락을 반영).
+- **합의하면 일찍 끝**: 1라운드에서 합의하면 3번, 작성 요청은 2번으로 끝납니다.
 - **이미지 재전송 줄이기**: 이미지·영상(프레임 12장)은 바로 다음 질문이거나 질문에 "이미지·영상·화면·프레임…"이 있을 때만 다시 보냅니다.
 - **🪙 토큰 표시**: 답변마다 이번 호출 토큰(마우스를 올리면 새 입력 / 캐시 읽기 / 출력), 왼쪽 아래에 오늘 GPT·Claude 토큰 합계.
 
 **💰 절약 켬** (입력창 위, 필요할 때만)
-- 토론: 교차 검토(2라운드) 생략 → 5번 → **3번 호출**
+- 토론: 의견이 갈려도 반박 라운드 없이 바로 결론 → **항상 3번 호출** (갈린 점은 "정해 주셔야 할 것"으로)
 - 최근 대화 맥락 약 1만 자, 첨부 원문 3만 자까지
 - 답변을 간결하게 요청 (출력 토큰 절약)
 - GPT 대화: 생각(추론) 강도 `low` — 작업 모드는 그대로
 
-더 아끼는 습관: 간단한 질문은 토론 대신 단독 · MCP 는 쓸 때만 켜기(켜 두면 매번 도구 설명이 붙음) · 주제가 바뀌면 **↪ 새 대화로 이어가기**.
+더 아끼는 습관: 사실 확인·간단한 질문은 단독 (토론은 합의하면 3번, 작성 요청은 2번으로 끝남) · MCP 는 쓸 때만 켜기(켜 두면 매번 도구 설명이 붙음) · 주제가 바뀌면 **↪ 새 대화로 이어가기**.
 
 ### 🌐 웹 검색
 - 입력창 위 **웹 검색 켬/끔**. 켜면 GPT(Codex `--search`)·Claude(WebSearch·WebFetch)가 웹을 검색하고 출처를 밝힙니다.
@@ -355,7 +376,7 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.27.2** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.28.0** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
@@ -370,9 +391,9 @@ It drives the official **Codex CLI (GPT)** and **Claude Code CLI (Claude)** sign
 |---|---|---|
 | **GPT** | Quick questions, prompt writing | 1 |
 | **Claude** | Quick questions, file/workflow analysis | 1 |
-| **Discussion** ⚠ | Design reviews and decisions with no single right answer | 5 (≈5× usage; 3 in 💰 Saver mode) |
+| **Discussion** ⚠ | Decisions and design reviews; writing requests (prompts, text) go draft → review automatically | writing 2 · agreed 3 · disputed 6 · max 8 |
 
-- **Discussion mode** — (📁 *Discussion log folder* on the conclusion opens the saved Markdown files and copies the path) round 1: both models answer independently · round 2: each critiques the other · final: a **blind, neutral synthesis** (the summarizer sees the answers only as "Model A / Model B", randomly assigned) split into *Conclusion / Agreed / Disagreed / Needs verification*. Every round is saved as Markdown in a local folder.
+- **Discussion mode** — picks the flow from your message (no extra buttons). **Writing requests** ("write a prompt", "draft", "polish", "translate"…): one model drafts, the other reviews and returns the improved final (2 calls); only if the reviewer rejects the whole approach does it become a debate. **Other questions**: round 1 independent answers → a moderator lists where they actually differ → if they agree, the conclusion comes right away (3 calls, saver mode or not) → otherwise round 2 on the disputed points only (6) → round 3 only for points both still hold (max 8). The moderator alternates between GPT and Claude each question and sees the answers blinded as "Model A / Model B". The **conclusion card** puts *Next steps* first (with a **🛠 To work mode** button for steps that touch files), then *Decisions for you* and *Things to verify*; agreed/disputed details are folded. 📁 *Discussion log folder* opens the saved Markdown files.
 - **Two modes** — 💬 Chat (no file access) · 🛠 **Work** (like Claude Code / Codex: read, create and edit files, make folders, write code, run commands in the folder you choose)
 - **⚠ Full access mode** (per chat, off by default, confirmation required, red banner while on) — Claude's Work-mode runs in that chat use `bypassPermissions`: commands, file edits and access outside the working folder (other drives, `Z:`) run without asking. Only Claude's work execution steps are affected (not Chat/Image modes, discussion planning/review, or GPT's sandbox); MCP tools still need "Always allow". Not carried into new chats or other PCs.
 - **Local-only server** — requests with a foreign Host, a cross-site Origin or a non-JSON body are refused (403/415).

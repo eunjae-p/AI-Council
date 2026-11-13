@@ -14,7 +14,9 @@ os.environ["AI_COUNCIL_IMAGE_DIR"] = str(tmp/"image")  # 기본 이미지 저장
 os.environ["PATH"] = str(HERE/"fake_bin") + os.pathsep + os.environ["PATH"]
 os.environ["T"] = str(tmp)
 sys.path.insert(0, str(ROOT))
-import ai_council_web as w, council_context as cc
+import ai_council_web as w
+from council_debate import classify as debate_cls
+import council_context as cc
 from http.server import ThreadingHTTPServer
 srv = ThreadingHTTPServer(("127.0.0.1", 0), w.Handler); port = srv.server_address[1]
 threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -56,24 +58,58 @@ _upd = (pathlib.Path(w.__file__).parent/"council_update.py").read_text(encoding=
 ok("fetch('/api/shutdown', { method:'POST', headers:{ 'Content-Type':'application/json'" in _ui and '"Content-Type": "application/json"' in _upd, "quit button and updater send JSON")
 # chat both
 ev = post("/api/chat", {"question":"첫 질문입니다 ComfyUI","conversation_id":c1,"target":"both","gpt_model":"gpt-6.1-sol","claude_model":"account default"}, raw=True)
-types = [e["type"] for e in ev]; ok(types.count("answer")==5 and types[-1]=="done", f"discussion events {types}")
+types = [e["type"] for e in ev]; ok(types.count("answer")==3 and types[-1]=="done", f"agreed discussion: round1 x2 + conclusion only {types}")
 d = get("/api/conversation?id="+c1); its = d["items"]
 ok(its[0]["model"]=="사용자" and sorted(i["model"] for i in its[1:3])==["Claude","GPT"] and all(i.get("round")==1 for i in its[1:3])
-   and sorted(i["model"] for i in its[3:5])==["Claude","GPT"] and all(i.get("round")==2 for i in its[3:5]) and its[5]["model"]=="Council", "discussion saved: round1 x2, round2 x2, conclusion")
+   and its[3]["model"]=="Council" and len(its)==4, "agreed: round1 x2, conclusion (no round 2)")
 ok(d["meta"]["title"]=="첫 질문입니다 ComfyUI", "auto title")
 g1 = next(i for i in its if i["model"]=="GPT" and i.get("round")==1)
 ok(g1.get("cli_model")=="gpt-6.1-sol", "cli_model recorded")
 log = open(os.environ["FAKE_LOG"]).read(); parts = log.split("=====CLAUDE")
-c_r1 = next(x for x in parts if "round 1 (independent opinion)" in x); c_r2 = next(x for x in parts if "round 2 (cross review)" in x)
-ok("GPT 답변" not in c_r1 and "GPT 답변: 받은 프롬프트" in c_r2 and "Claude 답변 ✓ 한글" in c_r2, "round1 independent, round2 sees both answers")
+c_r1 = next(x for x in parts if "round 1 (independent opinion)" in x)
+ok("GPT 답변" not in c_r1 and "## 핵심 주장" in c_r1, "round1 independent, asks for key-claim list")
 ok("No web access" in c_r1 and "--search" not in log, "web search off by default in discussion")
-syn = next(x for x in parts if "moderator of a discussion" in x)
-ok("모델 A — round 2 review of 모델 B" in syn and "## 의견이 갈린 점" in syn and "GPT — round" not in syn and "Claude — round" not in syn, "synthesis is blind (모델 A/B) and gets reviews")
-ok("Council discussion rules" in c_r1 and "Council discussion rules" in c_r2 and "Agreement between you is NOT" in c_r2, "discussion rules in both rounds")
-fin = its[5]["content"]; ok("모델 A" not in fin and ("GPT 의견이 더 타당" in fin or "Claude 의견이 더 타당" in fin), f"conclusion unblinded {fin}")
-ddir = w.store.data_dir/its[5]["debate_dir"]
-ok(sorted(f.name for f in ddir.iterdir())==sorted(["질문.md","1_GPT.md","1_Claude.md","2_GPT_검토.md","2_Claude_검토.md","결론.md"]), f"debate log files {list(ddir.iterdir())}")
-ok(ddir.parent.name.endswith("첫 질문입니다 ComfyUI") and "Council 결론입니다" in (ddir/"결론.md").read_text(encoding="utf-8"), "debate folder named by conversation")
+syn = next(x for x in parts if "moderator of a discussion" in x)  # 첫 질문(0번째)의 사회자 = Claude
+ok("모델 A — round 1" in syn and "GPT — round" not in syn and "decide whether they substantially agree" in syn, "analysis is blind (모델 A/B)")
+cn = its[3]; card = cn.get("card") or {}
+ok(card.get("confidence")=="높음" and card["actions"][0]["work"] is True and card["decisions"][0]["recommend"]=="1024", f"conclusion card parsed {card}")
+fin = cn["content"]; ok("모델 A" not in fin and ("GPT 의견이 더 타당" in fin or "Claude 의견이 더 타당" in fin) and "👉 다음에 할 일" in fin and "신뢰도: 높음" in fin, f"conclusion unblinded markdown {fin}")
+ok("중립 정리(이름 가림) · Claude" in cn["cli_model"] and cn.get("agreement")=="agreed", "moderator recorded")
+ddir = w.store.data_dir/cn["debate_dir"]
+ok(sorted(f.name for f in ddir.iterdir())==sorted(["질문.md","1_GPT.md","1_Claude.md","결론.md"]), f"debate log files {list(ddir.iterdir())}")
+ok(ddir.parent.name.endswith("첫 질문입니다 ComfyUI") and "GPT 의견이 더 타당" in (ddir/"결론.md").read_text(encoding="utf-8") or "Claude 의견이 더 타당" in (ddir/"결론.md").read_text(encoding="utf-8"), "debate folder named by conversation")
+# 쟁점 있음 → 쟁점만 2라운드 → 결론 (사회자 교대: 두 번째 질문 = GPT)
+cdx = post("/api/conversations")["id"]; post("/api/chat", {"question":"먼저","conversation_id":cdx,"target":"gpt"}, raw=True)
+open(os.environ["FAKE_LOG"],"w").close()
+ev = post("/api/chat", {"question":"DISPUTE 해상도 어떻게?","conversation_id":cdx,"target":"both"}, raw=True)
+types = [e["type"] for e in ev]; its = get("/api/conversation?id="+cdx)["items"]
+ok(types.count("answer")==6, f"disputed: r1 x2 + 쟁점 + r2 x2 + 결론 {types}")
+mod = next(i for i in its if i["model"]=="Moderator"); ok(mod["round"]==7 and len(mod["disputes"])==2 and "1. 해상도" in mod["content"] and "모델 A" not in mod["content"], f"disputes item {mod}")
+r2 = [i for i in its if i.get("round")==2]; ok(len(r2)==2, "round 2 = disputed points only")
+log = open(os.environ["FAKE_LOG"]).read()
+ok("round 2 (disputed points only)" in log and "1. 해상도" in log and "round 3" not in log, "round 2 prompt lists disputes; resolved -> no round 3")
+cn = its[-1]; ok(cn["model"]=="Council" and "GPT" in cn["cli_model"] and cn.get("agreement")=="disputed" and cn.get("rounds")==2, f"final by GPT moderator {cn.get('cli_model')}")
+ok("MARK:FINAL_BLIND" in log, "final prompt (GPT moderator) blind with replies")
+# 2라운드에서도 둘 다 유지 → 3라운드 1번만
+open(os.environ["FAKE_LOG"],"w").close()
+ev = post("/api/chat", {"question":"DISPUTE KEEP 끝까지","conversation_id":cdx,"target":"both"}, raw=True)
+types = [e["type"] for e in ev]; its = get("/api/conversation?id="+cdx)["items"]; log = open(os.environ["FAKE_LOG"]).read()
+ok(types.count("answer")==8 and log.count("round 3 (final, unresolved points only)")==1 and its[-1].get("rounds")==3, f"unresolved -> round 3 once {types.count('answer')}")
+r3 = next(x for x in log.split("=====CLAUDE") if "round 3 (final" in x); ok("1. 해상도" in r3 and "2. 노드 순서" not in r3.split("Unresolved points")[1].split("###")[1], "round 3 only unresolved points")
+# 사회자가 형식을 지키지 않으면 받은 글을 결론으로
+ev = post("/api/chat", {"question":"BADJSON 질문","conversation_id":cdx,"target":"both"}, raw=True)
+cn = get("/api/conversation?id="+cdx)["items"][-1]; ok(cn["model"]=="Council" and not cn.get("card") and "형식 없음" in cn["content"], "unparseable moderator output kept as text")
+# ✍️ 작성 요청: 초안 → 검토 (2회), 방향이 갈리면 → 답변 → 사회자
+cw2 = post("/api/conversations")["id"]; open(os.environ["FAKE_LOG"],"w").close()
+ev = post("/api/chat", {"question":"Flux 이미지 프롬프트 써줘","conversation_id":cw2,"target":"both"}, raw=True)
+types = [e["type"] for e in ev]; its = get("/api/conversation?id="+cw2)["items"]; log = open(os.environ["FAKE_LOG"]).read()
+ok(types.count("answer")==3 and "round 1 (independent" not in log and "moderator of a discussion" not in log, f"write: draft + review only {types}")
+cn = its[-1]; ok(cn["model"]=="Council" and cn["card"]["deliverable"]=="다듬은 최종본" and cn["card"]["agreed"]==["문장 정리"] and cn.get("flow")=="write", f"write conclusion {cn.get('card')}")
+ok([i.get("flow") for i in its[1:3]]==["write","write"] and its[1]["model"]=="GPT" and its[2]["model"]=="Claude", "drafter GPT, reviewer Claude (first turn)")
+ev = post("/api/chat", {"question":"MAJOR 공지 문구 작성해줘","conversation_id":cw2,"target":"both"}, raw=True)
+types = [e["type"] for e in ev]; its = get("/api/conversation?id="+cw2)["items"]
+ok(types.count("answer")==4 and its[-1]["card"]["deliverable"]=="최종 결과물 본문" and its[-2].get("round")==6, f"write major -> reply + moderator {types}")
+ok(debate_cls("A랑 B 중 어느 게 나아?")=="discuss" and debate_cls("이 문장 영어로 번역해줘")=="write" and debate_cls("ComfyUI 메모리 오류 원인")=="discuss", "classify write vs discuss")
 # chat claude only — check shared context contains GPT label
 open(os.environ["FAKE_LOG"],"w").close()
 post("/api/chat", {"question":"두번째","conversation_id":c1,"target":"claude"}, raw=True)
@@ -99,7 +135,7 @@ ok(get("/api/search?q="+urllib.parse.quote("워크플로우"))["items"][0]["kind
 # export twice -> collision
 e1 = post("/api/export", {"id":c1}); e2 = post("/api/export", {"id":c1})
 ok(e1["filename"]!=e2["filename"] and e2["filename"].endswith("_2.md"), f"export collision {e1['filename']} {e2['filename']}")
-md = pathlib.Path(e1["path"]).read_text(encoding="utf-8"); ok("# 워크플로우 분석" in md and "### Council 최종 결론" in md and "### GPT · 1차 의견 · gpt-6.1-sol" in md and "### Claude · 교차 검토" in md and "한글" in md, "markdown content")
+md = pathlib.Path(e1["path"]).read_text(encoding="utf-8"); ok("# 워크플로우 분석" in md and "### Council 최종 결론" in md and "### GPT · 1차 의견 · gpt-6.1-sol" in md and "### Claude · 1차 의견" in md and "한글" in md, "markdown content")
 from council_store import safe_filename
 ok(safe_filename('a<b>:c"/d\\e|f?g*') == "a_b__c__d_e_f_g_" and safe_filename("CON").startswith("_") and safe_filename("...") == "대화", "safe filename")
 # delete -> trash -> restore -> delete -> purge
@@ -207,7 +243,7 @@ wf = open(HERE/"fixtures"/"sample_workflow.json", encoding="utf-8").read()
 c8 = post("/api/conversations")["id"]
 open(os.environ["FAKE_LOG"],"w").close()
 ev = post("/api/chat", {"question":"이 워크플로우 분석해줘","conversation_id":c8,"target":"both","attachments":[{"name":"[GenVideo] _ test_v01.json","content":wf}]}, raw=True)
-types=[e["type"] for e in ev]; ok(types.count("answer")==5, f"attach discussion {types}")
+types=[e["type"] for e in ev]; ok(types.count("answer")==3, f"attach discussion {types}")
 log = open(os.environ["FAKE_LOG"]).read()
 ok("Parsed summary" in log and "### MUST (2개)" in log and "wan2.1_vace_14B_fp16.safetensors" in log and "Attached file summaries" in log, "attachment summary sent to models")
 it = get("/api/conversation?id="+c8)["items"][0]
@@ -257,7 +293,7 @@ c10 = post("/api/conversations")["id"]
 img = upload(c10, media_dir/"shot.png", "캡처 화면.png"); ok(img.get("kind")=="image" and img["id"].endswith("캡처 화면.png"), f"image upload {img}")
 open(os.environ["FAKE_LOG"],"w").close()
 ev = post("/api/chat", {"question":"이 이미지 설명해줘","conversation_id":c10,"target":"both","attachments":[{"name":"캡처 화면.png","upload":img["id"]}]}, raw=True)
-types=[e["type"] for e in ev]; ok(types.count("answer")==5, f"image discussion {types}")
+types=[e["type"] for e in ev]; ok(types.count("answer")==3, f"image discussion {types}")
 log = open(os.environ["FAKE_LOG"]).read()
 ok("'--image'" in log and img["id"] in log, "codex got --image")
 ok("'--tools', 'Read'" in log and "Image files to open with the Read tool" in log and ("CWD="+os.path.realpath(str(w.store.data_dir/"attachments"/c10))) in log, "claude reads image in attachment folder only")
@@ -869,11 +905,11 @@ ok(cn.get("tokens",{}).get("total")==7142, "conclusion tokens recorded")
 u = get("/api/status")["usage"]; ok(u["tokens_today"]["gpt"]>=12345*2 and u["tokens_today"]["claude"]>=7142*3, f"daily token totals {u['tokens_today']}")
 # 💰 절약 모드: 2라운드 생략, 간결 지시, Codex 추론 낮춤
 open(os.environ["FAKE_LOG"],"w").close()
-ev = post("/api/chat", {"question":"절약 토론","conversation_id":ct,"target":"both","saver":True}, raw=True)
+ev = post("/api/chat", {"question":"DISPUTE 절약 토론","conversation_id":ct,"target":"both","saver":True}, raw=True)
 types=[e["type"] for e in ev]; log = open(os.environ["FAKE_LOG"]).read()
-ok(types.count("answer")==3 and "round 2 (cross review)" not in log, f"saver: discussion 3 calls {types.count('answer')}")
+ok(types.count("answer")==3 and "round 2 (disputed" not in log, f"saver: disputes still 3 calls {types.count('answer')}")
 ok("Token saver mode" in log and "model_reasoning_effort=low" in log, "saver: concise note + codex low effort")
-ok("skipped: token saver mode" in log, "saver: conclusion told round 2 was skipped")
+cn = get("/api/conversation?id="+ct)["items"][-1]; ok(cn["model"]=="Council" and cn.get("card"), "saver: analysis call writes the conclusion card")
 open(os.environ["FAKE_LOG"],"w").close()
 wds = pathlib.Path(tempfile.mkdtemp(dir=str(tmp)))
 post("/api/chat", {"question":"절약 작업","conversation_id":ct,"target":"gpt","mode":"work","workdir":str(wds),"saver":True}, raw=True)
