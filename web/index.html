@@ -137,6 +137,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--gpt);box-shadow:0 0 0
 .content th{background:var(--th-bg);color:var(--strong);font-weight:700} .content tr:nth-child(even) td{background:var(--row-alt)}
 .content pre{white-space:pre;overflow:auto;background:var(--code-bg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:.4em 0 1em;font:13px/1.55 ui-monospace,Consolas,monospace}
 .content code{font:.86em ui-monospace,Consolas,monospace;background:var(--code-inline);color:var(--text);border-radius:5px;padding:.1em .38em}
+.codewrap{position:relative;margin:.4em 0 1em} .codewrap pre{margin:0;padding-top:34px} .codewrap.wrapped pre{white-space:pre-wrap;word-break:break-word} .codebar{position:absolute;top:6px;right:8px;display:flex;gap:6px;z-index:1} .codebtn{font-size:12px;padding:3px 9px;border-radius:7px;border:1px solid var(--line2);background:var(--btn);color:var(--text);cursor:pointer;opacity:.85} .codebtn:hover{opacity:1;background:var(--btn-h)} .codebtn.on{background:var(--info-bg);border-color:var(--info-line);color:var(--info-text)} .codebtn.ok{background:var(--council-bg);border-color:var(--council-line);color:var(--council)}
 .content pre code{background:none;padding:0;font-size:13px;color:inherit}
 .msg.user .content{font-size:15px;line-height:1.65;color:var(--text)}
 .msg.error .content{font-size:13.5px;line-height:1.6;color:var(--err-text);white-space:pre-wrap}
@@ -339,7 +340,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.28.0'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.28.1'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -387,6 +388,20 @@ function renderInline(parent, text) {
     rest = rest.slice(m.index + t.length);
   }
 }
+// 코드·프롬프트 블록: 오른쪽 위 📋 복사 · ↩ 줄바꿈(긴 한 줄 프롬프트를 가로 스크롤 없이 보기)
+function codeBlock(text) {
+  const wrap = el('div', 'codewrap'), pre = el('pre'), code = el('code'), bar = el('div', 'codebar');
+  code.textContent = text; pre.append(code);
+  const cp = el('button', 'codebtn', T('📋 복사', '📋 Copy'));
+  cp.title = T('이 블록 내용을 복사합니다', 'Copy this block');
+  cp.onclick = async e => { e.stopPropagation(); if (!await copyText(text, true)) return; cp.textContent = T('✓ 복사됨', '✓ Copied'); cp.classList.add('ok');
+    setTimeout(() => { cp.textContent = T('📋 복사', '📋 Copy'); cp.classList.remove('ok'); }, 1500); };
+  const wr = el('button', 'codebtn', T('↩ 줄바꿈', '↩ Wrap'));
+  wr.title = T('긴 줄을 화면 폭에 맞춰 줄바꿈해서 봅니다 (복사되는 내용은 그대로)', 'Wrap long lines to the width (copied text is unchanged)');
+  wr.onclick = e => { e.stopPropagation(); wrap.classList.toggle('wrapped'); wr.classList.toggle('on', wrap.classList.contains('wrapped')); };
+  bar.append(wr, cp); wrap.append(bar, pre);
+  return wrap;
+}
 function renderText(container, text) {
   const lines = String(text || '').replace(/\r\n?/g, '\n').replace(/\t/g, '    ').split('\n');
   const LIST = /^(\s*)([-*+•]|\d{1,3}[.)])\s+(.*)$/;
@@ -401,7 +416,7 @@ function renderText(container, text) {
     if (fence) {
       flush(); const buf = []; i++;
       while (i < lines.length && !lines[i].trim().startsWith(fence[1])) buf.push(lines[i++]);
-      i++; const pre = el('pre'), code = el('code'); code.textContent = buf.join('\n'); pre.append(code); container.append(pre); continue;
+      i++; container.append(codeBlock(buf.join('\n'))); continue;
     }
     if (!line.trim()) { flush(); i++; continue; }
     const h = line.match(/^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/);
@@ -819,7 +834,7 @@ async function openMcpManager() {
   try { render(await api('/api/mcp')); } catch (e) { info.textContent = e.message; }
   return m;
 }
-async function copyText(t) { try { await navigator.clipboard.writeText(t); toast(T('복사했습니다', 'Copied')); } catch { toast(T('복사 실패: 브라우저 권한을 확인하세요', 'Copy failed: check browser permissions'), true); } }
+async function copyText(t, quiet) { try { await navigator.clipboard.writeText(t); if (!quiet) toast(T('복사했습니다', 'Copied')); return true; } catch { toast(T('복사 실패: 브라우저 권한을 확인하세요', 'Copy failed: check browser permissions'), true); return false; } }
 
 const RENDER_TURNS = 12;  // 처음에 그릴 최근 질문 묶음 수
 function renderThread() {
