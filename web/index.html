@@ -340,7 +340,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.28.1'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.28.2'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -550,7 +550,7 @@ function msgEl(item, index) {
     // 토론 기록 폴더: 결론 바로 위에서 열기 (경로도 복사 → Claude 앱에 "이 폴더의 결론.md 읽어줘" 로 붙여넣기)
     const b = el('button', 'ghost small', T('📁 토론 기록 폴더', '📁 Discussion log folder'));
     b.title = T('질문·1차 의견·교차 검토·결론.md 가 저장된 PC 폴더를 엽니다. 폴더 경로도 복사됩니다.', 'Opens the folder on this PC with the question, round answers and 결론.md (conclusion). The path is copied too.');
-    b.onclick = async () => { try { const r = await api('/api/debate/open', { dir: item.debate_dir }); try { await navigator.clipboard.writeText(r.path); } catch {}
+    b.onclick = async () => { try { const r = await api('/api/debate/open', { dir: item.debate_dir }); await copySilent(r.path);
       toast((r.opened ? T('폴더를 열고 경로를 복사했습니다: ', 'Opened the folder and copied its path: ') : T('폴더 경로를 복사했습니다: ', 'Folder path copied: ')) + r.path); } catch (e) { toast(e.message, true); } };
     head.append(b);
   }
@@ -671,7 +671,7 @@ function mcpDenialCard(item, index) {
 // 🖥 대화 모드 → Claude 앱으로 가져가기 (대화 모드는 Claude Code 세션이 없어 문서로 넘긴다)
 async function takeToClaudeApp(item) {
   let r; try { r = await api('/api/handoff/export', { conversation_id:S.current, item_id:item.id }); } catch (e) { return toast(e.message, true); }
-  let copied = false; try { await navigator.clipboard.writeText(r.text); copied = true; } catch {}
+  const copied = await copySilent(r.text);
   const body = el('div');
   body.append(el('pre', '', (copied ? T(`복사했습니다 (${r.chars.toLocaleString()}자).`, `Copied (${r.chars.toLocaleString()} chars).`) : T('자동 복사가 막혔습니다. 아래 "다시 복사"를 누르세요.', 'Automatic copy was blocked. Press "Copy again" below.'))
     + T(`\n\n1. Claude 데스크톱 앱을 열고 새 대화를 시작합니다.\n2. 입력창에 붙여넣기(Ctrl+V)하고 보냅니다 — 질문·결론·앞선 맥락이 한 번에 전달됩니다.\n\n파일로도 저장했습니다:\n${r.path}\n(Claude 앱의 Code 쪽에서는 "이 파일 읽고 이어서 해줘"라고 해도 됩니다)`,
@@ -688,7 +688,7 @@ async function takeToClaudeApp(item) {
 function openInClaudeApp(item) {
   const id = item.claude_session, dir = item.workdir || $('#workdir').value.trim();
   const cmd = (S.platform === 'win32' || S.platform === 'windows' || /^[A-Za-z]:/.test(dir) ? `cd /d "${dir}" && ` : `cd "${dir}" && `) + `claude --resume ${id}`;
-  try { navigator.clipboard.writeText(cmd); } catch {}
+  copySilent(cmd);
   const a = document.createElement('a'); a.href = 'claude://resume?session=' + encodeURIComponent(id); document.body.append(a); a.click(); a.remove();
   modal(T('Claude 앱에서 이어서', 'Continue in Claude app'),
     T(`Claude 데스크톱 앱에서 이 세션을 여는 중입니다 (브라우저가 "Claude 열기"를 물으면 허용).\n\n안 열리면:\n· 데스크톱 앱 Code 화면에서 /resume 입력 → 이 세션 선택\n· 또는 터미널에서 (복사됨):\n  ${cmd}\n\n주의\n· 앱에서 이어서 한 작업은 Council 대화에 자동으로 들어오지 않습니다. 다시 Council 로 올 때는 "HANDOFF.md 마지막 항목 보고 이어서" 라고 하세요.\n· 같은 폴더를 Council 과 앱에서 동시에 작업시키지 마세요.\n· 1시간 안에 이어 가면 이전 기록을 캐시에서 읽어 토큰이 적게 듭니다.`,
@@ -834,7 +834,28 @@ async function openMcpManager() {
   try { render(await api('/api/mcp')); } catch (e) { info.textContent = e.message; }
   return m;
 }
-async function copyText(t, quiet) { try { await navigator.clipboard.writeText(t); if (!quiet) toast(T('복사했습니다', 'Copied')); return true; } catch { toast(T('복사 실패: 브라우저 권한을 확인하세요', 'Copy failed: check browser permissions'), true); return false; } }
+// 복사: Clipboard API 가 막힌 곳(FlowX 화면 안에 끼워 연 Council = iframe, 권한 거부 등)에서는 예전 방식(execCommand)으로 다시 시도
+function copyFallback(t) {
+  const ta = document.createElement('textarea'); ta.value = t; ta.setAttribute('readonly', '');
+  ta.style.cssText = 'position:fixed;top:-1000px;left:0;opacity:0'; document.body.append(ta);
+  const sel = document.getSelection(), prev = sel && sel.rangeCount ? sel.getRangeAt(0) : null;
+  ta.select(); ta.setSelectionRange(0, t.length); let ok = false;
+  try { ok = document.execCommand('copy'); } catch { ok = false; }
+  ta.remove(); if (prev && sel) { sel.removeAllRanges(); sel.addRange(prev); }
+  return ok;
+}
+async function copySilent(t) {  // 토스트 없이 복사만 (성공 여부)
+  try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(t); return true; } } catch {}
+  return copyFallback(t);
+}
+async function copyText(t, quiet) {
+  let ok = false;
+  try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(t); ok = true; } } catch { ok = false; }
+  if (!ok) ok = copyFallback(t);
+  if (ok) { if (!quiet) toast(T('복사했습니다', 'Copied')); return true; }
+  toast(T('복사 실패: 이 화면에서는 클립보드를 쓸 수 없습니다. 내용을 선택해 Ctrl+C 로 복사하세요', 'Copy failed: the clipboard is not available here. Select the text and press Ctrl+C'), true);
+  return false;
+}
 
 const RENDER_TURNS = 12;  // 처음에 그릴 최근 질문 묶음 수
 function renderThread() {
@@ -1623,7 +1644,7 @@ function confirmSwitch(k) {
 async function startLogin(k, x, sw) {
   let r; try { r = await api('/api/cli/login', sw ? { name:k, switch:true } : { name:k }); } catch (e) { toast(T('로그인 창을 열지 못했습니다: ', 'Could not open the sign-in window: ') + e.message, true); return; }
   if (!r.opened) {
-    try { await navigator.clipboard.writeText(r.command); } catch {}
+    await copySilent(r.command);
     modal(`${CLI_NAMES[k]} ${T('로그인', 'sign-in')}`, T(`이 PC에서는 로그인 창을 자동으로 열 수 없습니다.\n터미널에서 아래 명령을 실행하세요 (복사됨):\n\n`, `Council cannot open a sign-in window on this computer.\nRun this command in a terminal (copied):\n\n`) + r.command); return;
   }
   const m = modal(`${CLI_NAMES[k]} ${sw ? T('계정 바꾸기', 'account switch') : T('로그인', 'sign-in')}`, T(`검은 ${sw ? '로그아웃 → 로그인' : '로그인'} 창을 열었습니다.\n\n1. 잠시 후 브라우저가 열리면 ${k === 'codex' ? 'ChatGPT' : 'Claude'} 계정으로 로그인하세요.\n2. 로그인이 끝나면 검은 창은 닫아도 됩니다.\n\n로그인이 확인되면 이 안내는 자동으로 닫힙니다…`, `A ${sw ? 'sign-out → sign-in' : 'sign-in'} terminal window was opened.\n\n1. When the browser opens, sign in with your ${k === 'codex' ? 'ChatGPT' : 'Claude'} account.\n2. After signing in you can close the terminal window.\n\nThis message closes automatically once sign-in is confirmed…`),

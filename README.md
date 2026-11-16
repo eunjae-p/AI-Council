@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.28.1** (2026-11-16) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.28.2** (2026-11-16) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.28.2](CHANGELOG.md#v0282-2026-11-16) | 11-16 | 📋 FlowX 화면 안에서 연 Council 등에서 **복사 실패**하던 문제 수정 |
 | [V0.28.1](CHANGELOG.md#v0281-2026-11-16) | 11-16 | 📋 답변 속 코드·프롬프트 블록마다 **복사** 버튼과 **↩ 줄바꿈** 보기 |
 | [V0.28.0](CHANGELOG.md#v0280-2026-11-13) | 11-13 | ⚖️ **토론 개편** — 합의면 3번에 끝, 쟁점만 반박(미결이면 1번 더), ✍️ 작성 요청은 초안→검토 자동, 🏁 결론 카드(할 일 중심), 사회자 교대 |
 | [V0.27.2](CHANGELOG.md#v0272-2026-11-11) | 11-11 | 🎨 대화 중 이미지가 **같은 이미지를 두 장씩** 저장·표시하던 문제 수정 |
 | [V0.27.1](CHANGELOG.md#v0271-2026-11-06) | 11-06 | 🔗 `aicouncil://` 링크로 켜기 (Windows) — FlowX 의 AI Council 메뉴 '다시 연결'이 Council 을 창 없이 켬 |
-| [V0.27.0](CHANGELOG.md#v0270-2026-11-06) | 11-06 | 🖥 **앱처럼 실행** — 아이콘을 누르면 주소창 없는 **앱 창**으로 열림, 바탕화면·시작 메뉴(Mac: 응용 프로그램) 바로가기 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -376,7 +376,7 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.28.1** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.28.2** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
