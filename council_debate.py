@@ -138,7 +138,7 @@ Below are round-1 answers that 모델 A and 모델 B wrote independently.
 Task: compare them and decide whether they substantially agree.
 - Minor differences in wording, detail or order are NOT disagreements. A disagreement is a different recommendation,
   a contradictory fact, or a different judgment that would change what the user does.
-{saver_rule}
+{saver_rule}{work_rule}
 Output:
 1. A ```json block: {{"status": "agreed" | "disputed", "disputes": [{{"topic": "...", "A": "...", "B": "..."}}]}}
    ("disputes" empty when agreed; at most 5, most important first.)
@@ -165,7 +165,7 @@ FINAL_PROMPT = MODERATOR_RULES + """
 Write the final conclusion card from the discussion below (round-1 answers, the disputed points, and the replies on them).
 Settle each disputed point by evidence; if it cannot be settled, put it in "decisions" (what the user must choose, with
 your recommendation) or "checks" (what to verify), and mark it 미결 in "disputed".
-
+{work_rule}
 """ + CARD_SPEC.replace("{", "{{").replace("}", "}}") + """
 Shared context:
 {context}
@@ -204,18 +204,29 @@ def _blind(rng, gpt: str, claude: str) -> tuple[str, str, dict[str, str]]:
     return by[mapping["A"]], by[mapping["B"]], mapping
 
 
-def analyze_prompt(rng, *, context, question, attachments, gpt1, claude1, saver) -> tuple[str, dict[str, str]]:
+WORK_RULE = """
+WORK MODE: right after you, ONE model will carry out the conclusion in the user's folder, and nobody reviews the work
+afterwards — so the plan must be complete now. In the card, write the full implementation spec as the deliverable
+(between <<<DELIVERABLE>>> and <<<END>>>): numbered steps with file/object paths and exactly what to change, what must
+not be touched, every edge case either model raised that should be handled (merge both models' concrete points), and
+how to verify the result. Points that need the user's choice go to "decisions" with your recommendation (the executor
+will take the recommendation). "actions": the steps the executor will do ("work": true) and what the user should check
+afterwards ("work": false).
+"""
+
+
+def analyze_prompt(rng, *, context, question, attachments, gpt1, claude1, saver, work=False) -> tuple[str, dict[str, str]]:
     a1, b1, mapping = _blind(rng, gpt1, claude1)
     prompt = ANALYZE_PROMPT.format(
-        saver_rule="", final_rule=ANALYZE_FINAL_ALWAYS if saver else ANALYZE_FINAL_IF_AGREED,
+        saver_rule="", work_rule=WORK_RULE if work else "", final_rule=ANALYZE_FINAL_ALWAYS if saver else ANALYZE_FINAL_IF_AGREED,
         context=context, question=question, attachments=attachments, a1=a1, b1=b1)
     return prompt, mapping
 
 
-def final_prompt(mapping, *, context, question, attachments, gpt1, claude1, disputes, gpt2, claude2) -> str:
+def final_prompt(mapping, *, context, question, attachments, gpt1, claude1, disputes, gpt2, claude2, work=False) -> str:
     by1 = {"GPT": gpt1, "Claude": claude1}
     by2 = {"GPT": gpt2, "Claude": claude2}
-    return FINAL_PROMPT.format(context=context, question=question, attachments=attachments,
+    return FINAL_PROMPT.format(work_rule=WORK_RULE if work else "", context=context, question=question, attachments=attachments,
                                a1=by1[mapping["A"]], b1=by1[mapping["B"]], disputes=disputes,
                                a2=by2[mapping["A"]], b2=by2[mapping["B"]])
 

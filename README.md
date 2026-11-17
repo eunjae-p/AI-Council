@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.28.2** (2026-11-16) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.29.0** (2026-11-17) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.29.0](CHANGELOG.md#v0290-2026-11-17) | 11-17 | 🛠 **토론+작업: 먼저 읽기만 하며 분석·합의 → 한 번만 실행** (실행 뒤 검토·지적 반영 단계 없앰) |
 | [V0.28.2](CHANGELOG.md#v0282-2026-11-16) | 11-16 | 📋 FlowX 화면 안에서 연 Council 등에서 **복사 실패**하던 문제 수정 |
 | [V0.28.1](CHANGELOG.md#v0281-2026-11-16) | 11-16 | 📋 답변 속 코드·프롬프트 블록마다 **복사** 버튼과 **↩ 줄바꿈** 보기 |
 | [V0.28.0](CHANGELOG.md#v0280-2026-11-13) | 11-13 | ⚖️ **토론 개편** — 합의면 3번에 끝, 쟁점만 반박(미결이면 1번 더), ✍️ 작성 요청은 초안→검토 자동, 🏁 결론 카드(할 일 중심), 사회자 교대 |
 | [V0.27.2](CHANGELOG.md#v0272-2026-11-11) | 11-11 | 🎨 대화 중 이미지가 **같은 이미지를 두 장씩** 저장·표시하던 문제 수정 |
-| [V0.27.1](CHANGELOG.md#v0271-2026-11-06) | 11-06 | 🔗 `aicouncil://` 링크로 켜기 (Windows) — FlowX 의 AI Council 메뉴 '다시 연결'이 Council 을 창 없이 켬 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -173,11 +173,12 @@ GitHub의 최신 버전을 받는 방법은 두 가지입니다. 대화 기록�
 
 - **GPT(Codex)**: `workspace-write` 샌드박스 — 작업 폴더 안에서만 쓰고, 명령 실행과 **인터넷(설치 등)은 허용**됩니다. Codex는 명령별 승인을 할 수 없어 폴더 범위로 제한합니다.
 - **블렌더 등 연결된 도구**: 모드와 별개로 **🔌 Claude MCP** / **🔌 GPT MCP** 를 켭니다 (각 CLI에 Blender MCP가 등록돼 있어야 함).
-- **토론 + 작업 (협업)**: ① GPT·Claude가 **읽기만 하며** 계획 토론 → ② 결론 → ③ **실행: Claude / 실행: GPT** 로 고른 모델이 작업 →
-  ④ 다른 모델이 결과(파일·블렌더 씬)를 **읽기 전용으로 검토**하고 끝납니다. 지적이 있으면 **🔧 지적 반영하기** 를 누를 때만
-  실행했던 Claude 세션을 이어서 고칩니다 (자동으로 두 번 고치지 않음 → 토큰 절약). 구현 중 승인이 필요한 명령이 막히면 검토 전에 멈춥니다.
-  화면: **토론·작업 과정 보기**(접힘: 1차 의견 → 교차 검토 → 합의한 계획 → 구현 → 결과 검토) 아래에 **🏁 최종 결과**, 그 아래 검토 상태·변경 파일.
-  대화 모드 토론도 과정(접힘) 아래에 **🏁 최종 결론**이 마지막으로 보입니다. 기록은 `3_구현`·`4_검토.md`.
+- **토론 + 작업 (협업)** (V0.29.0): 고치기 전에 합의하고, 실행은 한 번만 합니다.
+  ① GPT·Claude가 **아무것도 바꾸지 않고 읽기만 하며** 실제 파일을 분석 — 바꿀 파일·내용, 건드리면 안 되는 것, 처리할 예외 상황(중복 실행·경로 없음·오류…), 확인 방법까지
+  → ② 사회자가 비교해 쟁점만 토론 (대화 모드 토론과 같은 흐름) → ③ 두 모델의 지적을 모두 담은 **작업 명세**로 결론
+  → ④ **실행: Claude / 실행: GPT** 로 고른 모델이 명세대로 **한 번** 작업하고 스스로 확인한 뒤 끝. 실행 뒤 다른 모델의 검토·지적 반영 단계는 없습니다 (같은 일을 두 번 하지 않음).
+  구현 중 승인이 필요한 명령이 막히면 거기서 멈추고, 승인하면 이어서 합니다. 예전 대화에 남은 검토 지적은 **🔧 지적 반영하기** 로 계속 반영할 수 있습니다.
+  화면: **토론·작업 과정 보기**(접힘: 1차 의견 → 쟁점 정리 → 쟁점 반박 → 합의한 작업 명세 → 실행) 아래에 **🏁 최종 결과**와 변경 파일. 기록은 `3_구현.md`.
 - **서버 실행**: 오래 켜 두는 서버는 백그라운드로 실행하도록 지시합니다. 끄는 방법은 답변에 안내됩니다.
 - ⚠ **운영 중인 서비스 폴더는 복사본에서** 작업하고 확인 후 반영하는 것을 권장합니다.
 - **⚠ 전체 권한 모드** (작업 폴더 옆 **🔓 전체 권한 끔/켬**, 대화별, 기본 꺼짐): 켜면 이 대화의 Claude 작업 실행이 명령·파일 수정·**작업 폴더 밖 접근**(다른 드라이브, `Z:` 등)을
@@ -376,7 +377,7 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.28.2** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.29.0** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
@@ -402,7 +403,7 @@ It drives the official **Codex CLI (GPT)** and **Claude Code CLI (Claude)** sign
 - **🌐 Web search** toggle — both models search the web and cite sources
 - **🎨 Images in chat** — in Chat mode turn on **🎨 Images**: ask GPT for an image mid-conversation and it appears right in the chat; follow-ups like "make the sky darker" edit the image it just made, and Claude can look at it and comment. Pick the ratio (**16:9** by default, 1:1, 9:16, 4:3, 3:4, or **Ask** = GPT asks the ratio first) and count (1–4); each image has **⬇ Download** and its pixel size. Saved to the `image` folder inside the Council folder by default — change it in **⚙ Settings** (top left). The old 🎨 Image mode was merged into this in V0.26.0.
 - **🔌 Claude MCP / GPT MCP** — use connected tools such as Blender with either model. Claude: only tools you allow run automatically, others ask first. GPT: all tools registered in Codex are enabled when on.
-- **Collaboration** — Discussion + Work: both plan → the model you pick (**Run: Claude / Run: GPT**) executes → the other reviews the actual result read-only and it stops there; **🔧 Apply review** continues the executor's Claude session only when you click it (no automatic second pass). The steps are collapsed above, and the **🏁 Final result** (or **🏁 Final conclusion** in a chat discussion) comes last.
+- **Collaboration** — Discussion + Work (V0.29.0): agree before changing anything, then run once. Both models first analyze the real files **read-only** (what to change, what not to touch, edge cases, how to verify) → the moderator compares them and only the disputed points are debated → the conclusion is a full **implementation spec** with both models' points → the model you pick (**Run: Claude / Run: GPT**) carries it out **once** and verifies it itself. No post-run review/fix pass (no double work). The steps are collapsed above, and the **🏁 Final result** comes last.
 - **Attachments** — text/JSON, images, video (12 frames via ffmpeg), ZIP (safely extracted: file list, text/code contents, up to 8 images; in work mode the extracted folder can be opened); drag & drop or Ctrl+V. ComfyUI workflow JSON is pre-summarized (nodes, models, color-coded required inputs)
 - **💰 Token saving** — always on: the start of the recent-context window stays fixed so each prompt begins like the previous one and hits the CLIs' prompt cache (cached input counts much cheaper); older discussions keep only the conclusion; the final summary uses a short context; images are re-sent only when the question is about them. Every answer shows 🪙 tokens (new input / cached input / output), with daily totals at the bottom left. Optional **💰 Saver** toggle: skips the discussion cross review (5 → 3 calls), shorter context and attachment excerpts, concise answers, low reasoning effort for GPT in chat.
 - **🔁 Switching with the Claude desktop app** — 📄 prepares `CLAUDE.md` (template, or just appends the handoff rule); 📝 Handoff (on by default) appends request / status / changed files / session ID / result summary to `HANDOFF.md` in the working folder after each Work task (read-only questions are skipped; turn it off for folders a web server publishes); **🖥 Continue in Claude app** opens the session in the desktop app via `claude://resume?session=…` (undocumented link; fallback: `/resume` in the app or the copied `claude --resume <ID>`). Chat-mode answers and discussion conclusions get **🖥 Take to Claude app**: the question, conclusion (plus round-1 excerpts) and earlier context are copied as one document (also saved under `exports/handoff/`) to paste into a new chat in the desktop app. Back in Council, say "read the last entry of HANDOFF.md and continue".

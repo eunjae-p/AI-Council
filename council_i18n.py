@@ -72,6 +72,7 @@ PAIRS: list[tuple[str, str]] = [
     ("1라운드 · GPT와 Claude가 각자 독립적으로 답변하는 중", "Round 1 · GPT and Claude are answering independently"),
     ("2라운드 · 서로의 답변을 읽고 교차 검토하는 중", "Round 2 · Each model is reviewing the other's answer"),
     ("토론 내용을 최종 결론으로 정리하는 중", "Writing the final conclusion"),
+    ("합의된 내용대로 {x}가 작업하는 중", "{x} is carrying out the agreed plan"),
     ("두 답변을 비교해 합의점과 쟁점을 정리하는 중", "Comparing both answers: what they agree on and where they differ"),
     ("2라운드 · 쟁점 {x}개만 서로 반박하는 중", "Round 2 · Rebutting only the {x} disputed point(s)"),
     ("3라운드 · 아직 갈린 쟁점 {x}개만 마지막으로 반박하는 중", "Round 3 · Final rebuttal on {x} unresolved point(s)"),

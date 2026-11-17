@@ -540,10 +540,12 @@ post("/api/chat", {"question":"EDIT_FILE 토론 후 수정","conversation_id":c1
 log = open(os.environ["FAKE_LOG"]).read()
 items = get("/api/conversation?id="+c15)["items"]
 rr = {i.get("round"): i["model"] for i in items[-8:] if i.get("round") in (3, 4, 5)}
-rv = next(i for i in reversed(items) if i.get("round")==4); r3i = next(i for i in reversed(items) if i.get("round")==3)
-ok(rr == {3:"Claude", 4:"GPT"} and items[-1]["role"]=="edit" and rv.get("review_verdict")=="issues",
-   f"discussion+work: Claude runs, GPT reviews, no automatic second fix {rr}")
-ok(log.count("acceptEdits")==1 and "workspace-write" not in log and "planning round" in log and "'read-only'" in log, "planning/review rounds are read-only")
+r3i = next(i for i in reversed(items) if i.get("round")==3)
+ok(rr == {3:"Claude"} and items[-1]["role"]=="edit", f"discussion+work: analysis -> agreement -> Claude runs once, no review after {rr}")
+ok(log.count("acceptEdits")==1 and "workspace-write" not in log and "analysis round (read only" in log and "'read-only'" in log, "analysis rounds are read-only")
+ok("WORK MODE: right after you" in log and "There is no separate review afterwards" in log and "will review your result" not in log, "moderator writes the full spec; executor verifies itself")
+# 예전 대화의 검토 항목(round 4)에서 🔧 지적 반영하기는 그대로 동작
+rv = w.store.append_message(c15, "assistant", "1. 문제: X 를 고쳐야 함", "GPT", round=4, mode="read", review_verdict="issues")
 post("/api/edit/apply", {"conversation_id":c15,"ref":items[-1]["id"],"action":"revert"})
 # 🔧 지적 반영하기: 구현했던 Claude 세션을 이어서 (--resume) 검토 내용만 전달
 open(os.environ["FAKE_LOG"],"w").close()
@@ -561,7 +563,7 @@ open(os.environ["FAKE_LOG"],"w").close()
 post("/api/chat", {"question":"EDIT_FILE GPT 실행","conversation_id":c15,"target":"both","mode":"work","workdir":str(ed),"executor":"gpt"}, raw=True)
 log = open(os.environ["FAKE_LOG"]).read(); items = get("/api/conversation?id="+c15)["items"]
 rr = {i.get("round"): i["model"] for i in items[-8:] if i.get("round") in (3, 4, 5)}
-ok(rr.get(3)=="GPT" and rr.get(4)=="Claude" and log.count("workspace-write")>=1 and "acceptEdits" not in log, f"executor GPT, Claude reviews {rr}")
+ok(rr.get(3)=="GPT" and 4 not in rr and log.count("workspace-write")>=1 and "acceptEdits" not in log, f"executor GPT runs once {rr}")
 ok([i for i in items if i["role"]=="user"][-1].get("executor")=="gpt", "executor saved")
 post("/api/edit/apply", {"conversation_id":c15,"ref":items[-1]["id"],"action":"revert"})
 # 작업 모드 명령: 허용 목록에 없으면 막히고 승인 요청, 이번만/항상 허용
@@ -585,7 +587,7 @@ open(os.environ["FAKE_LOG"],"w").close()
 post("/api/chat", {"question":"RUN_CMD: npm install express","conversation_id":cd2,"target":"both","mode":"work","workdir":str(cw),"executor":"claude"}, raw=True)
 its = get("/api/conversation?id="+cd2)["items"]; rounds = [i.get("round") for i in its if i["role"]=="assistant"]
 r3 = next((i for i in its if i.get("round")==3), {})
-ok(r3.get("paused") and 4 not in rounds and 5 not in rounds and r3.get("claude_session"), f"discussion: paused executor skips review/fix {rounds}")
+ok(r3.get("paused") and 4 not in rounds and 5 not in rounds and r3.get("claude_session"), f"discussion: paused executor waits for approval {rounds}")
 html_ = (pathlib.Path(w.__file__).parent/"web"/"index.html").read_text(encoding="utf-8")
 ok("const canResume" in html_ and "[3, 5].includes(item.round)" in html_, "approval in discussion+work resumes the executor session (no full rerun)")
 # 시간 제한: 진행 중이면 기다리고(출력 없는 시간 기준), 상한을 넘으면 세션을 남긴 채 '이어서 진행'
@@ -702,7 +704,7 @@ open(os.environ["FAKE_LOG"],"w").close()
 post("/api/chat", {"question":"EDIT_FILE 토론 실행","conversation_id":cf,"target":"both","mode":"work","workdir":str(fw),"executor":"claude"}, raw=True)
 lg = open(os.environ["FAKE_LOG"]).read(); claude_calls = [x for x in lg.split("=====CLAUDE")[1:]]
 ok(sum("bypassPermissions" in x for x in claude_calls)==1 and any("Implement the agreed conclusion" in x and "bypassPermissions" in x for x in claude_calls)
-   and not any("planning round" in x and "bypassPermissions" in x for x in claude_calls), "discussion: only the implementation step gets full access")
+   and not any("analysis round (read only" in x and "bypassPermissions" in x for x in claude_calls), "discussion: only the implementation step gets full access")
 # MCP: 전체 권한이어도 '항상 허용'한 도구만 — 나머지는 ask 규칙
 post("/api/mcp/refresh", {}); post("/api/mcp/allow", {"tool":"mcp__claude_ai_Higgsfield__balance","allowed":True})
 open(os.environ["FAKE_LOG"],"w").close()

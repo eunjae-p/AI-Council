@@ -58,7 +58,7 @@ import council_image
 from council_settings import Settings
 import council_app
 
-VERSION = "0.28.2"
+VERSION = "0.29.0"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -196,40 +196,30 @@ Do not modify any files. Cite file paths you used.
 """
 
 PLAN_NOTE = """
-## Work mode — planning round
-This discussion will end with one model carrying out the agreed plan in the working folder: {workdir}
-In this round you can only read files. Propose concrete steps (files to create or change, commands to run, why)
-and point out risks.
+## Work mode — analysis round (read only, do NOT change anything yet)
+This discussion will end with ONE model carrying out the agreed plan in the working folder: {workdir}
+There is no review after the work, so everything must be decided now. In this round you can only read: look at the
+actual files (and connected tools read-only) before proposing anything. Then give an implementation plan concrete
+enough that another model could carry it out without investigating again:
+- files/objects to create or change, and exactly what to change in each (and what must NOT be touched)
+- edge cases and failure modes to handle (duplicate runs, missing files/paths, errors, existing state, permissions…)
+- commands to run, and how to verify the result afterwards
+Write in the user's language.
 """
 
 IMPLEMENT_NOTE = """
 ## Implement the agreed conclusion
-GPT and Claude discussed this request and reached the conclusion below. Carry it out now in the working folder
-(and with connected tools if needed). Follow the conclusion; where it says something is unresolved or needs
-verification, choose the safest option and say so. Do not implement items marked as rejected.
-{other} will review your result afterwards, so end with a clear report: what you did, files/objects changed,
-commands run, and anything not done.
+GPT and Claude analyzed this request without changing anything, discussed it, and agreed on the conclusion and
+implementation spec below. Carry it out now in the working folder (and with connected tools if needed).
+- Follow the spec, including the edge cases it lists. Where something is unresolved or needs verification, choose the
+  safest option and say so. Do not implement items marked as rejected, and do not touch what the spec says to keep.
+- There is no separate review afterwards: before finishing, verify the result yourself (read back what you changed,
+  run the safe checks in the spec) and fix any problem you find.
+- End with a short report in the user's language (Korean if the user wrote Korean): what you did, files/objects
+  changed, commands run, verification results, and anything not done or left for the user.
 
 ### Conclusion
 {conclusion}
-"""
-
-REVIEW_NOTE = """
-## Cross review of {executor}'s work
-{executor} carried out the agreed conclusion. Check the actual result yourself — read the files in the working
-folder and, if connected tools are available (e.g. Blender), inspect the current state with read-only calls.
-Do not modify anything in this step.
-Write, in the user's language:
-1. What matches the conclusion
-2. Problems, bugs or missing parts — concrete and actionable (file/object, what is wrong, how to fix)
-3. Risks the user should know
-If there is nothing to fix, start your answer with the single word LGTM on its own line.
-
-### Conclusion
-{conclusion}
-
-### {executor}'s report
-{report}
 """
 
 FIX_NOTE = """
@@ -1201,7 +1191,7 @@ class Handler(BaseHTTPRequestHandler):
                         # 쟁점 정리: 합의면 이 호출이 바로 결론 (절약 모드는 쟁점이 있어도 여기서 결론)
                         prompt, mapping = debate.analyze_prompt(random.SystemRandom(), context=mod_context(), question=question,
                                                                 attachments=attach_summary, gpt1=first["gpt"], claude1=first["claude"],
-                                                                saver=saver)
+                                                                saver=saver, work=mode == "work")
                         blind = moderate(prompt, "두 답변을 비교해 합의점과 쟁점을 정리하는 중", 2)
                         raw = debate.unblind(blind, mapping)
                         status, disputes_blind, _ = debate.parse_analysis(blind)
@@ -1243,7 +1233,8 @@ class Handler(BaseHTTPRequestHandler):
                                                                    attachments=attach_summary, gpt1=first["gpt"], claude1=first["claude"],
                                                                    disputes=debate.disputes_text(disputes_blind),
                                                                    gpt2=debate.blind_names(replies["gpt"], mapping),
-                                                                   claude2=debate.blind_names(replies["claude"], mapping)),
+                                                                   claude2=debate.blind_names(replies["claude"], mapping),
+                                                                   work=mode == "work"),
                                                "토론 내용을 최종 결론으로 정리하는 중", 5)
                                 raw = debate.unblind(raw, mapping)
                                 save_conclusion(debate.parse_card(raw), raw, {"agreement": "disputed", "rounds": 3 if left else 2})
@@ -1254,39 +1245,21 @@ class Handler(BaseHTTPRequestHandler):
                         self.emit("model_error", model="Council", text=errors["Council"])
                     stopped = stopped or token.cancelled
             if mode == "work" and "Council" in answers and not token.cancelled:
-                # 작업 모드 토론: 결론 → 한 모델이 실행 → 다른 모델이 결과를 검토 → 실행한 모델이 수정
-                # (두 모델이 같은 파일·같은 블렌더 씬을 동시에 고치면 충돌하므로 순서대로 주고받는다)
-                doer, checker = executor, ("claude" if executor == "gpt" else "gpt")
-                d_label, c_label = models[doer][0], models[checker][0]
-
-                def step(which, prompt, round_no, stage, log_name, log_title, call_mode=None, post=None):
-                    nonlocal stopped
-                    self.emit("stage", step=round_no + 1, text=stage)
-                    try:
-                        text, item = ask(which, prompt, round_no, call_mode, post=post)
-                        debate.write_log(folder, log_name, log_title, text, item.get("cli_model", ""))
-                        self.emit("answer", item=item)
-                        if item.get("paused") or item.get("cmd_denials") or item.get("mcp_denials"):
-                            return None  # 승인 대기·막힌 명령이 있음 → 검토로 넘어가지 않음 (승인 후 이 세션을 이어서 진행)
-                        return text
-                    except Cancelled:
-                        stopped = True
-                    except CliFailure as exc:
-                        key = f"{models[which][0]} {log_title.split(' · ')[-1]}"
-                        errors[key] = exc.details()
-                        self.emit("model_error", model=key, text=errors[key])
-                    return None
-
-                report = step(doer, base_prompt(doer) + IMPLEMENT_NOTE.format(conclusion=answers["Council"], other=c_label), 3,
-                              f"결론대로 {d_label}가 작업하는 중", f"3_{d_label}_구현.md", f"{d_label} · 구현")
-                if report is not None and not token.cancelled:
-                    # 다른 모델이 결과를 읽기 전용으로 검토하고 여기서 끝낸다.
-                    # (예전: 지적이 있으면 실행 모델이 자동으로 다시 고침 → 같은 일을 두 번 해 토큰이 크게 들었다.
-                    #  이제 화면의 '🔧 지적 반영하기'를 누를 때만, 실행했던 Claude 세션을 이어서 고친다)
-                    step(checker, base_prompt(checker, "review") + REVIEW_NOTE.format(
-                             executor=d_label, conclusion=answers["Council"], report=report), 4,
-                         f"{c_label}가 결과를 검토하는 중", f"4_{c_label}_검토.md", f"{c_label} · 검토", "read",
-                         post=lambda a: {"review_verdict": "lgtm" if a.lstrip().upper().startswith("LGTM") else "issues"})
+                # 작업 모드 토론: 둘 다 읽기만 하며 분석 → 토론 → 합의된 작업 명세 → 한 모델이 실행하고 스스로 확인 → 끝.
+                # (V0.29.0: 구현 뒤 다른 모델 검토 → 지적 반영으로 같은 일을 두 번 하던 단계를 없앰. 고칠 점은 실행 전에 합의)
+                doer = executor
+                d_label = models[doer][0]
+                self.emit("stage", step=6, text=f"합의된 내용대로 {d_label}가 작업하는 중")
+                try:
+                    report, item = ask(doer, base_prompt(doer) + IMPLEMENT_NOTE.format(conclusion=answers["Council"]), 3)
+                    debate.write_log(folder, f"3_{d_label}_구현.md", f"{d_label} · 구현", report, item.get("cli_model", ""))
+                    self.emit("answer", item=item)
+                except Cancelled:
+                    stopped = True
+                except CliFailure as exc:
+                    key = f"{d_label} 구현"
+                    errors[key] = exc.details()
+                    self.emit("model_error", model=key, text=errors[key])
 
         if mode == "work" and workdir and getattr(self, "handoff", False):
             # 인수인계 기록: 실제로 무언가를 한 작업만 (파일을 읽기만 한 질문은 남기지 않음)
