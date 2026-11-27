@@ -340,7 +340,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.29.0'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.29.1'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -1107,12 +1107,31 @@ function highlight(node, text, q) {
   node.append(document.createTextNode(text.slice(i)));
 }
 
+// ---------- 대화별 입력 초안 ----------
+// 다른 대화로 옮겨도 적던 글·첨부는 원래 대화에 남는다 (Claude·ChatGPT 앱처럼).
+// 글은 이 PC 브라우저에 저장(앱을 다시 켜도 유지, 최근 50개 대화), 첨부는 앱을 닫기 전까지만.
+const DRAFT_KEY = 'councilDrafts', DRAFT_MAX = 50;
+function draftsAll() { try { const d = JSON.parse(store.get(DRAFT_KEY) || '{}'); return d && typeof d === 'object' ? d : {}; } catch { return {}; } }
+function saveDraft(id, text) {
+  if (!id) return; const d = draftsAll();
+  if (text && text.trim()) d[id] = { t:text, at:Date.now() }; else delete d[id];
+  const keys = Object.keys(d);
+  if (keys.length > DRAFT_MAX) keys.sort((a, b) => d[a].at - d[b].at).slice(0, keys.length - DRAFT_MAX).forEach(k => delete d[k]);
+  store.set(DRAFT_KEY, JSON.stringify(d));
+}
+function loadDraft(id) { const x = draftsAll()[id]; return x && typeof x.t === 'string' ? x.t : ''; }
+S.fileDrafts = {};
+function stashInput(id) { if (!id) return; saveDraft(id, $('#q').value); if (S.files.length) S.fileDrafts[id] = S.files; else delete S.fileDrafts[id]; }
+function restoreInput(id) { $('#q').value = loadDraft(id); autoGrow(); S.files = S.fileDrafts[id] || []; delete S.fileDrafts[id]; renderChips(); }
+
 // ---------- 대화 열기/만들기 ----------
 async function openConversation(id, focusIndex) {
   try {
     const data = await api('/api/conversation?id=' + encodeURIComponent(id));
     if (S.current !== id) S.renderTurns = RENDER_TURNS;  // 다른 대화를 열면 다시 최근 묶음만
+    const switched = S.current !== id; if (switched) stashInput(S.current);  // 떠나는 대화의 입력은 그 대화에 남겨 둔다
     S.current = id; S.meta = data.meta; S.items = data.items; updateFullAccessUI();
+    if (switched) restoreInput(id);
     if (focusIndex != null) {  // 검색으로 오래된 메시지로 이동할 때는 그 위치까지 그린다
       const need = S.items.slice(focusIndex).filter(x => x.role === 'user').length + 1;
       S.renderTurns = Math.max(S.renderTurns || RENDER_TURNS, need);
@@ -1460,7 +1479,7 @@ async function send() {
   setBusy(true, T('보내는 중', 'Sending'));
   if (!S.items.length) box.innerHTML = '';
   const pend = pendingEl(T('대화 맥락을 준비하는 중', 'Preparing conversation context')); box.append(pend); scrollBottom();
-  const draft = question; q.value = ''; autoGrow();
+  const draft = question; q.value = ''; autoGrow(); saveDraft(convId, '');
   const allowOnceSent = S.allowOnce || []; S.allowOnce = []; S.skipGitCheck = false;
   const cmdsOnceSent = S.allowCmdsOnce || []; S.allowCmdsOnce = [];
   const approvedNames = S.approvedNames || [], blockedCmds = S.blockedCmds || []; S.approvedNames = []; S.blockedCmds = [];
@@ -1502,8 +1521,10 @@ async function send() {
       const lost = await connectionLost(convId);
       if (lost) { $('#status').textContent = lost; notifyDone(convId, 'error', question); return; }
     }
-    if (!gotUser && !q.value) { q.value = draft; autoGrow(); }
-    if (!gotUser && !S.files.length) { S.files = sentFiles; renderChips(); } // 저장 전 실패면 첨부도 되돌림 // 질문이 저장되지 않았으면 입력창에 되돌림
+    if (!gotUser && here() && !q.value) { q.value = draft; autoGrow(); saveDraft(convId, draft); }  // 질문이 저장되지 않았으면 그 대화의 입력창으로 되돌림
+    else if (!gotUser && !here() && !loadDraft(convId)) saveDraft(convId, draft);
+    if (!gotUser && here() && !S.files.length) { S.files = sentFiles; renderChips(); }
+    else if (!gotUser && !here() && sentFiles.length && !S.fileDrafts[convId]) S.fileDrafts[convId] = sentFiles; // 저장 전 실패면 첨부도 되돌림 // 질문이 저장되지 않았으면 입력창에 되돌림
     if (here()) { try { await openConversation(convId); } catch {} const last = S.items[S.items.length - 1];
       if (!last || last.role !== 'error') { $('#msgs').append(el('div', 'inline-err', T('오류: ', 'Error: ') + err.message)); } scrollBottom(); }
     else toast(T('오류: ', 'Error: ') + err.message, true);
@@ -1546,7 +1567,7 @@ window.addEventListener('keydown', e => {
   if (S.running) { e.preventDefault(); if (confirm(T('답변 생성을 중지할까요? (Esc)', 'Stop generating? (Esc)'))) stopRun('esc'); }
 });
 const autoGrow = () => { const q = $('#q'); q.style.height = 'auto'; q.style.height = Math.min(q.scrollHeight, innerHeight * .4) + 'px'; };
-$('#q').addEventListener('input', autoGrow);
+$('#q').addEventListener('input', () => { autoGrow(); saveDraft(S.current, $('#q').value); });
 $('#q').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
 
 // ---------- CLI 버전 확인 · 버튼으로 업데이트/로그인 ----------

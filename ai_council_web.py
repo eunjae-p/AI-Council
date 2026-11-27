@@ -58,7 +58,7 @@ import council_image
 from council_settings import Settings
 import council_app
 
-VERSION = "0.29.0"
+VERSION = "0.29.1"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
