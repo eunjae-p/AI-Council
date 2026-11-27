@@ -605,7 +605,11 @@ _t = _th.Thread(target=lambda: post("/api/chat", {"question":"PROGRESS_LOOP 이�
 _t.start(); _t2.sleep(4)
 lv = get("/api/live?id="+ct2)
 ok(lv["busy"] is True and lv["stage"] and len(lv["log"]) >= 1 and lv["log"][-1]["model"]=="Claude" and lv["started"] > 0, f"live progress while running {str(lv)[:200]}")
+rp = (lv.get("report") or {}).get("item") or {}
+ok(rp.get("kind") == "report" and rp.get("text","").startswith("📍 구현 끝") and lv["report"]["model"] == "Claude", f"📍 progress report kept for live view {lv.get('report')}")
 _t.join(60)
+_d = get("/api/conversation?id="+ct2)["items"][-1]
+ok(any(a.get("kind") == "report" for a in _d.get("activity") or []), "report saved in activity log")
 lv = get("/api/live?id="+ct2); ok(lv == {"busy": False}, f"live cleared when done {lv}")
 a = get("/api/conversation?id="+ct2)["items"][-1]
 ok(a["role"]=="assistant" and "오래 걸린 작업 완료" in a["content"] and a["elapsed"] > 10, f"progress keeps the run alive past the idle limit ({a.get('elapsed')}s)")
@@ -708,11 +712,14 @@ ok("bypassPermissions" not in open(os.environ["FAKE_LOG"]).read(), "chat mode un
 open(os.environ["FAKE_LOG"],"w").close()
 post("/api/chat", {"question":"GPT 작업","conversation_id":cf,"target":"gpt","mode":"work","workdir":str(fw)}, raw=True)
 lg = open(os.environ["FAKE_LOG"]).read(); ok("workspace-write" in lg and "bypass" not in lg and "danger-full-access" not in lg, "GPT sandbox unchanged")
+ok("Progress reports" not in lg, "GPT work prompt has no 📍 report rule (its progress is not shown live)")
 open(os.environ["FAKE_LOG"],"w").close()
 post("/api/chat", {"question":"EDIT_FILE 토론 실행","conversation_id":cf,"target":"both","mode":"work","workdir":str(fw),"executor":"claude"}, raw=True)
 lg = open(os.environ["FAKE_LOG"]).read(); claude_calls = [x for x in lg.split("=====CLAUDE")[1:]]
 ok(sum("bypassPermissions" in x for x in claude_calls)==1 and any("Implement the agreed conclusion" in x and "bypassPermissions" in x for x in claude_calls)
    and not any("analysis round (read only" in x and "bypassPermissions" in x for x in claude_calls), "discussion: only the implementation step gets full access")
+ok(all(("Progress reports" in x) == ("Implement the agreed conclusion" in x) for x in claude_calls if "--system-prompt" in x or "Implement" in x or "analysis round" in x),
+   "📍 progress-report rule only in the implementation step")
 # MCP: 전체 권한이어도 '항상 허용'한 도구만 — 나머지는 ask 규칙
 post("/api/mcp/refresh", {}); post("/api/mcp/allow", {"tool":"mcp__claude_ai_Higgsfield__balance","allowed":True})
 open(os.environ["FAKE_LOG"],"w").close()

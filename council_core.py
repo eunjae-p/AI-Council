@@ -814,6 +814,9 @@ class PermissionWatch:
         return "\n\n".join(self.texts[-3:])[:4000] or "…"
 
 
+REPORT_MARK = "📍"  # 작업 중 중간 보고 글의 시작 표시 (ai_council_web.PROGRESS_NOTE 와 같게)
+
+
 def _claude_progress(line: str, callback) -> None:
     """stream-json 한 줄 → 진행 상황 콜백 (도구 호출, 짧은 설명 글)."""
     line = line.strip()
@@ -847,7 +850,10 @@ def _claude_progress(line: str, callback) -> None:
             callback({"kind": "tool", "text": _tool_summary(str(block.get("name", "")), block.get("input") or {})})
         elif block.get("type") == "text" and str(block.get("text", "")).strip():
             text = " ".join(str(block["text"]).split())
-            callback({"kind": "text", "text": text[:200] + ("…" if len(text) > 200 else "")})
+            if text.startswith(REPORT_MARK):  # 📍 중간 보고: 화면 위쪽에 고정 표시 (조금 더 길게)
+                callback({"kind": "report", "text": text[:500] + ("…" if len(text) > 500 else "")})
+            else:
+                callback({"kind": "text", "text": text[:200] + ("…" if len(text) > 200 else "")})
 
 
 def _claude_result(stdout: str, info: dict | None) -> str:

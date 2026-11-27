@@ -60,7 +60,8 @@ if ("PROGRESS_LOOP" in p or "SILENT_HANG" in p) and _STREAM and "--resume" not i
     print(json.dumps({"type":"system","subtype":"init","session_id":sid,"mcp_servers":[]}), flush=True)
     if "SILENT_HANG" in p: time.sleep(20)
     for k in range(20):  # 진행 상황을 계속 보냄
-        print(json.dumps({"type":"assistant","session_id":sid,"message":{"content":[{"type":"text","text":"진행 %d" % k}]}}, ensure_ascii=False), flush=True)
+        txt = "📍 구현 끝 · 지금: 테스트 실행 · 남은 것: 보고 — 약 1분" if k == 2 and "Progress reports" in p else "진행 %d" % k
+        print(json.dumps({"type":"assistant","session_id":sid,"message":{"content":[{"type":"text","text":txt}]}}, ensure_ascii=False), flush=True)
         time.sleep(0.8)
     out("오래 걸린 작업 완료"); sys.exit(0)
 if "HEREDOC_FAIL" in p and _STREAM:

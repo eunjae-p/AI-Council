@@ -146,6 +146,9 @@ details.indiv>summary{cursor:pointer;color:var(--muted);font-size:13px;padding:2
 details.indiv .msg{margin-top:10px}
 .pending .ptime{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--dim);font-size:12.5px}
 .pendwrap .plog{margin:6px 2px 0;font:12px/1.6 ui-monospace,Consolas,monospace;color:var(--muted);max-height:260px;overflow:auto}
+.pendwrap .preport{margin:8px 2px 0;padding:8px 10px;border-left:3px solid var(--accent,#d9a400);background:rgba(217,164,0,.08);border-radius:6px;font-size:13px;line-height:1.55;white-space:pre-wrap}
+.pendwrap .preport b{font-size:12px;color:var(--muted);font-weight:600;margin-right:6px}
+.act.report .ax{color:var(--text,inherit);font-weight:600}
 .act{display:flex;gap:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .act .at{color:var(--dim);flex:none;min-width:34px} .act .aw{color:var(--council);flex:none}
 .act .ax{overflow:hidden;text-overflow:ellipsis} .act.text .ax{color:var(--dim);font-family:system-ui,sans-serif} .act.init .ax{color:var(--info-text)}
 details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:pointer;color:var(--muted)} details.actlog .act{font:12px/1.6 ui-monospace,Consolas,monospace;color:var(--muted)}
@@ -340,7 +343,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.29.2'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.29.3'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -1445,10 +1448,18 @@ function setBusy(on, text) {
 function pendingEl(text, startMs) {
   // 진행 중 표시 + 경과 시간 (웹 검색·MCP·토론은 몇 분 걸릴 수 있어 멈춘 것처럼 보이지 않게)
   const p = el('div', 'pendwrap'), row = el('div', 'pending'), t0 = startMs || Date.now(), clock = el('span', 'ptime', '0:00'); p.id = 'pending';
-  row.append(el('span', 'spin'), el('span', 'ptext', text), clock); p.append(row, el('div', 'plog'));
+  row.append(el('span', 'spin'), el('span', 'ptext', text), clock); const rep = el('div', 'preport'); rep.hidden = true; p.append(row, rep, el('div', 'plog'));
   const tick = setInterval(() => { if (!p.isConnected && Date.now() - t0 > 3000) { clearInterval(tick); return; }
     const sec = Math.floor((Date.now() - t0) / 1000); clock.textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; }, 1000);
   return p;
+}
+
+// 📍 중간 보고: 작업 중 모델이 남긴 '끝난 것 · 지금 하는 것 · 남은 것' 을 진행 표시 위쪽에 고정
+function setReport(pend, item, who) {
+  const r = pend && pend.querySelector('.preport'); if (!r || !item || !item.text) return;
+  const sec = Math.floor(item.t || 0);
+  r.replaceChildren(el('b', '', `${T('중간 보고', 'Progress report')}${who ? ' · ' + who : ''} · ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`), document.createTextNode(item.text));
+  r.hidden = false;
 }
 
 // 🔄 새로고침·다른 창에서 다시 연 대화의 작업이 서버에서 아직 진행 중이면, 진행 상황을 이어서 보여 주고 끝나면 결과를 띄운다
@@ -1470,6 +1481,7 @@ async function attachLive(id, lv0) {
   let answers = lv0 ? lv0.answers || 0 : 0, lv = lv0;
   for (;;) {
     if (lv && lv.stage) pend.querySelector('.ptext').textContent = lv.stage;
+    if (lv && lv.report) setReport(pend, lv.report.item, lv.report.model);
     if (lv && lv.log) { const lg = pend.querySelector('.plog'); lg.replaceChildren(...lv.log.slice(-14).map(x => activityLine(x.item || {}, x.model))); }
     await new Promise(r => setTimeout(r, 3000));
     if (S.liveTok !== tok || S.current !== id || !pend.isConnected) return;  // 다른 대화로 옮겼거나 다시 그림 → 다시 열면 다시 붙음
@@ -1535,7 +1547,7 @@ async function send() {
       buf += dec.decode(value, { stream:true }); const lines = buf.split('\n'); buf = lines.pop();
       for (const line of lines) {
         if (!line) continue; const e = JSON.parse(line);
-        if (e.type === 'progress') { const lg = pend.querySelector('.plog'); if (lg) { lg.append(activityLine(e.item || {}, e.model)); while (lg.children.length > 14) lg.firstChild.remove(); } }
+        if (e.type === 'progress') { if ((e.item || {}).kind === 'report') setReport(pend, e.item, e.model); const lg = pend.querySelector('.plog'); if (lg) { lg.append(activityLine(e.item || {}, e.model)); while (lg.children.length > 14) lg.firstChild.remove(); } }
         else if (e.type === 'stage') { $('#status').textContent = e.text; const t = pend.querySelector('.ptext'); if (t) t.textContent = e.text; }
         else if (e.type === 'saved') { gotUser = true; if (here()) { pend.before(msgEl(e.item)); }
           const c = e.context; $('#ctxInfo').textContent = c ? T(`모델에 전달: ${c.summarized_through ? `요약(1-${c.summarized_through}) + ` : ''}최근 ${c.total - c.recent_from}개 메시지`, `Sent to models: ${c.summarized_through ? `summary(1-${c.summarized_through}) + ` : ''}last ${c.total - c.recent_from} messages`) : ''; }

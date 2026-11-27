@@ -58,7 +58,7 @@ import council_image
 from council_settings import Settings
 import council_app
 
-VERSION = "0.29.2"
+VERSION = "0.29.3"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -162,6 +162,15 @@ You can read, create and modify files under this folder and run shell commands t
 - Long-running processes (dev servers, watchers): start them in the background so they keep running after you
   finish, and report how to open or stop them. Do not wait on them in the foreground.
 - End with a short summary: files created or changed, commands run, and anything left for the user to do.
+"""
+
+PROGRESS_NOTE = """
+## Progress reports
+The user watches your messages live while you work and cannot see what is left. After each major step (and at least
+every ~10 minutes on long tasks), write ONE short message that starts with "📍", in the user's language: what is done,
+what you are doing now, what is left, and a rough time left. Example:
+"📍 구현 끝 (seam.py·server.py·화면) · 지금: 기존 테스트 실행 · 남은 것: 실행 확인·보고 — 약 10분"
+Keep working right after it; do not wait for a reply. The final summary is still required at the end.
 """
 
 EXTRA_DIRS_NOTE = """
@@ -346,6 +355,8 @@ class Handler(BaseHTTPRequestHandler):
                 elif kind == "progress":
                     live["log"].append({"model": payload.get("model"), "item": payload.get("item")})
                     del live["log"][:-LIVE_LOG]
+                    if isinstance(payload.get("item"), dict) and payload["item"].get("kind") == "report":
+                        live["report"] = {"model": payload.get("model"), "item": payload.get("item")}  # 📍 최근 중간 보고
                 else:
                     live["answers"] += 1
         if not getattr(self, "stream_alive", False):
@@ -421,7 +432,7 @@ class Handler(BaseHTTPRequestHandler):
                 with _busy_lock:
                     lv = _live.get(cid_)
                     data = {"busy": cid_ in _busy, "stage": lv["stage"], "started": lv["started"],
-                            "log": list(lv["log"]), "answers": lv["answers"]} if lv else {"busy": cid_ in _busy}
+                            "log": list(lv["log"]), "answers": lv["answers"], "report": lv.get("report")} if lv else {"busy": cid_ in _busy}
                 self.send_json(data)
             elif parsed.path == "/api/history":  # V0.5 호환
                 self.send_json({"items": store.load_messages(store.check_id(arg("conversation_id")))})
@@ -932,6 +943,8 @@ class Handler(BaseHTTPRequestHandler):
             if mode == "work":
                 note = PLAN_NOTE if phase == "plan" else READ_NOTE if phase == "review" else WORK_NOTE
                 prompt += note.format(workdir=workdir)
+                if note is WORK_NOTE and which == "claude":  # 진행 기록이 실시간으로 보이는 Claude 만 (GPT 는 보이지 않음)
+                    prompt += PROGRESS_NOTE
                 extra = getattr(self, "extra_dirs", None) or []
                 if extra:
                     prompt += EXTRA_DIRS_NOTE.format(
@@ -958,7 +971,7 @@ class Handler(BaseHTTPRequestHandler):
 
             def on_progress(ev: dict) -> None:
                 # Claude 가 지금 쓰는 도구·명령을 실시간으로 화면에 (끝나면 답변의 '작업 기록'으로 저장)
-                entry = {"t": round(time.time() - started, 1), "kind": ev.get("kind", ""), "text": str(ev.get("text", ""))[:300]}
+                entry = {"t": round(time.time() - started, 1), "kind": ev.get("kind", ""), "text": str(ev.get("text", ""))[:600]}
                 if len(activity) < 200:
                     activity.append(entry)
                 self.emit("progress", model=label, item=entry)
@@ -1273,7 +1286,8 @@ class Handler(BaseHTTPRequestHandler):
                 d_label = models[doer][0]
                 self.emit("stage", step=6, text=f"합의된 내용대로 {d_label}가 작업하는 중")
                 try:
-                    report, item = ask(doer, base_prompt(doer) + IMPLEMENT_NOTE.format(conclusion=answers["Council"]), 3)
+                    report, item = ask(doer, base_prompt(doer) + IMPLEMENT_NOTE.format(conclusion=answers["Council"])
+                                       + (PROGRESS_NOTE if doer == "claude" else ""), 3)
                     debate.write_log(folder, f"3_{d_label}_구현.md", f"{d_label} · 구현", report, item.get("cli_model", ""))
                     self.emit("answer", item=item)
                 except Cancelled:
