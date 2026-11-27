@@ -58,7 +58,7 @@ import council_image
 from council_settings import Settings
 import council_app
 
-VERSION = "0.29.1"
+VERSION = "0.29.2"
 HOST = "127.0.0.1"
 PORT = 8765
 INDEX = ROOT / "web" / "index.html"
@@ -90,6 +90,9 @@ _busy: set[str] = set()
 _cli_updating: set[str] = set()  # 업데이트 중인 CLI (그동안 새 질문을 받지 않음)
 _tokens: dict[str, CancelToken] = {}  # 대화 ID → 진행 중인 작업의 중지 토큰
 _busy_lock = threading.Lock()
+# 대화 ID → 진행 상황 (단계 문구·최근 활동). 새로고침·다른 창에서 다시 열어도 진행 중인 작업을 이어서 보여 주기 위함
+_live: dict[str, dict] = {}
+LIVE_LOG = 30
 
 
 def cli_available(name: str) -> bool:
@@ -335,6 +338,16 @@ class Handler(BaseHTTPRequestHandler):
         # 브라우저가 끊겨도 작업과 저장은 끝까지 진행한다.
         if kind == "stage":
             self.last_stage = str(payload.get("text", ""))
+        live = getattr(self, "live", None)
+        if live is not None and kind in ("stage", "progress", "answer"):
+            with _busy_lock:  # 새로고침한 화면이 /api/live 로 이어서 볼 수 있게 기록
+                if kind == "stage":
+                    live["stage"] = str(payload.get("text", ""))
+                elif kind == "progress":
+                    live["log"].append({"model": payload.get("model"), "item": payload.get("item")})
+                    del live["log"][:-LIVE_LOG]
+                else:
+                    live["answers"] += 1
         if not getattr(self, "stream_alive", False):
             return
         line = json.dumps(council_i18n.localize({"type": kind, **payload}, self.lang), ensure_ascii=False) + "\n"
@@ -403,6 +416,13 @@ class Handler(BaseHTTPRequestHandler):
                 with _busy_lock:
                     running = cid_ in _busy
                 self.send_json({**store.detail(cid_), "busy": running})  # busy: 연결이 끊겨도 작업이 계속 중인지
+            elif parsed.path == "/api/live":  # 진행 중인 작업의 현재 단계·최근 활동 (새로고침 뒤 이어 보기)
+                cid_ = store.check_id(arg("id"))
+                with _busy_lock:
+                    lv = _live.get(cid_)
+                    data = {"busy": cid_ in _busy, "stage": lv["stage"], "started": lv["started"],
+                            "log": list(lv["log"]), "answers": lv["answers"]} if lv else {"busy": cid_ in _busy}
+                self.send_json(data)
             elif parsed.path == "/api/history":  # V0.5 호환
                 self.send_json({"items": store.load_messages(store.check_id(arg("conversation_id")))})
             elif parsed.path == "/api/search":
@@ -782,6 +802,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             _busy.add(conversation_id)
             self.cancel = _tokens[conversation_id] = CancelToken()
+            self.live = _live[conversation_id] = {"stage": "", "started": time.time(), "log": [], "answers": 0}
         beat = threading.Event()
         try:
             self.start_stream()
@@ -801,6 +822,7 @@ class Handler(BaseHTTPRequestHandler):
             with _busy_lock:
                 _busy.discard(conversation_id)
                 _tokens.pop(conversation_id, None)
+                _live.pop(conversation_id, None)
 
     def run_chat(self, conversation_id: str, question: str, target: str, gpt_model: str, claude_model: str,
                  mode: str = "chat", workdir=None, files: list | None = None, web: bool = False,

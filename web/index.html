@@ -340,7 +340,7 @@ details.actlog{margin-top:8px;font-size:12.5px} details.actlog summary{cursor:po
 <div class="toast" id="toast"></div>
 
 <script>
-const UI_VERSION = '0.29.1'; // ai_council_web.py 의 VERSION 과 같아야 함
+const UI_VERSION = '0.29.2'; // ai_council_web.py 의 VERSION 과 같아야 함
 const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 // 화면 문구: T('한국어', 'English') — 언어 전환은 저장 후 새로고침
@@ -1145,6 +1145,9 @@ async function openConversation(id, focusIndex) {
       if (t) { const d = t.closest('details'); if (d) d.open = true; t.scrollIntoView({ block:'center' }); t.classList.add('flash'); }
     } else scrollBottom();
     if (S.running !== id) $('#q').focus();
+    // 이 화면이 보낸 작업이 아닌데 서버에서 진행 중이면 (새로고침·다른 창) 진행 상황을 이어서 보여 준다
+    if (data.busy && S.running !== id) { let lv = null; try { lv = await api('/api/live?id=' + encodeURIComponent(id)); } catch {} if (S.current === id) attachLive(id, lv); }
+    else if (S.liveBusy === id) { S.liveBusy = null; S.liveTok = null; }
   } catch (e) { toast(e.message, true); throw e; }
 }
 async function newConversation() {
@@ -1439,18 +1442,52 @@ function setBusy(on, text) {
   b.textContent = on ? T('■ 중지', '■ Stop') : T('보내기', 'Send'); b.title = on ? T('답변 생성 중지 (Esc)', 'Stop generating (Esc)') : '';
   $('#spin').hidden = !on; $('#status').textContent = text || (on ? T('진행 중', 'Working') : T('준비됨', 'Ready'));
 }
-function pendingEl(text) {
+function pendingEl(text, startMs) {
   // 진행 중 표시 + 경과 시간 (웹 검색·MCP·토론은 몇 분 걸릴 수 있어 멈춘 것처럼 보이지 않게)
-  const p = el('div', 'pendwrap'), row = el('div', 'pending'), t0 = Date.now(), clock = el('span', 'ptime', '0:00'); p.id = 'pending';
+  const p = el('div', 'pendwrap'), row = el('div', 'pending'), t0 = startMs || Date.now(), clock = el('span', 'ptime', '0:00'); p.id = 'pending';
   row.append(el('span', 'spin'), el('span', 'ptext', text), clock); p.append(row, el('div', 'plog'));
   const tick = setInterval(() => { if (!p.isConnected && Date.now() - t0 > 3000) { clearInterval(tick); return; }
     const sec = Math.floor((Date.now() - t0) / 1000); clock.textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; }, 1000);
   return p;
 }
 
+// 🔄 새로고침·다른 창에서 다시 연 대화의 작업이 서버에서 아직 진행 중이면, 진행 상황을 이어서 보여 주고 끝나면 결과를 띄운다
+// (이 화면이 보낸 작업은 send() 가 직접 스트림으로 받는다)
+S.liveBusy = null; S.liveTok = null;
+async function attachLive(id, lv0) {
+  const tok = S.liveTok = {}; S.liveBusy = id;
+  const pend = pendingEl(T('작업 진행 중 · 새로고침 전에 시작한 작업을 이어서 보여 줍니다', 'Working · showing a task started before the page was reloaded'),
+                         lv0 && lv0.started ? lv0.started * 1000 : 0);
+  pend.id = 'livepend';
+  const stop = el('button', 'ghost small', T('■ 중지', '■ Stop'));
+  stop.onclick = async () => {
+    if (!confirm(T('진행 중인 작업을 중지할까요?', 'Stop the running task?'))) return;
+    try { const r = await api('/api/chat/stop', { conversation_id:id, reason:'button' }); toast(r.ok ? T('중지 요청을 보냈습니다', 'Stop requested') : (r.message || T('진행 중인 작업이 없습니다', 'No task in progress'))); }
+    catch (e) { toast(T('중지 실패: ', 'Stop failed: ') + e.message, true); } };
+  pend.querySelector('.pending').append(stop);
+  $('#msgs').append(pend); scrollBottom();
+  $('#status').textContent = T('작업 진행 중 (새로고침 전에 시작)', 'Working (started before reload)');
+  let answers = lv0 ? lv0.answers || 0 : 0, lv = lv0;
+  for (;;) {
+    if (lv && lv.stage) pend.querySelector('.ptext').textContent = lv.stage;
+    if (lv && lv.log) { const lg = pend.querySelector('.plog'); lg.replaceChildren(...lv.log.slice(-14).map(x => activityLine(x.item || {}, x.model))); }
+    await new Promise(r => setTimeout(r, 3000));
+    if (S.liveTok !== tok || S.current !== id || !pend.isConnected) return;  // 다른 대화로 옮겼거나 다시 그림 → 다시 열면 다시 붙음
+    try { lv = await api('/api/live?id=' + encodeURIComponent(id)); } catch { lv = null; continue; }
+    if (S.liveTok !== tok || S.current !== id) return;
+    if (!lv.busy) {
+      S.liveBusy = null; S.liveTok = null; pend.remove(); await openConversation(id);
+      $('#status').textContent = T('답변 완료', 'Done'); toast(T('새로고침 전에 시작한 작업이 끝났습니다', 'The task started before the reload has finished'));
+      notifyDone(id, 'done', ''); return;
+    }
+    if ((lv.answers || 0) > answers) { answers = lv.answers; S.liveTok = null; await openConversation(id); return; }  // 새 답변이 저장됨 → 다시 그리고 다시 붙음
+  }
+}
+
 async function send() {
   const q = $('#q'), question = q.value.trim();
   if ((!question && !S.files.length) || S.running) return;
+  if (S.liveBusy && S.liveBusy === S.current) { toast(T('이 대화는 아직 작업 중입니다. 끝나면 결과가 자동으로 보이니, 그 뒤에 보내 주세요 (적은 글은 그대로 남아 있습니다)', 'This chat is still working. The result will show up automatically — send after that (your text stays here)'), true); return; }
   askNotifyOnce();
   if (S.cliUpdating) { toast(T('GPT/Claude 프로그램을 업데이트하는 중입니다. 끝난 뒤 보내 주세요', 'The GPT/Claude programs are updating. Send when it finishes'), true); return; }
   if (S.files.some(f => f.uploading)) { toast(T('파일 업로드가 끝난 뒤 보내 주세요', 'Wait for the upload to finish'), true); return; }

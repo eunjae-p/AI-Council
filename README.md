@@ -2,7 +2,7 @@
 
 **🇰🇷 한국어** · [🇺🇸 English](#english)
 
-> **현재 버전: V0.29.1** (2026-11-27) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
+> **현재 버전: V0.29.2** (2026-11-27) · [전체 업데이트 내역 보기 → CHANGELOG.md](CHANGELOG.md)
 
 하나의 채팅 화면에서 질문마다 **GPT / Claude / 토론(Discussion)** 을 골라 답을 받는 로컬 멀티모델 채팅 앱입니다.
 각 PC에서 **구독 계정으로 로그인한 Codex CLI(GPT)와 Claude Code CLI(Claude)** 를 사용하며, API 키는 쓰지 않습니다.
@@ -11,11 +11,11 @@
 
 | 버전 | 날짜 | 주요 변경 |
 |---|---|---|
+| [V0.29.2](CHANGELOG.md#v0292-2026-11-27) | 11-27 | 🔄 **새로고침해도 진행 중인 작업 이어 보기** — 단계·최근 활동·■ 중지, 끝나면 답변 자동 표시 |
 | [V0.29.1](CHANGELOG.md#v0291-2026-11-27) | 11-27 | ✏️ **대화별 입력 초안** — 다른 대화로 옮겨도 적던 글·첨부는 원래 대화에 남음 |
 | [V0.29.0](CHANGELOG.md#v0290-2026-11-17) | 11-17 | 🛠 **토론+작업: 먼저 읽기만 하며 분석·합의 → 한 번만 실행** (실행 뒤 검토·지적 반영 단계 없앰) |
 | [V0.28.2](CHANGELOG.md#v0282-2026-11-16) | 11-16 | 📋 FlowX 화면 안에서 연 Council 등에서 **복사 실패**하던 문제 수정 |
 | [V0.28.1](CHANGELOG.md#v0281-2026-11-16) | 11-16 | 📋 답변 속 코드·프롬프트 블록마다 **복사** 버튼과 **↩ 줄바꿈** 보기 |
-| [V0.28.0](CHANGELOG.md#v0280-2026-11-13) | 11-13 | ⚖️ **토론 개편** — 합의면 3번에 끝, 쟁점만 반박(미결이면 1번 더), ✍️ 작성 요청은 초안→검토 자동, 🏁 결론 카드(할 일 중심), 사회자 교대 |
 
 이전 버전은 [CHANGELOG.md](CHANGELOG.md)에서 볼 수 있습니다.
 
@@ -300,6 +300,7 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
   - **🗜 압축**: 지금까지의 대화를 바로 요약으로 압축 (최근 대화는 원문 유지, 원문 기록은 지우지 않음). 모델에 보내는 맥락은 원래도 자동으로 압축됩니다(장기 요약).
   - **↪ 새 대화로 이어가기**: 대화 전체를 요약해 그 요약을 기억하는 새 대화를 시작. 메시지가 150개를 넘으면 위에 안내가 뜹니다. 두 대화는 서로 링크로 연결.
 - **■ 중지**: 답변 생성을 즉시 멈춥니다. `Esc`는 한 번 더 확인합니다(창이 열려 있으면 창만 닫음). 완료된 답변은 남고, 중지 기록에 시점·경과 시간이 남습니다.
+- **🔄 새로고침해도 이어 보기**: 작업 중에 새로고침하거나 창을 다시 열어도, 그 대화를 열면 진행 중 표시(단계·최근 활동·■ 중지)가 다시 나타나고 끝나면 답변이 자동으로 뜹니다.
 
 ## 🛠 문제 해결
 
@@ -377,7 +378,7 @@ ZIP 안의 `__MACOSX`·`.git`·`node_modules`, 폴더 밖을 가리키는 경로
 
 # 🇺🇸 AI Council (English)
 
-> **Current version: V0.29.1** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
+> **Current version: V0.29.2** · [Changelog (Korean)](CHANGELOG.md) · [한국어 설명은 위로 ↑](#ai-council)
 
 **Ask GPT, Claude, or both at once — from one local chat window, using the subscriptions you already pay for.**
 
@@ -449,6 +450,7 @@ Clone with `git` (not ZIP) so the built-in updater works.
 - **Work mode**: if a command is blocked even though it is allowed (Claude Code's own safety checks: paths outside the working folder, a whole drive as the working folder, protected folders), Council shows the reason instead of repeating the same approval card; use a project folder (e.g. `D:\VQC`) rather than a whole drive. The approval card offers **🧰 Allow all dev commands / file copy/move and run again** when the blocked command belongs to one of those groups, so you get asked less next time. When a command or MCP tool is blocked, Claude **pauses right there** (⏸, nothing after it runs) and a 🛡 card appears — **Allow once and run again** / **Always allow and run again** resumes the same Claude session from that step (also for the executor step in Discussion + Work, without rerunning the discussion). Approve soon: within about an hour the earlier history is read from cache. Time limit: Claude keeps going while it reports progress; it stops after 15 minutes with no progress or 60 minutes in total, and **↪ Continue** resumes the same session (work is not thrown away). Manage the allowlist with **🛡** next to the folder. In a Git repository you can review changes and **✅ Commit** or **↩ Revert**; with uncommitted changes you choose **Create checkpoint and start** or **Continue without**.
 - **💰 Saver on/off** (fewer tokens: see Features), **Web search on/off**, **Claude MCP / GPT MCP on/off** (⚙ manages Claude's always-allowed tools), **Run: Claude / Run: GPT** in Discussion + Work, **Models ▾** to pin model versions
 - **⤓ MD** downloads one answer; **Chat_md** downloads the whole chat; **■ Stop** (or Esc) stops generating
+- **Refresh-safe**: if you reload or reopen the window while a task runs, opening that conversation shows the running task again (stage, recent activity, ■ Stop) and the answer appears automatically when it finishes.
 - **Long chats**: only the latest 12 turns are drawn (⬆ show earlier / show all); **🗜 Compress** summarizes the chat now; **↪ Continue in new chat** starts a new chat that carries over a summary.
 - **🔔 Notifications**: desktop notification when an answer is ready (or needs approval) while you're in another window; toggle with 🔔/🔕 at the top left.
 - **Language**: `EN` / `한국어` at the top left. Saved messages are not translated; only Council's own labels and messages change.

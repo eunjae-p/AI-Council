@@ -599,6 +599,14 @@ evhb = post("/api/chat", {"question":"PROGRESS_LOOP 작업","conversation_id":ct
 ok(sum(e["type"]=="ping" for e in evhb) >= 5, "heartbeat pings keep the stream alive during long work")
 w.HEARTBEAT_SECONDS = 15
 ok(get("/api/conversation?id="+ct2).get("busy") is False, "conversation reports busy=False when idle")
+# 🔄 새로고침 뒤 이어 보기: 진행 중인 작업의 단계·최근 활동을 /api/live 로
+import threading as _th
+_t = _th.Thread(target=lambda: post("/api/chat", {"question":"PROGRESS_LOOP 이어 보기","conversation_id":ct2,"target":"claude","mode":"work","workdir":str(cw)}, raw=True))
+_t.start(); _t2.sleep(4)
+lv = get("/api/live?id="+ct2)
+ok(lv["busy"] is True and lv["stage"] and len(lv["log"]) >= 1 and lv["log"][-1]["model"]=="Claude" and lv["started"] > 0, f"live progress while running {str(lv)[:200]}")
+_t.join(60)
+lv = get("/api/live?id="+ct2); ok(lv == {"busy": False}, f"live cleared when done {lv}")
 a = get("/api/conversation?id="+ct2)["items"][-1]
 ok(a["role"]=="assistant" and "오래 걸린 작업 완료" in a["content"] and a["elapsed"] > 10, f"progress keeps the run alive past the idle limit ({a.get('elapsed')}s)")
 w.WORK_HARD_LIMIT = 5
